@@ -525,9 +525,13 @@ def _hide_project(session: requests.Session, project_id: str, verbose: bool = Tr
 
 
 def _fetch_and_filter_page(session: requests.Session, profile_id: str, page: int, page_size: int, 
-                           filter_type: str, filter_value: float, verbose: bool = False):
+                           filter_type: str, filter_value, verbose: bool = False):
     """
     Fetch a single page of projects and filter them
+    
+    Args:
+        filter_type: Type of filter ('hourly_rate', 'incentive', or 'kind_of_research')
+        filter_value: The filter value used (float for hourly_rate/incentive, int for kind_of_research)
     
     Returns:
         Tuple of (filtered_projects, total_count, has_more_pages)
@@ -550,6 +554,7 @@ def _fetch_and_filter_page(session: requests.Session, profile_id: str, page: int
     for project in projects_list:
         remuneration = project.get('respondentRemuneration', 0)
         time_minutes = project.get('timeMinutesRequired', 0)
+        kind_of_research = project.get('kindOfResearch')
         
         if filter_type == 'hourly_rate':
             if time_minutes > 0:
@@ -557,8 +562,19 @@ def _fetch_and_filter_page(session: requests.Session, profile_id: str, page: int
                 if project_hourly_rate < filter_value:
                     project['calculated_hourly_rate'] = project_hourly_rate
                     filtered_projects.append(project)
-        else:  # incentive
+        elif filter_type == 'incentive':
             if remuneration < filter_value:
+                if time_minutes > 0:
+                    project_hourly_rate = (remuneration / time_minutes) * 60
+                else:
+                    project_hourly_rate = 0
+                project['calculated_hourly_rate'] = project_hourly_rate
+                filtered_projects.append(project)
+        elif filter_type == 'kind_of_research':
+            # Hide projects that don't match the specified kindOfResearch value
+            # filter_value is the kindOfResearch value we want to keep (e.g., 1 for remote)
+            # So we hide everything that's NOT equal to filter_value
+            if kind_of_research != filter_value:
                 if time_minutes > 0:
                     project_hourly_rate = (remuneration / time_minutes) * 60
                 else:
@@ -573,7 +589,7 @@ def _fetch_and_filter_page(session: requests.Session, profile_id: str, page: int
 
 
 def _process_filtered_projects(session: requests.Session, profile_id: str, page_size: int,
-                               filter_type: str, filter_value: float, verbose: bool = True):
+                               filter_type: str, filter_value, verbose: bool = True):
     """
     Process filtered projects with interactive prompts and pagination support
     
@@ -581,11 +597,22 @@ def _process_filtered_projects(session: requests.Session, profile_id: str, page_
         session: Authenticated requests session
         profile_id: Profile ID for fetching projects
         page_size: Number of results per page
-        filter_type: Type of filter ('hourly_rate' or 'incentive')
-        filter_value: The filter value used
+        filter_type: Type of filter ('hourly_rate', 'incentive', or 'kind_of_research')
+        filter_value: The filter value used (float for hourly_rate/incentive, int for kind_of_research)
         verbose: Whether to show detailed output
     """
-    filter_label = f"hourly rate < ${filter_value}/hr" if filter_type == 'hourly_rate' else f"incentive < ${filter_value}"
+    # Map kindOfResearch values to human-readable names
+    kind_names = {1: "remote", 2: "focus groups", 8: "in-person"}
+    
+    if filter_type == 'hourly_rate':
+        filter_label = f"hourly rate < ${filter_value}/hr"
+    elif filter_type == 'incentive':
+        filter_label = f"incentive < ${filter_value}"
+    elif filter_type == 'kind_of_research':
+        kind_name = kind_names.get(filter_value, f"kindOfResearch={filter_value}")
+        filter_label = f"not {kind_name} (kindOfResearch != {filter_value})"
+    else:
+        filter_label = f"filter: {filter_type} = {filter_value}"
     
     # Fetch first page
     page = 1
@@ -620,10 +647,14 @@ def _process_filtered_projects(session: requests.Session, profile_id: str, page_
         remuneration = project.get('respondentRemuneration', 0)
         time_minutes = project.get('timeMinutesRequired', 0)
         hourly_rate_val = project.get('calculated_hourly_rate', 0)
+        kind_of_research = project.get('kindOfResearch')
+        kind_name = kind_names.get(kind_of_research, f"unknown ({kind_of_research})")
         project_link = f"https://app.respondent.io/respondents/v2/projects/view/{project_id_val}"
         
         click.echo(f"[{idx}] {project_id_val}")
         click.echo(f"    Hourly Rate: ${hourly_rate_val:.2f}/hr (${remuneration} for {time_minutes} min)")
+        if filter_type == 'kind_of_research':
+            click.echo(f"    Research Type: {kind_name} (kindOfResearch={kind_of_research})")
         click.echo(f"    Name: {name}")
         click.echo(f"    Description: {description[:200]}{'...' if len(description) > 200 else ''}")
         click.echo(f"    Link: {project_link}")
@@ -646,6 +677,8 @@ def _process_filtered_projects(session: requests.Session, profile_id: str, page_
         remuneration = project.get('respondentRemuneration', 0)
         time_minutes = project.get('timeMinutesRequired', 0)
         hourly_rate_val = project.get('calculated_hourly_rate', 0)
+        kind_of_research = project.get('kindOfResearch')
+        kind_name = kind_names.get(kind_of_research, f"unknown ({kind_of_research})")
         project_link = f"https://app.respondent.io/respondents/v2/projects/view/{project_id_val}"
         
         click.echo(f"\n{'='*80}")
@@ -653,6 +686,8 @@ def _process_filtered_projects(session: requests.Session, profile_id: str, page_
         click.echo(f"ID: {project_id_val}")
         click.echo(f"Name: {name}")
         click.echo(f"Hourly Rate: ${hourly_rate_val:.2f}/hr (${remuneration} for {time_minutes}min.)")
+        if filter_type == 'kind_of_research':
+            click.echo(f"Research Type: {kind_name} (kindOfResearch={kind_of_research})")
         click.echo(f"Description: {description}")
         click.echo(f"Link: {project_link}")
         click.echo(f"{'='*80}")
@@ -733,10 +768,11 @@ def _process_filtered_projects(session: requests.Session, profile_id: str, page_
 @click.option('--id', 'project_id', help='Project ID to hide')
 @click.option('--hourly-rate', 'hourly_rate', type=int, help='Hide all projects with hourly rate lower than this value')
 @click.option('--incentive', 'incentive', type=int, help='Hide all projects with total incentive lower than this value')
-@click.option('--profile-id', default='691f593b2e2ac1bd7fa84915', help='Profile ID for fetching projects (used with --hourly-rate or --incentive)')
+@click.option('--hide-not-kind', 'hide_not_kind', type=click.Choice(['remote', 'in-person', 'focus-groups'], case_sensitive=False), help='Hide all projects that are not of the specified research type (remote=1, in-person=8, focus-groups=2)')
+@click.option('--profile-id', default='691f593b2e2ac1bd7fa84915', help='Profile ID for fetching projects (used with --hourly-rate, --incentive, or --hide-not-kind)')
 @click.option('--verbose/--no-verbose', default=True, help='Show detailed output')
-def hide(config, project_id, hourly_rate, incentive, profile_id, verbose):
-    """Hide a project or multiple projects by hourly rate or incentive"""
+def hide(config, project_id, hourly_rate, incentive, hide_not_kind, profile_id, verbose):
+    """Hide a project or multiple projects by hourly rate, incentive, or research type"""
     try:
         # Load configuration
         config_data = load_config(config)
@@ -755,8 +791,19 @@ def hide(config, project_id, hourly_rate, incentive, profile_id, verbose):
             click.echo("\n❌ Authentication verification failed. Please check your cookies in config.json", err=True)
             sys.exit(1)
         
+        # Handle research kind filtering mode
+        if hide_not_kind is not None:
+            # Map human-readable names to kindOfResearch values
+            kind_mapping = {
+                'remote': 1,
+                'in-person': 8,
+                'focus-groups': 2
+            }
+            kind_value = kind_mapping[hide_not_kind.lower()]
+            _process_filtered_projects(session, profile_id, 50, 'kind_of_research', kind_value, verbose)
+        
         # Handle hourly rate filtering mode
-        if hourly_rate is not None:
+        elif hourly_rate is not None:
             _process_filtered_projects(session, profile_id, 50, 'hourly_rate', hourly_rate, verbose)
         
         # Handle incentive filtering mode
@@ -769,7 +816,7 @@ def hide(config, project_id, hourly_rate, incentive, profile_id, verbose):
             if not success:
                 sys.exit(1)
         else:
-            click.echo("❌ Either --id, --hourly-rate, or --incentive must be provided", err=True)
+            click.echo("❌ Either --id, --hourly-rate, --incentive, or --hide-not-kind must be provided", err=True)
             click.echo("Use --help for more information", err=True)
             sys.exit(1)
         
