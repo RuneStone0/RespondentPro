@@ -11,14 +11,12 @@ try:
     from ..services.user_service import load_user_config, load_user_filters, save_user_config
     from ..services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
     from ..services.project_service import fetch_all_respondent_projects, get_hidden_count
-    from ..services.filter_service import apply_filters_to_projects
     from ..cache_manager import get_cache_stats
     from ..db import projects_cache_collection
 except ImportError:
     from services.user_service import load_user_config, load_user_filters, save_user_config
     from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
     from services.project_service import fetch_all_respondent_projects, get_hidden_count
-    from services.filter_service import apply_filters_to_projects
     from cache_manager import get_cache_stats
     from db import projects_cache_collection
 
@@ -98,10 +96,6 @@ def projects():
                     'page': 1,
                     'pageSize': len(all_projects)
                 }
-                
-                # Apply user filters (for display only)
-                if projects_data:
-                    projects_data, _ = apply_filters_to_projects(projects_data, filters)
                 
                 # Get persistent hidden count from MongoDB
                 hidden_count = get_hidden_count(user_id)

@@ -28,6 +28,7 @@ try:
     from ..preference_learner import (
         record_project_hidden, record_category_hidden, get_user_preferences
     )
+    from ..services.filter_service import should_hide_project
     from ..db import (
         projects_cache_collection, hidden_projects_log_collection, user_preferences_collection
     )
@@ -48,6 +49,7 @@ except ImportError:
     from preference_learner import (
         record_project_hidden, record_category_hidden, get_user_preferences
     )
+    from services.filter_service import should_hide_project
     from db import (
         projects_cache_collection, hidden_projects_log_collection, user_preferences_collection
     )
@@ -172,7 +174,11 @@ def save_filters():
                     
                     def hide_in_background():
                         try:
-                            process_and_hide_projects(user_id, req_session, profile_id, data)
+                            process_and_hide_projects(
+                                user_id, req_session, profile_id, data,
+                                cookies=config.get('cookies', {}),
+                                authorization=config.get('authorization')
+                            )
                         except Exception as e:
                             import traceback
                             print(f"Error in background hide process: {traceback.format_exc()}")
@@ -221,7 +227,11 @@ def hide_projects():
         
         def hide_in_background():
             try:
-                process_and_hide_projects(user_id, req_session, profile_id, filters)
+                process_and_hide_projects(
+                    user_id, req_session, profile_id, filters,
+                    cookies=config.get('cookies', {}),
+                    authorization=config.get('authorization')
+                )
             except Exception as e:
                 import traceback
                 print(f"Error in background hide process: {traceback.format_exc()}")
@@ -237,6 +247,98 @@ def hide_projects():
         return jsonify({
             'success': True,
             'message': 'Hide process started'
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
+
+
+@bp.route('/preview-hide', methods=['POST'])
+def preview_hide():
+    """Preview projects that would be hidden based on current filter settings"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        user_id = session['user_id']
+        data = request.json
+        filters = {
+            'min_incentive': data.get('min_incentive'),
+            'min_incentive_auto': data.get('min_incentive_auto', False),
+            'min_hourly_rate': data.get('min_hourly_rate'),
+            'min_hourly_rate_auto': data.get('min_hourly_rate_auto', False),
+            'research_types': data.get('research_types', []),
+            'research_types_auto': data.get('research_types_auto', False)
+        }
+        
+        # Check if any filters are set
+        if filters['min_incentive'] is None and filters['min_hourly_rate'] is None and not filters['research_types']:
+            return jsonify({
+                'success': True,
+                'projects': [],
+                'count': 0,
+                'message': 'No filters set - no projects would be hidden'
+            })
+        
+        # Get cached projects or fetch them
+        config = load_user_config(user_id)
+        if not config or not config.get('cookies', {}).get('respondent.session.sid'):
+            return jsonify({'error': 'Session keys not configured'}), 400
+        
+        profile_id = config.get('profile_id')
+        if not profile_id:
+            return jsonify({'error': 'Profile ID not found'}), 400
+        
+        # Try to get from cache first, otherwise fetch projects
+        req_session = create_respondent_session(
+            cookies=config.get('cookies', {}),
+            authorization=config.get('authorization')
+        )
+        all_projects, _ = fetch_all_respondent_projects(
+            session=req_session,
+            profile_id=profile_id,
+            page_size=50,
+            user_id=user_id,
+            use_cache=True,
+            cookies=config.get('cookies', {}),
+            authorization=config.get('authorization')
+        )
+        
+        # Find projects that would be hidden
+        projects_to_hide = []
+        for project in all_projects:
+            if should_hide_project(project, filters):
+                # Calculate hourly rate for display
+                remuneration = project.get('respondentRemuneration', 0)
+                time_minutes = project.get('timeMinutesRequired', 0)
+                hourly_rate = 0
+                if time_minutes > 0:
+                    hourly_rate = (remuneration / time_minutes) * 60
+                
+                # Get research type name
+                research_type = project.get('kindOfResearch')
+                research_type_name = None
+                if research_type == 1:
+                    research_type_name = 'Remote'
+                elif research_type == 2:
+                    research_type_name = 'Focus Groups'
+                elif research_type == 8:
+                    research_type_name = 'In-Person'
+                
+                projects_to_hide.append({
+                    'id': project.get('id'),
+                    'name': project.get('name', 'Untitled Project'),
+                    'incentive': remuneration,
+                    'hourly_rate': round(hourly_rate, 2),
+                    'time_minutes': time_minutes,
+                    'research_type': research_type_name or str(research_type) if research_type else 'Unknown'
+                })
+        
+        return jsonify({
+            'success': True,
+            'projects': projects_to_hide,
+            'count': len(projects_to_hide)
         })
         
     except Exception as e:
