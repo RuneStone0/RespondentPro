@@ -275,6 +275,56 @@ def extract_demographic_params(profile_data):
     return params
 
 
+def extract_demographic_params_from_mongodb(profile_data):
+    """
+    Extract demographic parameters from MongoDB profile data structure
+    
+    Args:
+        profile_data: Dictionary containing profile data from MongoDB (nested under 'profile' key)
+        
+    Returns:
+        Dictionary with demographic parameters (gender, education_level, ethnicity, date_of_birth, country)
+    """
+    if not isinstance(profile_data, dict):
+        return {}
+    
+    params = {}
+    
+    # Extract gender from demographics
+    if 'demographics' in profile_data and isinstance(profile_data['demographics'], dict):
+        demographics = profile_data['demographics']
+        if 'gender' in demographics:
+            params['gender'] = demographics['gender']
+        
+        # Extract education level
+        if 'educationLevel' in demographics:
+            params['education_level'] = demographics['educationLevel']
+        
+        # Extract ethnicity
+        if 'ethnicity' in demographics:
+            params['ethnicity'] = demographics['ethnicity']
+        
+        # Extract date of birth
+        if 'dateOfBirth' in demographics:
+            params['date_of_birth'] = demographics['dateOfBirth']
+        elif 'birthDate' in demographics:
+            params['date_of_birth'] = demographics['birthDate']
+    
+    # Extract country from location.city.country
+    if 'location' in profile_data and isinstance(profile_data['location'], dict):
+        location = profile_data['location']
+        if 'city' in location and isinstance(location['city'], dict):
+            city = location['city']
+            if 'country' in city:
+                params['country'] = city['country']
+        elif 'country' in location:
+            params['country'] = location['country']
+        elif 'countryCode' in location:
+            params['country'] = location['countryCode']
+    
+    return params
+
+
 def get_user_profile(mongo_user_id):
     """
     Retrieve user profile data from MongoDB

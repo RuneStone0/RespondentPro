@@ -28,11 +28,11 @@ except ImportError:
 # Import respondent auth service
 try:
     from .respondent_auth_service import (
-        verify_respondent_authentication, fetch_user_profile, extract_demographic_params
+        verify_respondent_authentication, get_user_profile, extract_demographic_params_from_mongodb
     )
 except ImportError:
     from services.respondent_auth_service import (
-        verify_respondent_authentication, fetch_user_profile, extract_demographic_params
+        verify_respondent_authentication, get_user_profile, extract_demographic_params_from_mongodb
     )
 
 # Import filter service
@@ -189,27 +189,19 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
             if cached and cached.get('projects'):
                 return cached['projects'], cached.get('total_count', len(cached['projects']))
     
-    # Fetch user profile to get demographic parameters (optional - if it fails, continue without them)
+    # Fetch user profile from MongoDB to get demographic parameters
     demographic_params = {}
-    if cookies and authorization is not None:
+    if user_id:
         try:
-            # Get user_id from authentication verification
-            print(f"[Respondent.io API] Getting user_id for profile fetch...")
-            verification = verify_respondent_authentication(cookies, authorization)
-            user_id_for_profile = verification.get('user_id')
-            
-            if user_id_for_profile:
-                print(f"[Respondent.io API] Fetching user profile (user_id={user_id_for_profile})")
-                profile_data = fetch_user_profile(session, user_id_for_profile)
-                if profile_data:
-                    demographic_params = extract_demographic_params(profile_data)
-                    print(f"[Respondent.io API] Extracted demographic params: {demographic_params}")
-                else:
-                    print(f"[Respondent.io API] No profile data returned, continuing without demographic filters")
+            print(f"[Respondent.io API] Fetching user profile from MongoDB (user_id={user_id})")
+            profile_data = get_user_profile(str(user_id))
+            if profile_data:
+                demographic_params = extract_demographic_params_from_mongodb(profile_data)
+                print(f"[Respondent.io API] Extracted demographic params from MongoDB: {demographic_params}")
             else:
-                print(f"[Respondent.io API] Could not extract user_id from authentication, skipping profile fetch")
+                print(f"[Respondent.io API] No profile data found in MongoDB, continuing without demographic filters")
         except Exception as e:
-            print(f"[Respondent.io API] Failed to fetch profile (continuing without demographic filters): {e}")
+            print(f"[Respondent.io API] Failed to fetch profile from MongoDB (continuing without demographic filters): {e}")
             # Continue without demographic parameters - they're optional
     
     # Fetch all pages using totalResults-based pagination
