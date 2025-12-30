@@ -45,7 +45,7 @@ except ImportError:
 hide_progress = {}
 
 
-def fetch_respondent_projects(session, profile_id, page_size=15, page=1, user_id=None, use_cache=True, 
+def fetch_respondent_projects(session, profile_id, page_size=50, page=1, user_id=None, use_cache=True, 
                                gender=None, education_level=None, ethnicity=None, date_of_birth=None, country=None, sort="v4Score"):
     """
     Fetch projects from Respondent.io API, checking cache first if available
@@ -53,7 +53,7 @@ def fetch_respondent_projects(session, profile_id, page_size=15, page=1, user_id
     Args:
         session: Authenticated requests.Session object
         profile_id: Profile ID to search for
-        page_size: Number of results per page (default: 15)
+        page_size: Number of results per page (default: 50)
         page: Page number (default: 1)
         user_id: Optional user ID for cache lookup
         use_cache: Whether to use cache (default: True)
@@ -93,7 +93,7 @@ def fetch_respondent_projects(session, profile_id, page_size=15, page=1, user_id
         "sort": sort,
         "pageSize": page_size,
         "page": page,
-        "includeCount": "false",
+        "includeCount": "true",
         "showHiddenProjects": "false",
         "onlyShowMatched": "false",
         "showEligible": "true",
@@ -143,17 +143,17 @@ def fetch_respondent_projects(session, profile_id, page_size=15, page=1, user_id
         raise Exception(f"Invalid JSON response: {e}")
 
 
-def fetch_all_respondent_projects(session, profile_id, page_size=15, user_id=None, use_cache=True, cookies=None, authorization=None):
+def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=None, use_cache=True, cookies=None, authorization=None):
     """
     Fetch all pages of projects from Respondent.io API, checking cache first
     
-    Uses heuristic pagination: if a page returns exactly page_size results, assume there's
-    a next page and continue fetching until a page returns fewer than page_size results.
+    Uses totalResults-based pagination: fetches the first page with includeCount=true to get
+    totalResults, then calculates the total number of pages needed and fetches all pages.
     
     Args:
         session: Authenticated requests.Session object
         profile_id: Profile ID to search for
-        page_size: Number of results per page (default: 15)
+        page_size: Number of results per page (default: 50)
         user_id: Optional user ID for cache lookup
         use_cache: Whether to use cache (default: True)
         cookies: Optional cookies dict for session validation
@@ -212,73 +212,96 @@ def fetch_all_respondent_projects(session, profile_id, page_size=15, user_id=Non
             print(f"[Respondent.io API] Failed to fetch profile (continuing without demographic filters): {e}")
             # Continue without demographic parameters - they're optional
     
-    # Fetch all pages using heuristic pagination
+    # Fetch all pages using totalResults-based pagination
     print(f"[Respondent.io API] Fetching all projects (profile_id={profile_id}, page_size={page_size})")
     all_projects = []
-    page = 1
-    max_pages = 20  # Safety limit to prevent infinite loops
+    total_results = None
+    total_pages = None
     
-    while page <= max_pages:
-        try:
-            # Use demographic parameters from user profile
-            page_data = fetch_respondent_projects(
-                session, profile_id, page_size, page=page, user_id=None, use_cache=False,
-                gender=demographic_params.get('gender'),
-                education_level=demographic_params.get('education_level'),
-                ethnicity=demographic_params.get('ethnicity'),
-                date_of_birth=demographic_params.get('date_of_birth'),
-                country=demographic_params.get('country'),
-                sort="respondentRemuneration"
-            )
-            
-            # Validate response structure
-            if not isinstance(page_data, dict):
-                print(f"[Respondent.io API] Invalid response format for page {page}, stopping pagination")
+    # Fetch first page to get totalResults
+    try:
+        page_data = fetch_respondent_projects(
+            session, profile_id, page_size, page=1, user_id=None, use_cache=False,
+            gender=demographic_params.get('gender'),
+            education_level=demographic_params.get('education_level'),
+            ethnicity=demographic_params.get('ethnicity'),
+            date_of_birth=demographic_params.get('date_of_birth'),
+            country=demographic_params.get('country'),
+            sort="respondentRemuneration"
+        )
+        
+        # Validate response structure
+        if not isinstance(page_data, dict):
+            raise Exception(f"Invalid response format for page 1: {type(page_data)}")
+        
+        # Extract page_results first
+        page_results = page_data.get('results', [])
+        if not isinstance(page_results, list):
+            raise Exception(f"Invalid results format for page 1: {type(page_results)}")
+        
+        # Extract totalResults from first page response
+        total_results = page_data.get('totalResults')
+        if total_results is None:
+            print(f"[Respondent.io API] WARNING: totalResults not found in response, falling back to count of results")
+            # Fallback: use the count of results we got
+            total_results = len(page_results)
+        
+        # Calculate total pages needed (ceiling division)
+        total_pages = (total_results + page_size - 1) // page_size
+        
+        all_projects.extend(page_results)
+        print(f"[Respondent.io API] Fetched page 1: {len(page_results)} results (totalResults: {total_results}, total pages: {total_pages})")
+        
+        # Safety limit to prevent excessive requests
+        max_pages = 100
+        if total_pages > max_pages:
+            print(f"[Respondent.io API] WARNING: total_pages ({total_pages}) exceeds safety limit ({max_pages}), limiting to {max_pages} pages")
+            total_pages = max_pages
+        
+        # Fetch remaining pages (2 through total_pages)
+        for page in range(2, total_pages + 1):
+            try:
+                page_data = fetch_respondent_projects(
+                    session, profile_id, page_size, page=page, user_id=None, use_cache=False,
+                    gender=demographic_params.get('gender'),
+                    education_level=demographic_params.get('education_level'),
+                    ethnicity=demographic_params.get('ethnicity'),
+                    date_of_birth=demographic_params.get('date_of_birth'),
+                    country=demographic_params.get('country'),
+                    sort="respondentRemuneration"
+                )
+                
+                # Validate response structure
+                if not isinstance(page_data, dict):
+                    print(f"[Respondent.io API] Invalid response format for page {page}, stopping pagination")
+                    break
+                
+                page_results = page_data.get('results', [])
+                if not isinstance(page_results, list):
+                    print(f"[Respondent.io API] Invalid results format for page {page}, stopping pagination")
+                    break
+                
+                results_count = len(page_results)
+                if results_count == 0:
+                    print(f"[Respondent.io API] Reached last page (got 0 results on page {page})")
+                    break
+                
+                all_projects.extend(page_results)
+                print(f"[Respondent.io API] Fetched page {page}: {results_count} results (total: {len(all_projects)} projects)")
+                
+            except Exception as e:
+                print(f"[Respondent.io API] ERROR fetching page {page}: {e}")
+                # For subsequent pages, stop pagination but return what we have
+                print(f"[Respondent.io API] Stopping pagination due to error, returning {len(all_projects)} projects collected so far")
                 break
-            
-            page_results = page_data.get('results', [])
-            
-            # Handle case where results might be None or not a list
-            if not isinstance(page_results, list):
-                print(f"[Respondent.io API] Invalid results format for page {page}, stopping pagination")
-                break
-            
-            results_count = len(page_results)
-            
-            # If we got 0 results, we've reached the end
-            if results_count == 0:
-                print(f"[Respondent.io API] Reached last page (got 0 results on page {page})")
-                break
-            
-            all_projects.extend(page_results)
-            print(f"[Respondent.io API] Fetched page {page}: {results_count} results (total: {len(all_projects)} projects)")
-            
-            # Continue fetching if we got exactly page_size results (definitely more pages)
-            # Also continue if we got fewer than page_size but > 0 (might be more pages, check next page)
-            # Only stop if we get 0 results (handled above)
-            if results_count == page_size:
-                # Got exactly page_size, definitely more pages available
-                page += 1
-            elif results_count < page_size:
-                # Got fewer than page_size, but check next page to confirm it's empty
-                # If next page returns 0, we'll stop; if it returns > 0, we continue
-                page += 1
-            
-        except Exception as e:
-            print(f"[Respondent.io API] ERROR fetching page {page}: {e}")
-            # If we have some results, continue with what we have
-            # If this is the first page and it fails, we should raise the error
-            if page == 1:
-                raise
-            # For subsequent pages, stop pagination but return what we have
-            print(f"[Respondent.io API] Stopping pagination due to error, returning {len(all_projects)} projects collected so far")
-            break
+        
+    except Exception as e:
+        print(f"[Respondent.io API] ERROR fetching first page: {e}")
+        raise
     
-    if page > max_pages:
-        print(f"[Respondent.io API] WARNING: Reached maximum page limit ({max_pages}), stopping pagination")
-    
-    total_count = len(all_projects)
-    print(f"[Respondent.io API] Completed fetching all projects: {total_count} projects total across {page} page(s)")
+    # Use totalResults if available, otherwise use count of fetched projects
+    total_count = total_results if total_results is not None else len(all_projects)
+    print(f"[Respondent.io API] Completed fetching all projects: {len(all_projects)} projects fetched (totalResults: {total_count})")
     
     # Cache the results if user_id provided
     if user_id and projects_cache_collection is not None:
@@ -332,7 +355,7 @@ def get_hidden_count(user_id):
         return 0
 
 
-def process_and_hide_projects(user_id, session, profile_id, filters, page_size=15):
+def process_and_hide_projects(user_id, session, profile_id, filters, page_size=50):
     """
     Process all projects and hide matching ones via API
     

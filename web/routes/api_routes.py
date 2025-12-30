@@ -625,7 +625,7 @@ def refresh_cache():
         all_projects, total_count = fetch_all_respondent_projects(
             session=req_session,
             profile_id=profile_id,
-            page_size=15,
+            page_size=50,
             user_id=user_id,
             use_cache=False,
             cookies=config.get('cookies', {}),
