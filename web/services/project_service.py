@@ -347,7 +347,7 @@ def get_hidden_count(user_id):
         return 0
 
 
-def process_and_hide_projects(user_id, session, profile_id, filters, page_size=50):
+def process_and_hide_projects(user_id, session, profile_id, filters, page_size=50, cookies=None, authorization=None):
     """
     Process all projects and hide matching ones via API
     
@@ -357,6 +357,8 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         profile_id: Profile ID to search for
         filters: Filter criteria dict
         page_size: Number of results per page
+        cookies: Optional cookies dict for cache refresh
+        authorization: Optional authorization header for cache refresh
         
     Returns:
         dict with results: total_processed, total_hidden, failures
@@ -390,6 +392,14 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         errors = []
         hidden_project_ids = []
         
+        # Determine hidden_method based on whether auto-hide is enabled
+        auto_hide_enabled = (
+            filters.get('min_incentive_auto') or 
+            filters.get('min_hourly_rate_auto') or 
+            filters.get('research_types_auto')
+        )
+        hidden_method = 'auto' if auto_hide_enabled else 'manual'
+        
         # Hide each project
         for idx, project in enumerate(projects_to_hide):
             project_id = project.get('id')
@@ -400,13 +410,13 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
                     hidden_count += 1
                     hidden_project_ids.append(project_id)
                     hide_progress[user_id_str]['hidden'] = hidden_count
-                    # Log to hidden_projects_log
+                    # Log to hidden_projects_log with correct method
                     if hidden_projects_log_collection is not None:
                         log_hidden_project(
                             hidden_projects_log_collection,
                             str(user_id),
                             project_id,
-                            'manual'
+                            hidden_method
                         )
                 else:
                     errors.append(project_id)
@@ -417,6 +427,20 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         # Update cache to remove hidden projects
         if projects_cache_collection is not None and hidden_project_ids:
             mark_projects_hidden_in_cache(projects_cache_collection, user_id_str, hidden_project_ids)
+        
+        # Refresh cache from API to get updated project list after hiding
+        if projects_cache_collection is not None and hidden_project_ids:
+            try:
+                print(f"[Project Service] Refreshing cache after hiding {len(hidden_project_ids)} projects")
+                # Fetch fresh data from API (bypassing cache)
+                all_projects_refreshed, total_count_refreshed = fetch_all_respondent_projects(
+                    session, profile_id, page_size, user_id=user_id, use_cache=False, 
+                    cookies=cookies, authorization=authorization
+                )
+                print(f"[Project Service] Cache refreshed: {len(all_projects_refreshed)} projects now in cache")
+            except Exception as e:
+                print(f"[Project Service] Error refreshing cache after hiding: {e}")
+                # Don't fail the whole operation if cache refresh fails
         
         # Update progress to completed
         hide_progress[user_id_str]['status'] = 'completed'

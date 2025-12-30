@@ -274,18 +274,21 @@ def save_user_filters(user_id, filters):
         raise Exception("MongoDB connection not available. Please ensure MongoDB is running.")
     try:
         # Convert string values to numbers or None
+        # Explicitly handle null/None values to ensure cleared settings are saved
         min_incentive = None
         min_hourly_rate = None
         
-        if filters.get('min_incentive'):
+        min_incentive_val = filters.get('min_incentive')
+        if min_incentive_val is not None and min_incentive_val != '':
             try:
-                min_incentive = float(filters.get('min_incentive'))
+                min_incentive = float(min_incentive_val)
             except (ValueError, TypeError):
                 min_incentive = None
         
-        if filters.get('min_hourly_rate'):
+        min_hourly_rate_val = filters.get('min_hourly_rate')
+        if min_hourly_rate_val is not None and min_hourly_rate_val != '':
             try:
-                min_hourly_rate = float(filters.get('min_hourly_rate'))
+                min_hourly_rate = float(min_hourly_rate_val)
             except (ValueError, TypeError):
                 min_hourly_rate = None
         
