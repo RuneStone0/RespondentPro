@@ -1,0 +1,267 @@
+{
+    "status": "PENDING",
+    "linkedinUrl": "https://www.linkedin.com/in/slug/",
+    "mobileType": null,
+    "phoneVerificationCode": null,
+    "paypal": null,
+    "employment": {
+        "email": "rune@employer.com",
+        "emailDomain": null,
+        "company": "employer",
+        "companySize": "501-1000",
+        "jobTitle": "Developer",
+        "jobTitleId": "5fd502da802baf994fab01aa",
+        "seniorityLevel": "developer",
+        "roleDescription": "Some fancy job description",
+        "isEmailVerified": true,
+        "employmentStatus": "employedfulltime",
+        "verificationToken": null,
+        "industry": [
+            "Internet",
+            "Security and Investigations",
+            "Information Technology and Services",
+            "Information Services",
+            "Financial Services"
+        ],
+        "jobFunctions": [
+            "informationTechnology"
+        ],
+        "income": "payroll",
+        "smallBusinessOwner": false
+    },
+    "picture": "https://respondent-storage.s3.us-east-1.amazonaws.com/users/691f593aabd77eb5a29c7b35/picture-1763662215828/Rune-2019-smaller.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIA45R3WANNYAROAEE6%2F20251230%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251230T011015Z&X-Amz-Expires=16315&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEOD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQD6NtGV%2FKBC26N3pzsVkWaLAAl6DqrBY765mp3KV2dDgQIhALR5PGXZhucCbKXTzAfgVeyGCD3e9C7R0MzCsnC6M2LiKoYECKn%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQBRoMODg4MTA5NjYzMDY3Igw3PIl%2BFYNnvbNLwtMq2gPPPhbq9EERS527l3HJjKA2bo5SS%2Fou4RNW3scis2G1oQQVEIrzidc2VdMH6y%2BnZbPGiAOjhryUCbMxnxlPwt1gq0c2zukku7fhThdnWx5YyYRU9RLeSB8wunsko%2Fc59jXFTeZTRJ7O2btp3RYDqwWThTVTjUuNid9IZSFek17Ywno%2BTTsCIaEkoXUMx9mKcPZX4%2FiTPYm31BZm2pfZtLdSNRkyFhKI%2FgbozJCKCHUjUiOIvMEeJsiv796CLc2GX%2BKBCQV%2BYUP8bFM4EscN0rGhwj%2FGsvxhHjiAV2XubTJ2VkDjC00LRbwNTejyplD%2FHCdUUPRfqrD7jE0u5XQS2JM%2BlbGYVpzV9Ohh7YO6Tqp%2B0aebTeumD36oVmS%2FnysQdVq6bu8IgY5e37FAskvDLs2wGK6Q0CuoequugrhUW8JxGTbQEDmeZRXmnIVt%2FFsOFmkndmOHP8Z85RfYMcdmMpPIBLEf4fc8yQ0lot5Koa2M9CkIukm9X4e4ZHoguGXRzPXvenzGBGDwrkPpuIcgmNPZq8rf57Z4X2qcKj7vuBwa03QjOcbGJ7BKY0kedw%2FKZZu3CkFsal%2FSZuZVqmwVZfCv9WaFDgHMc0yQsG%2By3UOUSdTbUH747hdBsfgw06PMygY6pAH1Gh0iZQL6O6E91fnkih4awwpBMo2N0QHBMZfZAaLH5Wx2HhWVKGyG7P04Imqzsxlutq1PeAfJzKoJmATxQL%2FubVMcpVn6019Sqd1SmubH3mE%2FWZysW2JBmSklSdhZk2hqEveM%2FKHdUR7qhkUbzIMo0vJ62LynlvtFcf8cb24%2FNELlN%2BtwVOz4HVAL283DUO%2FGrYFTdOqR68y8cghqkm8J%2FR5GWA%3D%3D&X-Amz-Signature=41134e101f87d47301a80b2086b11fbd02d1c976199c16ef8b516a2ff3ddc5e7&X-Amz-SignedHeaders=host&x-id=GetObject",
+    "socialLinks": {
+        "linkedin": {
+            "url": "https://www.linkedin.com/in/slug/",
+            "createdAt": null
+        },
+        "facebook": {
+            "url": null,
+            "createdAt": null
+        },
+        "twitter": {
+            "url": "https://twitter.com/slug",
+            "createdAt": null
+        },
+        "instagram": {
+            "url": null,
+            "createdAt": null
+        },
+        "github": {
+            "url": "https://github.com/slug",
+            "createdAt": null
+        }
+    },
+    "score": 52,
+    "skills": [
+        {
+            "updatedAt": "2025-06-30T06:17:25.482Z",
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "validated": true,
+            "isCanonical": true,
+            "type": "certification",
+            "slug": "web development",
+            "name": "Web Development",
+            "id": "5ffcc8aeb4b3a4e96ada7bd0"
+        },
+        {
+            "updatedAt": "2025-06-30T06:12:50.637Z",
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "validated": true,
+            "isCanonical": true,
+            "type": "certification",
+            "slug": "cyber security assessment",
+            "name": "Cyber Security Assessment",
+            "id": "5ffcc8abb4b3a4e96ada278d"
+        },
+        {
+            "updatedAt": "2025-06-30T06:12:44.804Z",
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "validated": true,
+            "isCanonical": true,
+            "type": "certification",
+            "slug": "cyber security strategy",
+            "name": "Cyber Security Strategy",
+            "id": "5ffcc8abb4b3a4e96ada2792"
+        },
+        {
+            "updatedAt": "2025-06-30T06:21:27.301Z",
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "validated": true,
+            "isCanonical": true,
+            "type": "certification",
+            "slug": "hacking",
+            "name": "Hacking",
+            "id": "5ffcc8b0b4b3a4e96adac53d"
+        },
+        {
+            "updatedAt": "2025-06-30T06:18:28.326Z",
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "validated": true,
+            "isCanonical": true,
+            "type": "certification",
+            "slug": "bitcoin",
+            "name": "Bitcoin",
+            "id": "5ffcc8afb4b3a4e96ada8ec7"
+        },
+        {
+            "updatedAt": "2025-06-30T06:17:05.833Z",
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "validated": true,
+            "isCanonical": true,
+            "type": "certification",
+            "slug": "trading strategy",
+            "name": "Trading Strategy",
+            "id": "5ffcc8aeb4b3a4e96ada75a1"
+        },
+        {
+            "updatedAt": "2025-06-30T07:34:33.831Z",
+            "createdAt": "2024-09-02T19:41:51.168Z",
+            "validated": false,
+            "isCanonical": false,
+            "type": "user-created",
+            "count": 0,
+            "slug": "3d pri",
+            "name": "3d pri",
+            "id": "66d614ffe5f98d8378f099cc"
+        }
+    ],
+    "videoIntroUrl": null,
+    "trustedCompany": null,
+    "userId": "691f593aabd77eb5a29c7b35",
+    "firstName": "Rune",
+    "lastName": "Kristensen",
+    "phone": "+11232177852",
+    "isPhoneVerified": true,
+    "verifiedPhone": "+11232177852",
+    "twilioPhoneData": {
+        "countryCode": "US",
+        "phoneNumber": "+11232177852",
+        "valid": true,
+        "lineTypeIntelligence": {
+            "carrierName": "T-Mobile USA, Inc.",
+            "errorCode": null,
+            "mobileCountryCode": "310",
+            "mobileNetworkCode": "160",
+            "type": "mobile"
+        }
+    },
+    "email": "name@gmail.com",
+    "emailDomain": "gmail.com",
+    "demographics": {
+        "gender": "male",
+        "ethnicity": "whitecaucasian",
+        "educationLevel": "bachelordegree",
+        "dateOfBirth": "1988-06-22",
+        "birthDate": "1988-06-22T00:00:00.000Z",
+        "householdIncome": "200000+",
+        "age": "37"
+    },
+    "location": {
+        "city": {
+            "id": "ChIJaRsa2O1_TYcRyWENYIGsb_0",
+            "country": "US",
+            "city": "Lehi",
+            "state": "UT",
+            "formattedAddress": "Lehi, UT, USA",
+            "location": {
+                "latitude": 40.3916172,
+                "longitude": -111.8507662
+            },
+            "zip": null
+        },
+        "state": "UT",
+        "loc": {
+            "type": "Point",
+            "coordinates": [
+                -111.8507662,
+                40.3916172
+            ]
+        }
+    },
+    "social": {
+        "linkedin": null,
+        "facebook": null
+    },
+    "notificationSettings": {
+        "dailyDigest": true,
+        "targetedResearchInvitation": true
+    },
+    "topics": [
+        {
+            "id": "612d47a193dff5eaf5b2b413",
+            "name": "Information Technology"
+        },
+        {
+            "id": "612d47a193dff5eaf5b2b408",
+            "name": "Computers & Electronics"
+        },
+        {
+            "id": "612d47a193dff5eaf5b2b40b",
+            "name": "Finance"
+        }
+    ],
+    "personal": {
+        "relationshipStatus": "married",
+        "languages": [
+            "en",
+            "da"
+        ],
+        "childrenBirthYears": [
+            "2025",
+            "2023"
+        ],
+        "livingSituation": "spouse",
+        "pets": [
+            "noPets"
+        ],
+        "homeOwner": true
+    },
+    "technical": {
+        "webcam": true,
+        "mobilePhoneWithInternet": true,
+        "programmingLanguages": [
+            "javaScript",
+            "python",
+            "c#",
+            "other"
+        ],
+        "browsers": [
+            "chrome",
+            "edge",
+            "firefox",
+            "internetExplorer",
+            "safari",
+            "other"
+        ],
+        "smartphoneOS": [
+            "ios",
+            "windows"
+        ],
+        "tabletOS": [
+            "ipadOS",
+            "windows"
+        ],
+        "computerOS": [
+            "windows",
+            "other",
+            "linux"
+        ]
+    },
+    "risk": {
+        "riskLevel": "approved",
+        "profile": {
+            "lastChecked": "2025-12-27T06:55:49.060Z",
+            "level": "approved"
+        },
+        "clearbit": {
+            "lastChecked": "2025-12-27T06:55:48.729Z",
+            "level": "approved"
+        }
+    },
+    "lastLoginAt": "2025-12-30T02:53:46.612Z",
+    "lastScreenerSubmittedAt": "2025-12-27T07:11:08.572Z",
+    "createdAt": "2025-11-20T18:08:59.361Z",
+    "updatedAt": "2025-12-30T02:53:46.625Z",
+    "id": "691f593b2e2ac1bd7fa84915"
+}
