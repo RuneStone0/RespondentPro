@@ -1,0 +1,1571 @@
+{% extends "base.html" %}
+
+{% block title %}Project Preview - Respondent Pro{% endblock %}
+
+{% block extra_css %}
+<style>
+    .header {
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--border-color);
+        border-radius: 0;
+        margin-bottom: 0;
+        box-shadow: none;
+    }
+    
+    .btn-hide-project {
+        padding: 6px 12px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    
+    .btn-hide-project:hover {
+        background: var(--hover-bg);
+        border-color: var(--primary-color);
+    }
+    
+    .progress-spinner {
+        border: 3px solid var(--border-color);
+        border-top: 3px solid var(--primary-color);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Toast Notification System */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .toast {
+        min-width: 300px;
+        max-width: 400px;
+        padding: 16px 20px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        animation: slideInRight 0.3s ease-out;
+        position: relative;
+    }
+    
+    .toast.success {
+        border-left: 4px solid #10b981;
+    }
+    
+    .toast.error {
+        border-left: 4px solid #ef4444;
+    }
+    
+    .toast.info {
+        border-left: 4px solid var(--primary-color);
+    }
+    
+    .toast-icon {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+    }
+    
+    .toast-content {
+        flex: 1;
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+    
+    .toast-close {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+    
+    .toast-close:hover {
+        background: var(--hover-bg);
+        color: var(--text-primary);
+    }
+    
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOutRight {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    .toast.hiding {
+        animation: slideOutRight 0.3s ease-in forwards;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="main-content">
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">R</div>
+            <div class="header-title">Respondent Pro</div>
+        </div>
+        <div class="header-right">
+            <div class="profile-menu-container">
+                <button class="profile-icon-btn" onclick="toggleProfileMenu()" aria-label="Profile menu">
+                    <div class="user-avatar">{{ username[0].upper() if username else 'U' }}</div>
+                </button>
+                <div class="profile-dropdown" id="profileDropdown">
+                    <div class="profile-dropdown-header">
+                        <div class="profile-dropdown-avatar">{{ username[0].upper() if username else 'U' }}</div>
+                        <div class="profile-dropdown-info">
+                            <div class="profile-dropdown-name">{{ username }}</div>
+                            <div class="profile-dropdown-id" id="profileAccountId">ID: {{ config.profile_id[:8] if config and config.profile_id else 'Not configured' }}</div>
+                        </div>
+                    </div>
+                    <div class="profile-dropdown-divider"></div>
+                    <div class="profile-dropdown-item" onclick="openConfigModal(); closeProfileMenu();">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>Credentials</span>
+                    </div>
+                    <div class="profile-dropdown-item" onclick="toggleTheme();">
+                        <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
+                            <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
+                        </svg>
+                        <span>Dark Mode</span>
+                    </div>
+                    <div class="profile-dropdown-divider"></div>
+                    <a href="/logout" class="profile-dropdown-item profile-dropdown-logout">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1H3zm11 4.414l-4.293 4.293a1 1 0 01-1.414 0L4 8.414V15h10V7.414zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if error %}
+    <div class="alert-banner" id="alertBanner">
+        <div class="alert-content">
+            <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            <div>
+                <strong>Failed to fetch projects</strong>
+                <div style="font-size: 12px; margin-top: 4px; opacity: 0.9;">{{ error }}</div>
+            </div>
+        </div>
+        <button class="btn-try-again" onclick="location.reload()">Try Again</button>
+    </div>
+    {% endif %}
+    
+    <div class="content-area">
+        <div class="section-header">
+            <div class="section-actions">
+                <button class="btn-filter-settings" onclick="openRecommendationsModal()" id="recommendationsBtn" style="margin-right: 8px;">
+                    <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; margin-right: 8px;">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                    Recommendations
+                </button>
+                <button class="btn-filter-settings" onclick="toggleFilterPanel()" id="filterSettingsBtn">
+                    <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; margin-right: 8px;">
+                        <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"/>
+                    </svg>
+                    Filter Settings
+                </button>
+            </div>
+        </div>
+        
+        <div class="filter-panel" id="filterPanel" style="display: none;">
+            <div class="filter-panel-header">
+                <h3>Hide Projects</h3>
+                <button class="btn-close-filter" onclick="toggleFilterPanel()">×</button>
+            </div>
+            <div class="filter-panel-content">
+                <!-- Global Mode Selector -->
+                <div class="filter-mode-section">
+                    <div class="mode-selector-header">
+                        <label>Auto Hide:</label>
+                        <div class="filter-mode-toggle">
+                            <span class="mode-label">Manual</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="globalAutoMode" onchange="updateGlobalMode()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="mode-label">Auto</span>
+                        </div>
+                    </div>
+                    <div class="mode-description" id="modeDescription">
+                        <p><strong>Manual Mode:</strong> Configure your filters below and click "Hide Projects" to hide projects that don't match your criteria.</p>
+                    </div>
+                </div>
+                
+                <div class="filter-divider"></div>
+                
+                <!-- Filter Options -->
+                <div class="filter-group">
+                    <label for="minIncentive">Hide projects with incentive less than:</label>
+                    <div class="filter-input-group">
+                        <span class="currency-symbol">$</span>
+                        <input type="number" id="minIncentive" placeholder="e.g., 70" min="0" step="0.01">
+                        <button class="btn-clear-filter" onclick="clearFilter('minIncentive')" title="Clear filter">×</button>
+                    </div>
+                    <div class="help-text">Leave empty to keep all projects</div>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="minHourlyRate">Hide projects with hourly rate less than:</label>
+                    <div class="filter-input-group">
+                        <span class="currency-symbol">$</span>
+                        <input type="number" id="minHourlyRate" placeholder="e.g., 80" min="0" step="0.01">
+                        <button class="btn-clear-filter" onclick="clearFilter('minHourlyRate')" title="Clear filter">×</button>
+                    </div>
+                    <div class="help-text">Leave empty to keep all projects</div>
+                </div>
+                
+                <div class="filter-group">
+                    <div class="filter-header-inline">
+                        <label>Show only these research types:</label>
+                        <button type="button" class="btn-clear-research-types" onclick="clearResearchTypes()" title="Clear all selections">Clear</button>
+                    </div>
+                    <div class="research-type-options">
+                        <label class="research-type-option">
+                            <input type="checkbox" id="researchType1" value="1">
+                            <span class="option-label">Remote</span>
+                        </label>
+                        <label class="research-type-option">
+                            <input type="checkbox" id="researchType2" value="2">
+                            <span class="option-label">Focus Groups</span>
+                        </label>
+                        <label class="research-type-option">
+                            <input type="checkbox" id="researchType8" value="8">
+                            <span class="option-label">In-Person</span>
+                        </label>
+                    </div>
+                    <div class="help-text">Select one or more research types. Leave all unselected to show all types.</div>
+                </div>
+                
+                <div class="filter-panel-actions">
+                    <button class="btn-primary" id="applyFiltersBtn" onclick="saveFilters()">Hide Projects</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="projects-container">
+            {% if not has_config %}
+            <div class="empty-state">
+                <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <h3>Session keys not configured</h3>
+                <p>Click the button below to configure your Respondent.io session keys.</p>
+                <button class="btn-primary" onclick="openConfigModal()" style="margin-top: 16px;">Configure Session Keys</button>
+            </div>
+            {% elif projects and projects.results %}
+            <div class="project-list">
+                {% for project in projects.results %}
+                <div class="project-card">
+                    <div class="project-header">
+                        <div>
+                            <div class="project-title">{{ project.name or 'Untitled Project' }}</div>
+                            <div class="project-id">ID: {{ project.id }}</div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button class="btn-hide-project" onclick="openHideModal('{{ project.id }}', '{{ project.name|replace("'", "\\'") }}')" title="Hide this project">
+                                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A20.932 20.932 0 0018.928 10c-1.137-4.5-4.663-7.857-8.928-9.5a19.04 19.04 0 00-2.348.637L3.707 2.293zM5.865 4.637A18.97 18.97 0 0010 3.5c2.209 0 4.154.89 5.635 2.363A18.97 18.97 0 0116.5 10c0 .695-.08 1.37-.23 2.02l-1.523-1.523A10.945 10.945 0 0015 10a8 8 0 00-8-8c-.695 0-1.37.08-2.02.23L2.293 2.293zm8.293 8.293l-1.586-1.586A4 4 0 0110 6a4 4 0 00-4 4c0 .695.08 1.37.23 2.02l1.523 1.523A10.945 10.945 0 005 10a8 8 0 018-8c.695 0 1.37.08 2.02.23l-1.523 1.523z" clip-rule="evenodd"/>
+                                    <path d="M13.586 13.586L2.293 2.293a1 1 0 011.414-1.414l11.293 11.293a1 1 0 01-1.414 1.414z"/>
+                                </svg>
+                                Hide
+                            </button>
+                            <a href="https://app.respondent.io/respondents/v2/projects/view/{{ project.id }}" 
+                               target="_blank" 
+                               class="project-link">
+                                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right: 6px; vertical-align: middle;">
+                                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/>
+                                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/>
+                                </svg>
+                                Apply
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="project-meta">
+                        {% set remuneration = project.respondentRemuneration or 0 %}
+                        {% set time_minutes = project.timeMinutesRequired or 0 %}
+                        {% if time_minutes > 0 %}
+                            {% set hourly_rate = (remuneration / time_minutes) * 60 %}
+                        {% else %}
+                            {% set hourly_rate = 0 %}
+                        {% endif %}
+                        
+                        <div class="meta-item">
+                            <span class="meta-label">Hourly Rate</span>
+                            <span class="meta-value hourly-rate">${{ "%.2f"|format(hourly_rate) }}/hr</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Incentive</span>
+                            <span class="meta-value">${{ remuneration }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Time Required</span>
+                            <span class="meta-value">{{ time_minutes }} min</span>
+                        </div>
+                        {% if project.kindOfResearch %}
+                        <div class="meta-item">
+                            <span class="meta-label">Research Type</span>
+                            <span class="meta-value">
+                                {% if project.kindOfResearch == 1 %}Remote
+                                {% elif project.kindOfResearch == 2 %}Focus Groups
+                                {% elif project.kindOfResearch == 8 %}In-Person
+                                {% else %}{{ project.kindOfResearch }}{% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if project.description %}
+                    <div class="project-description">
+                        {{ project.description[:300] }}{% if project.description|length > 300 %}...{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <h3>No projects match your criteria</h3>
+                <p>Try changing your Target Hourly Rate or targeting profile.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="footer">
+        <div class="footer-left">
+            <div class="hide-progress" id="hideProgress" style="display: none;">
+                <div class="progress-spinner"></div>
+                <span>Hiding projects... <strong id="progressCurrent">0</strong>/<strong id="progressTotal">0</strong></span>
+            </div>
+        </div>
+        <div class="footer-right">
+            <div class="footer-stat" id="footerSyncStatus" style="display: none;">
+                <span>Synced <span id="footerSyncTime"></span> • Next refresh in <span id="footerCountdown"></span></span>
+            </div>
+            <div class="footer-stat">
+                <button onclick="refreshCache()" id="footerRefreshCacheBtn" style="background: none; border: none; padding: 4px; cursor: pointer; display: flex; align-items: center; color: var(--text-secondary); transition: color 0.2s;" title="Refresh project cache manually" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">
+                    <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;">
+                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="footer-stat">
+                <span class="connection-badge" id="footerConnectionStatus">{% if has_config %}Connected{% else %}Inactive{% endif %}</span>
+            </div>
+            <div class="footer-stat" title="Total number of projects hidden by Respondent Pro based on your filter settings (minimum incentive, hourly rate, or research type)">
+                <div class="status-dot orange"></div>
+                <span><strong id="hiddenCount">{{ hidden_count }}</strong> Hidden</span>
+            </div>
+            {% if projects and projects.count is defined %}
+            <div class="footer-stat" title="Total number of available projects">
+                <span><strong id="totalProjectsCount">{{ projects.count }}</strong> Projects</span>
+            </div>
+            {% else %}
+            <div class="footer-stat" title="Total number of available projects" style="display: none;">
+                <span><strong id="totalProjectsCount">0</strong> Projects</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Session Keys Configuration Modal -->
+<div class="modal-overlay" id="configModal" style="display: {% if show_config_modal %}flex{% else %}none{% endif %};">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>
+                Session Keys Configuration
+                {% if config %}
+                <span class="status-badge saved">Saved</span>
+                {% else %}
+                <span class="status-badge not-saved">Not Saved</span>
+                {% endif %}
+            </h2>
+            <button class="btn-close-modal" onclick="closeConfigModal()" aria-label="Close">×</button>
+        </div>
+        
+        <div class="modal-body">
+            <div class="error" id="configError"></div>
+            <div class="success" id="configSuccess"></div>
+            
+            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                Provide your Respondent.io session keys to enable API access. You can find these in your browser's Developer Tools (F12) → Network tab when logged into respondent.io.
+            </p>
+            
+            <form id="sessionKeysForm">
+                <div class="form-group">
+                    <label for="modal_session_sid">respondent.session.sid *</label>
+                    <input type="text" id="modal_session_sid" placeholder="s%3AvDYrxyRM_m854jqPq90t05fkyVodoUc-..." name="session_sid" required>
+                    <div class="help-text">The session cookie value from your browser</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="modal_authorization">Authorization Header</label>
+                    <input type="text" id="modal_authorization" placeholder="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." name="authorization">
+                    <div class="help-text">The Authorization Bearer token from request headers (optional)</div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeConfigModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" id="modalSaveBtn">Save Session Keys</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Hide Project Feedback Modal -->
+<div class="modal-overlay" id="hideModal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Hide Project</h2>
+            <button class="btn-close-modal" onclick="closeHideModal()" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom: 16px;">Why are you hiding this project? (optional)</p>
+            <textarea id="hideFeedbackText" placeholder="e.g., Not interested in healthcare projects, Wrong region, etc." rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-family: inherit; resize: vertical;"></textarea>
+            <div class="modal-actions" style="margin-top: 16px;">
+                <button type="button" class="btn-secondary" onclick="closeHideModal()">Cancel</button>
+                <button type="button" class="btn-secondary" onclick="hideProjectWithoutFeedback()">Hide without feedback</button>
+                <button type="button" class="btn-primary" onclick="hideProjectWithFeedback()">Hide</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations Modal -->
+<div class="modal-overlay" id="recommendationsModal" style="display: none;">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <h2>Category Recommendations</h2>
+            <button class="btn-close-modal" onclick="closeRecommendationsModal()" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="recommendationsLoading" style="text-align: center; padding: 40px;">
+                <div class="progress-spinner"></div>
+                <p>Generating recommendations...</p>
+            </div>
+            <div id="recommendationsList" style="display: none;">
+                <!-- Recommendations will be populated here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Category Preview Modal -->
+<div class="modal-overlay" id="previewModal" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+        <div class="modal-header">
+            <h2 id="previewModalTitle">Preview Category</h2>
+            <button class="btn-close-modal" onclick="closePreviewModal()" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="previewLoading" style="text-align: center; padding: 40px;">
+                <div class="progress-spinner"></div>
+                <p>Loading projects...</p>
+            </div>
+            <div id="previewProjects" style="display: none;">
+                <!-- Projects will be populated here -->
+            </div>
+            <div class="modal-actions" style="margin-top: 16px;">
+                <button type="button" class="btn-secondary" onclick="closePreviewModal()">Cancel</button>
+                <button type="button" class="btn-primary" onclick="hideCategoryFromPreview()">Hide</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notification Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Analytics Section -->
+<div class="analytics-section" id="analyticsSection" style="display: none; margin-top: 24px; padding: 20px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color);">
+    <h3 style="margin-bottom: 16px;">Hidden Projects Analytics</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+            <h4 style="margin-bottom: 12px;">Timeline</h4>
+            <canvas id="hiddenProjectsChart" width="400" height="200"></canvas>
+        </div>
+        <div>
+            <h4 style="margin-bottom: 12px;">Breakdown by Method</h4>
+            <div id="methodBreakdown"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toast Notification System
+    function showToast(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const iconSvg = type === 'success' 
+            ? '<svg class="toast-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>'
+            : type === 'error'
+            ? '<svg class="toast-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>'
+            : '<svg class="toast-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>';
+        
+        toast.innerHTML = `
+            ${iconSvg}
+            <div class="toast-content">${message}</div>
+            <button class="toast-close" onclick="this.parentElement.remove()" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+            </button>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto-remove after duration
+        if (duration > 0) {
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+    }
+    
+    // Modal functions
+    function openConfigModal() {
+        document.getElementById('configModal').style.display = 'flex';
+        // Load existing config if available
+        {% if config %}
+        const config = {{ config | tojson }};
+        if (config.cookies && config.cookies['respondent.session.sid']) {
+            document.getElementById('modal_session_sid').value = config.cookies['respondent.session.sid'];
+        }
+        if (config.authorization) {
+            document.getElementById('modal_authorization').value = config.authorization;
+        }
+        {% endif %}
+    }
+    
+    function closeConfigModal() {
+        document.getElementById('configModal').style.display = 'none';
+        hideConfigMessage();
+    }
+    
+    // Close modal when clicking outside
+    document.getElementById('configModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeConfigModal();
+        }
+    });
+    
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeConfigModal();
+        }
+    });
+    
+    function showConfigError(message) {
+        const errorEl = document.getElementById('configError');
+        errorEl.textContent = message;
+        errorEl.classList.add('show');
+        document.getElementById('configSuccess').classList.remove('show');
+    }
+    
+    function showConfigSuccess(message) {
+        const successEl = document.getElementById('configSuccess');
+        successEl.textContent = message;
+        successEl.classList.add('show');
+        document.getElementById('configError').classList.remove('show');
+    }
+    
+    function hideConfigMessage() {
+        document.getElementById('configError').classList.remove('show');
+        document.getElementById('configSuccess').classList.remove('show');
+    }
+    
+    // Handle session keys form submission
+    document.getElementById('sessionKeysForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideConfigMessage();
+        
+        const session_sid = document.getElementById('modal_session_sid').value.trim();
+        const authorization = document.getElementById('modal_authorization').value.trim() || null;
+        
+        if (!session_sid) {
+            showConfigError('respondent.session.sid is required');
+            return;
+        }
+        
+        const saveBtn = document.getElementById('modalSaveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        try {
+            const response = await fetch('/api/session-keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_sid,
+                    authorization
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save session keys');
+            }
+            
+            const result = await response.json();
+            
+            // Display verification results
+            if (result.verification) {
+                const verification = result.verification;
+                if (verification.success) {
+                    showConfigSuccess(
+                        `✅ ${result.message}\n` +
+                        `✅ Authentication verified!\n` +
+                        `Profile ID: ${verification.profile_id}\n` +
+                        `First Name: ${verification.first_name}`
+                    );
+                    
+                    // Reload page after a short delay to show projects
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showConfigError(
+                        `Session keys saved, but verification failed:\n${verification.message}`
+                    );
+                }
+            } else {
+                showConfigSuccess(result.message || 'Session keys saved successfully!');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            }
+            
+        } catch (error) {
+            showConfigError(error.message || 'Failed to save session keys');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Session Keys';
+        }
+    });
+    
+    // Load saved filters on page load
+    {% if filters %}
+    window.addEventListener('DOMContentLoaded', () => {
+        const filters = {{ filters | tojson }};
+        
+        if (filters.min_incentive !== null && filters.min_incentive !== undefined) {
+            document.getElementById('minIncentive').value = filters.min_incentive;
+        }
+        
+        if (filters.min_hourly_rate !== null && filters.min_hourly_rate !== undefined) {
+            document.getElementById('minHourlyRate').value = filters.min_hourly_rate;
+        }
+        
+        // Load research types filter
+        if (filters.research_types && Array.isArray(filters.research_types)) {
+            filters.research_types.forEach(typeId => {
+                const checkbox = document.getElementById('researchType' + typeId);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        }
+        
+        // Set global auto mode (check if any filter is in auto mode)
+        const isAutoMode = filters.min_incentive_auto || filters.min_hourly_rate_auto || filters.research_types_auto;
+        if (isAutoMode) {
+            document.getElementById('globalAutoMode').checked = true;
+        }
+        updateGlobalMode();
+    });
+    {% else %}
+    // Initialize mode description even if no filters loaded
+    window.addEventListener('DOMContentLoaded', () => {
+        updateGlobalMode();
+    });
+    {% endif %}
+    
+    function toggleFilterPanel() {
+        const panel = document.getElementById('filterPanel');
+        const isVisible = panel.style.display !== 'none';
+        panel.style.display = isVisible ? 'none' : 'block';
+    }
+    
+    function updateGlobalMode() {
+        const isAuto = document.getElementById('globalAutoMode').checked;
+        const modeDescription = document.getElementById('modeDescription');
+        const applyBtn = document.getElementById('applyFiltersBtn');
+        
+        if (isAuto) {
+            modeDescription.innerHTML = '<p><strong>Auto Hide:</strong> When enabled, projects will be automatically hidden in the background based on your filter settings, removing the need to manually hide projects.</p>';
+            applyBtn.textContent = 'Save & Enable Auto Hide';
+        } else {
+            modeDescription.innerHTML = '<p><strong>Manual Mode:</strong> Configure your filters below and click "Hide Projects" to hide projects that don\'t match your criteria.</p>';
+            applyBtn.textContent = 'Hide Projects';
+        }
+    }
+    
+    function clearFilter(filterId) {
+        document.getElementById(filterId).value = '';
+    }
+    
+    function clearAllFilters() {
+        document.getElementById('minIncentive').value = '';
+        document.getElementById('minHourlyRate').value = '';
+        document.getElementById('globalAutoMode').checked = false;
+        
+        // Clear research type selection
+        document.querySelectorAll('input[id^="researchType"]').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        updateGlobalMode();
+    }
+    
+    async function saveFilters() {
+        const minIncentive = document.getElementById('minIncentive').value.trim();
+        const minHourlyRate = document.getElementById('minHourlyRate').value.trim();
+        const globalAutoMode = document.getElementById('globalAutoMode').checked;
+        
+        // Get selected research types
+        const researchTypes = [];
+        document.querySelectorAll('input[id^="researchType"]:checked').forEach(checkbox => {
+            researchTypes.push(parseInt(checkbox.value));
+        });
+        
+        // Apply global auto mode to all filters
+        const filters = {
+            min_incentive: minIncentive ? parseFloat(minIncentive) : null,
+            min_incentive_auto: globalAutoMode,
+            min_hourly_rate: minHourlyRate ? parseFloat(minHourlyRate) : null,
+            min_hourly_rate_auto: globalAutoMode,
+            research_types: researchTypes,
+            research_types_auto: globalAutoMode
+        };
+        
+        try {
+            const response = await fetch('/api/filters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(filters)
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save filters');
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                // Reload page to update cache refresh time
+                // (Cache refresh happens when projects are fetched)
+                
+                // Trigger hide process (both manual and auto mode)
+                try {
+                    const hideResponse = await fetch('/api/hide-projects', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    if (hideResponse.ok) {
+                        // Start polling for progress
+                        startProgressPolling();
+                    } else {
+                        // If hide endpoint fails, just reload
+                        location.reload();
+                    }
+                } catch (error) {
+                    console.error('Error starting hide process:', error);
+                    // If error, just reload
+                    location.reload();
+                }
+            }
+        } catch (error) {
+            console.error('Error saving filters:', error);
+            showToast('Error saving filters: ' + error.message, 'error');
+        }
+    }
+    
+    function clearResearchTypes() {
+        document.querySelectorAll('input[id^="researchType"]').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+    }
+    
+    function toggleProfileMenu() {
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) {
+            dropdown.classList.toggle('show');
+        }
+    }
+    
+    function closeProfileMenu() {
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) {
+            dropdown.classList.remove('show');
+        }
+    }
+    
+    // Close profile menu when clicking outside
+    document.addEventListener('click', function(event) {
+        const profileMenu = document.querySelector('.profile-menu-container');
+        const dropdown = document.getElementById('profileDropdown');
+        if (profileMenu && dropdown && !profileMenu.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+    
+    // Close profile menu on Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeProfileMenu();
+        }
+    });
+    
+    function updateCacheRefreshedDisplay() {
+        // This function can be called after cache refresh
+        // For now, we'll reload the page to get the updated cache time
+        // In the future, this could fetch the cache stats via API
+        const cacheRefreshedEl = document.getElementById('cacheRefreshed');
+        if (cacheRefreshedEl) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            cacheRefreshedEl.innerHTML = `• Synced ${timeStr}`;
+            cacheRefreshedEl.setAttribute('data-refreshed', timeStr);
+            cacheRefreshedEl.style.display = 'inline';
+        }
+    }
+    
+    // Get user's timezone (request location permission or use browser timezone)
+    let userTimezone = null;
+    
+    async function detectTimezone() {
+        // First, try to get timezone from browser (no permission needed)
+        try {
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            userTimezone = timezone;
+            return timezone;
+        } catch (e) {
+            console.error('Error getting browser timezone:', e);
+        }
+        
+        // Optionally request location for more accurate timezone
+        // (This is optional - browser timezone is usually sufficient)
+        if (navigator.geolocation) {
+            return new Promise((resolve) => {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        try {
+                            // Use a timezone API to get timezone from coordinates
+                            const lat = position.coords.latitude;
+                            const lon = position.coords.longitude;
+                            // For now, use browser timezone as fallback
+                            // In production, you could call a timezone API like timezoneapi.io
+                            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                            userTimezone = timezone;
+                            resolve(timezone);
+                        } catch (e) {
+                            // Fallback to browser timezone
+                            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                            userTimezone = timezone;
+                            resolve(timezone);
+                        }
+                    },
+                    (error) => {
+                        // User denied location or error - use browser timezone
+                        console.log('Location access denied or error, using browser timezone');
+                        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                        userTimezone = timezone;
+                        resolve(timezone);
+                    },
+                    { timeout: 5000, enableHighAccuracy: false }
+                );
+            });
+        } else {
+            // No geolocation support - use browser timezone
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            userTimezone = timezone;
+            return timezone;
+        }
+    }
+    
+    // Convert UTC timestamp to local timezone and format
+    function formatLocalTime(utcTimestamp) {
+        if (!utcTimestamp) return null;
+        
+        try {
+            const utcDate = new Date(utcTimestamp);
+            if (isNaN(utcDate.getTime())) {
+                console.error('Invalid UTC timestamp:', utcTimestamp);
+                return null;
+            }
+            
+            // Format in user's local timezone
+            const timeStr = utcDate.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: userTimezone || undefined
+            });
+            
+            return timeStr;
+        } catch (e) {
+            console.error('Error formatting local time:', e);
+            return null;
+        }
+    }
+    
+    // Update cache refresh time display
+    function updateCacheRefreshDisplay(utcTimestamp) {
+        if (!utcTimestamp) return;
+        
+        const localTime = formatLocalTime(utcTimestamp);
+        if (localTime) {
+            // Update footer sync time
+            const footerSyncTimeEl = document.getElementById('footerSyncTime');
+            const footerSyncStatusEl = document.getElementById('footerSyncStatus');
+            if (footerSyncTimeEl) {
+                footerSyncTimeEl.textContent = localTime;
+            }
+            if (footerSyncStatusEl) {
+                footerSyncStatusEl.style.display = 'block';
+            }
+            
+            // Update countdown timer
+            updateCountdownTimer(utcTimestamp);
+        }
+    }
+    
+    // Update countdown timer
+    function updateCountdownTimer(utcTimestamp) {
+        if (!utcTimestamp) return;
+        
+        const countdownEl = document.getElementById('footerCountdown');
+        if (!countdownEl) return;
+        
+        try {
+            const lastUpdated = new Date(utcTimestamp);
+            const nextRefresh = new Date(lastUpdated.getTime() + 24 * 60 * 60 * 1000); // Add 24 hours
+            const now = new Date();
+            const diff = nextRefresh - now;
+            
+            if (diff <= 0) {
+                countdownEl.textContent = 'Refreshing...';
+                return;
+            }
+            
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            if (hours > 0) {
+                countdownEl.textContent = `${hours}h ${minutes}m`;
+            } else if (minutes > 0) {
+                countdownEl.textContent = `${minutes}m ${seconds}s`;
+            } else {
+                countdownEl.textContent = `${seconds}s`;
+            }
+        } catch (e) {
+            console.error('Error updating countdown timer:', e);
+            countdownEl.textContent = '--';
+        }
+    }
+    
+    // Start countdown timer interval
+    let countdownInterval = null;
+    function startCountdownTimer(utcTimestamp) {
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+        }
+        
+        // Update immediately
+        updateCountdownTimer(utcTimestamp);
+        
+        // Update every second
+        countdownInterval = setInterval(() => {
+            updateCountdownTimer(utcTimestamp);
+        }, 1000);
+    }
+    
+    // Update cache refresh time after projects are fetched
+    async function updateCacheRefreshTime() {
+        try {
+            // First ensure timezone is detected
+            if (!userTimezone) {
+                await detectTimezone();
+            }
+            
+            const response = await fetch('/api/cache/stats');
+            if (response.ok) {
+                const data = await response.json();
+                const utcTimestamp = data.last_updated || data.cache_refreshed_str;
+                if (utcTimestamp) {
+                    updateCacheRefreshDisplay(utcTimestamp);
+                    startCountdownTimer(utcTimestamp);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating cache refresh time:', error);
+        }
+    }
+    
+    // Refresh cache manually
+    async function refreshCache() {
+        const btn = document.getElementById('footerRefreshCacheBtn');
+        if (!btn) return;
+        
+        const originalSvg = btn.innerHTML;
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.innerHTML = '<svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>';
+        
+        try {
+            const response = await fetch('/api/cache/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to refresh cache');
+            }
+            
+            const result = await response.json();
+            
+            // Update cache refresh time display with new UTC timestamp
+            if (!userTimezone) {
+                await detectTimezone();
+            }
+            if (result.last_updated) {
+                updateCacheRefreshDisplay(result.last_updated);
+                startCountdownTimer(result.last_updated);
+            } else {
+                await updateCacheRefreshTime();
+            }
+            
+            // Show success message
+            showToast('Cache refreshed successfully!', 'success');
+            
+            // Reload page to show updated projects
+            location.reload();
+        } catch (error) {
+            console.error('Error refreshing cache:', error);
+            showToast('Error refreshing cache: ' + error.message, 'error');
+            btn.innerHTML = originalSvg;
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+    }
+    
+    let progressPollingInterval = null;
+    
+    function startProgressPolling() {
+        // Show progress indicator
+        const progressEl = document.getElementById('hideProgress');
+        if (progressEl) {
+            progressEl.style.display = 'flex';
+        }
+        
+        // Start polling
+        if (progressPollingInterval) {
+            clearInterval(progressPollingInterval);
+        }
+        
+        progressPollingInterval = setInterval(checkHideProgress, 1000); // Poll every second
+        checkHideProgress(); // Check immediately
+    }
+    
+    function stopProgressPolling() {
+        if (progressPollingInterval) {
+            clearInterval(progressPollingInterval);
+            progressPollingInterval = null;
+        }
+    }
+    
+    async function checkHideProgress() {
+        try {
+            const response = await fetch('/api/hide-progress');
+            if (!response.ok) {
+                return;
+            }
+            
+            const progress = await response.json();
+            
+            // Update progress display
+            const progressEl = document.getElementById('hideProgress');
+            const currentEl = document.getElementById('progressCurrent');
+            const totalEl = document.getElementById('progressTotal');
+            
+            if (progress.status === 'in_progress') {
+                if (progressEl) progressEl.style.display = 'flex';
+                if (currentEl) currentEl.textContent = progress.current || 0;
+                if (totalEl) totalEl.textContent = progress.total || 0;
+            } else if (progress.status === 'completed') {
+                // Hide progress indicator
+                if (progressEl) progressEl.style.display = 'none';
+                stopProgressPolling();
+                
+                // Update hidden count and reload page
+                if (progress.hidden !== undefined) {
+                    const hiddenCountEl = document.getElementById('hiddenCount');
+                    if (hiddenCountEl) {
+                        hiddenCountEl.textContent = progress.hidden;
+                    }
+                }
+                
+                // Reload page to show updated projects
+                setTimeout(() => {
+                    location.reload();
+                }, 500);
+            } else if (progress.status === 'error') {
+                // Hide progress indicator
+                if (progressEl) progressEl.style.display = 'none';
+                stopProgressPolling();
+                
+                console.error('Error hiding projects:', progress.error || 'Unknown error');
+                showToast('Error hiding projects: ' + (progress.error || 'Unknown error'), 'error');
+            } else if (progress.status === 'idle') {
+                // Hide progress indicator
+                if (progressEl) progressEl.style.display = 'none';
+                stopProgressPolling();
+            }
+        } catch (error) {
+            console.error('Error checking hide progress:', error);
+        }
+    }
+    
+    // Hide project modal functions
+    let currentHideProjectId = null;
+    let currentHideProjectName = null;
+    
+    function openHideModal(projectId, projectName) {
+        currentHideProjectId = projectId;
+        currentHideProjectName = projectName;
+        document.getElementById('hideModal').style.display = 'flex';
+        document.getElementById('hideFeedbackText').value = '';
+    }
+    
+    function closeHideModal() {
+        document.getElementById('hideModal').style.display = 'none';
+        currentHideProjectId = null;
+        currentHideProjectName = null;
+    }
+    
+    async function hideProjectWithoutFeedback() {
+        if (!currentHideProjectId) return;
+        await hideProject(null);
+    }
+    
+    async function hideProjectWithFeedback() {
+        if (!currentHideProjectId) return;
+        const feedback = document.getElementById('hideFeedbackText').value.trim();
+        await hideProject(feedback);
+    }
+    
+    async function hideProject(feedbackText) {
+        if (!currentHideProjectId) return;
+        
+        try {
+            const response = await fetch('/api/hide-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: currentHideProjectId,
+                    feedback_text: feedbackText || null
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to hide project');
+            }
+            
+            const result = await response.json();
+            closeHideModal();
+            
+            // Update hidden count
+            await updateHiddenCount();
+            
+            // Show notification
+            if (result.auto_hidden_count > 0) {
+                showToast(`Project hidden! ${result.auto_hidden_count} similar project(s) were also automatically hidden.`, 'success');
+            } else {
+                showToast('Project hidden successfully!', 'success');
+            }
+            
+            // Reload page to remove hidden project
+            location.reload();
+        } catch (error) {
+            console.error('Error hiding project:', error);
+            showToast('Error hiding project: ' + error.message, 'error');
+        }
+    }
+    
+    // Recommendations modal functions
+    function openRecommendationsModal() {
+        document.getElementById('recommendationsModal').style.display = 'flex';
+        document.getElementById('recommendationsLoading').style.display = 'block';
+        document.getElementById('recommendationsList').style.display = 'none';
+        loadRecommendations();
+    }
+    
+    function closeRecommendationsModal() {
+        document.getElementById('recommendationsModal').style.display = 'none';
+    }
+    
+    async function loadRecommendations() {
+        try {
+            const response = await fetch('/api/recommendations');
+            if (!response.ok) {
+                throw new Error('Failed to load recommendations');
+            }
+            
+            const data = await response.json();
+            displayRecommendations(data.recommendations || []);
+        } catch (error) {
+            document.getElementById('recommendationsLoading').innerHTML = 
+                '<p style="color: var(--error-color);">Error loading recommendations: ' + error.message + '</p>';
+        }
+    }
+    
+    function displayRecommendations(recommendations) {
+        const listEl = document.getElementById('recommendationsList');
+        const loadingEl = document.getElementById('recommendationsLoading');
+        
+        if (recommendations.length === 0) {
+            listEl.innerHTML = '<p>No recommendations available at this time.</p>';
+        } else {
+            listEl.innerHTML = recommendations.map((rec, index) => `
+                <div style="padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0;">${rec.category_name || 'Unnamed Category'}</h4>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">${rec.description || ''}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 18px; font-weight: bold; color: var(--primary-color);">${rec.project_count || 0}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">projects</div>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="previewCategory(${index}, '${btoa(JSON.stringify(rec.category_pattern))}')" style="width: 100%;">
+                        Preview
+                    </button>
+                </div>
+            `).join('');
+            
+            // Store recommendations globally for preview
+            window.recommendationsData = recommendations;
+        }
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+    }
+    
+    // Preview modal functions
+    let currentPreviewCategory = null;
+    let currentPreviewPattern = null;
+    
+    function previewCategory(index, patternB64) {
+        const recommendations = window.recommendationsData || [];
+        if (index >= recommendations.length) {
+            console.error('Invalid recommendation index:', index);
+            return;
+        }
+        
+        const rec = recommendations[index];
+        if (!rec || !rec.category_name) {
+            console.error('Invalid recommendation data:', rec);
+            console.error('Error: Invalid category data');
+            showToast('Error: Invalid category data. Please try again.', 'error');
+            return;
+        }
+        
+        // Store category data - make a deep copy to prevent issues
+        currentPreviewCategory = JSON.parse(JSON.stringify(rec));
+        currentPreviewPattern = patternB64;
+        
+        // Also store in modal data attributes as backup
+        const modal = document.getElementById('previewModal');
+        if (modal) {
+            modal.setAttribute('data-category-name', rec.category_name || '');
+            modal.setAttribute('data-category-pattern', patternB64 || '');
+        }
+        
+        document.getElementById('previewModal').style.display = 'flex';
+        document.getElementById('previewModalTitle').textContent = `Preview: ${rec.category_name}`;
+        document.getElementById('previewLoading').style.display = 'block';
+        document.getElementById('previewProjects').style.display = 'none';
+        
+        loadPreviewProjects(patternB64);
+    }
+    
+    function closePreviewModal() {
+        document.getElementById('previewModal').style.display = 'none';
+        // Only clear if not in the middle of a hide operation
+        // The data will be cleared after successful hide
+        clearPreviewData();
+    }
+    
+    function clearPreviewData() {
+        currentPreviewCategory = null;
+        currentPreviewPattern = null;
+    }
+    
+    async function loadPreviewProjects(patternB64) {
+        try {
+            const response = await fetch(`/api/recommendations/preview?category_pattern=${encodeURIComponent(patternB64)}`);
+            if (!response.ok) {
+                throw new Error('Failed to load preview');
+            }
+            
+            const data = await response.json();
+            displayPreviewProjects(data.projects || []);
+        } catch (error) {
+            document.getElementById('previewLoading').innerHTML = 
+                '<p style="color: var(--error-color);">Error loading preview: ' + error.message + '</p>';
+        }
+    }
+    
+    function displayPreviewProjects(projects) {
+        const projectsEl = document.getElementById('previewProjects');
+        const loadingEl = document.getElementById('previewLoading');
+        
+        if (projects.length === 0) {
+            projectsEl.innerHTML = '<p>No projects found in this category.</p>';
+        } else {
+            projectsEl.innerHTML = projects.map(project => {
+                const remuneration = project.respondentRemuneration || 0;
+                const timeMinutes = project.timeMinutesRequired || 0;
+                const hourlyRate = timeMinutes > 0 ? ((remuneration / timeMinutes) * 60).toFixed(2) : '0.00';
+                
+                return `
+                    <div style="padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px;">
+                        <div style="font-weight: bold; margin-bottom: 4px;">${project.name || 'Untitled'}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
+                            $${hourlyRate}/hr • $${remuneration} • ${timeMinutes} min
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            ${(project.description || '').substring(0, 150)}${(project.description || '').length > 150 ? '...' : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        loadingEl.style.display = 'none';
+        projectsEl.style.display = 'block';
+    }
+    
+    async function hideCategoryFromPreview() {
+        // Get category data from stored variables or modal data attributes
+        let categoryName = null;
+        let categoryPattern = null;
+        
+        // First try to get from currentPreviewCategory
+        if (currentPreviewCategory && currentPreviewCategory.category_name) {
+            categoryName = currentPreviewCategory.category_name;
+            categoryPattern = currentPreviewCategory.category_pattern;
+        } 
+        // Fallback: try to get from modal data attributes
+        else {
+            const modal = document.getElementById('previewModal');
+            if (modal) {
+                const storedName = modal.getAttribute('data-category-name');
+                const storedPattern = modal.getAttribute('data-category-pattern');
+                
+                if (storedName && storedPattern) {
+                    categoryName = storedName;
+                    try {
+                        categoryPattern = JSON.parse(atob(storedPattern));
+                    } catch (e) {
+                        console.error('Error decoding stored pattern:', e);
+                    }
+                }
+            }
+            
+            // Last resort: try to get from modal title and currentPreviewPattern
+            if (!categoryName && currentPreviewPattern) {
+                const modalTitle = document.getElementById('previewModalTitle');
+                if (modalTitle) {
+                    const titleText = modalTitle.textContent;
+                    if (titleText.startsWith('Preview: ')) {
+                        categoryName = titleText.replace('Preview: ', '');
+                    }
+                }
+                
+                // Decode pattern from base64
+                try {
+                    categoryPattern = JSON.parse(atob(currentPreviewPattern));
+                } catch (e) {
+                    console.error('Error decoding category pattern:', e);
+                }
+            }
+        }
+        
+        if (!categoryName || !categoryPattern) {
+            console.error('Missing category data:', { categoryName, categoryPattern, currentPreviewCategory, currentPreviewPattern });
+            console.error('Missing category data:', { categoryName, categoryPattern, currentPreviewCategory, currentPreviewPattern });
+            showToast('Error: Category information is missing. Please close and reopen the preview to try again.', 'error');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/recommendations/hide-category', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    category_name: categoryName,
+                    category_pattern: categoryPattern
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to hide category');
+            }
+            
+            const result = await response.json();
+            
+            // Clear preview data and close preview modal
+            clearPreviewData();
+            closePreviewModal();
+            
+            // Keep recommendations modal open and refresh the recommendations list
+            // This allows the user to review more recommendations
+            document.getElementById('recommendationsLoading').style.display = 'block';
+            document.getElementById('recommendationsList').style.display = 'none';
+            await loadRecommendations();
+            
+            // Update hidden count
+            await updateHiddenCount();
+        } catch (error) {
+            console.error('Error hiding category: ', error);
+            // Silently handle error - user can see the issue from the UI state
+        }
+    }
+    
+    // Analytics functions
+    async function updateHiddenCount() {
+        try {
+            const response = await fetch('/api/analytics/hidden-count');
+            if (response.ok) {
+                const data = await response.json();
+                const hiddenCountEl = document.getElementById('hiddenCount');
+                if (hiddenCountEl) {
+                    hiddenCountEl.textContent = data.total_count || 0;
+                }
+            }
+        } catch (error) {
+            console.error('Error updating hidden count:', error);
+        }
+    }
+    
+    // Update total projects count
+    async function updateTotalProjectsCount() {
+        try {
+            const response = await fetch('/api/cache/stats');
+            if (response.ok) {
+                const data = await response.json();
+                const totalCountEl = document.getElementById('totalProjectsCount');
+                const totalProjectsStat = totalCountEl?.closest('.footer-stat');
+                if (totalCountEl && data.total_count !== undefined) {
+                    totalCountEl.textContent = data.total_count || 0;
+                    if (totalProjectsStat) {
+                        totalProjectsStat.style.display = 'block';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error updating total projects count:', error);
+        }
+    }
+    
+    // Load analytics on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+        // Detect timezone first
+        await detectTimezone();
+        
+        // Update cache refresh time and start countdown timer
+        await updateCacheRefreshTime();
+        
+        await updateHiddenCount();
+        await updateTotalProjectsCount();
+        // Load analytics if section is visible
+        // loadAnalytics();
+    });
+    
+    // Close modals when clicking outside
+    document.getElementById('hideModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closeHideModal();
+    });
+    document.getElementById('recommendationsModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closeRecommendationsModal();
+    });
+    document.getElementById('previewModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closePreviewModal();
+    });
+</script>
+{% endblock %}

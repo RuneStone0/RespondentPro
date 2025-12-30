@@ -11,16 +11,19 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 
-def load_config(config_path: str = "config.json") -> Dict[str, Any]:
+def load_config(config_path: str = None) -> Dict[str, Any]:
     """
     Load configuration from JSON file
     
     Args:
-        config_path: Path to the config file
+        config_path: Path to the config file (defaults to config.json in project root)
         
     Returns:
         Dictionary containing configuration
     """
+    if config_path is None:
+        # Default to config.json in project root (parent of cli directory)
+        config_path = Path(__file__).parent.parent / "config.json"
     config_file = Path(config_path)
     
     if not config_file.exists():
@@ -311,7 +314,7 @@ def cli():
 
 
 @cli.command()
-@click.option('--config', '-c', default='config.json', help='Path to config file')
+@click.option('--config', '-c', default=None, help='Path to config file (defaults to config.json in project root)')
 @click.option('--verbose/--no-verbose', default=True, help='Show detailed output')
 def auth(config, verbose):
     """Test authentication with Respondent.io"""
@@ -347,7 +350,7 @@ def auth(config, verbose):
 
 
 @cli.command()
-@click.option('--config', '-c', default='config.json', help='Path to config file')
+@click.option('--config', '-c', default=None, help='Path to config file (defaults to config.json in project root)')
 @click.option('--profile-id', default='691f593b2e2ac1bd7fa84915', help='Profile ID to search for')
 @click.option('--max-incentive', type=int, default=1000, help='Maximum incentive')
 @click.option('--min-incentive', type=int, default=5, help='Minimum incentive')
@@ -764,7 +767,7 @@ def _process_filtered_projects(session: requests.Session, profile_id: str, page_
 
 
 @cli.command()
-@click.option('--config', '-c', default='config.json', help='Path to config file')
+@click.option('--config', '-c', default=None, help='Path to config file (defaults to config.json in project root)')
 @click.option('--id', 'project_id', help='Project ID to hide')
 @click.option('--hourly-rate', 'hourly_rate', type=int, help='Hide all projects with hourly rate lower than this value')
 @click.option('--incentive', 'incentive', type=int, help='Hide all projects with total incentive lower than this value')

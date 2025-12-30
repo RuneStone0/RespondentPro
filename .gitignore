@@ -1,22 +1,38 @@
-# Virtual environment
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
+env/
+ENV/
+.venv
+
+# Cursor
+/.cursor/debug.log
+
+# Flask
+instance/
+.webassets-cache
+
+# Data and config files
+# Note: data/ folder is no longer used - all data is stored in MongoDB
+config_*.json
+config.json
+*.db
+*.sqlite
+
+# Environment variables
 .env
 
-# OS files
-.DS_Store
-
-# IDE files
-.idea/
+# IDE
 .vscode/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+.idea/
+*.swp
+*.swo
+*~
 
-# Config file
-config.json
-
-# Project file
-projects.json
+# OS
+.DS_Store
+Thumbs.db
