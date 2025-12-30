@@ -527,7 +527,7 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         # Find projects that should be hidden
         projects_to_hide = []
         for project in all_projects:
-            if should_hide_project(project, filters):
+            if should_hide_project(project, filters, project_details_collection=project_details_collection):
                 projects_to_hide.append(project)
         
         total_to_hide = len(projects_to_hide)
