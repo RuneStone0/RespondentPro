@@ -9,9 +9,9 @@ from datetime import datetime
 
 # Import database collections
 try:
-    from ..db import users_collection, session_keys_collection
+    from ..db import users_collection, session_keys_collection, user_preferences_collection
 except ImportError:
-    from web.db import users_collection, session_keys_collection
+    from web.db import users_collection, session_keys_collection, user_preferences_collection
 
 
 def get_user_by_username(username):
@@ -235,43 +235,74 @@ def save_user_config(user_id, config, profile_id=None):
 
 def load_user_filters(user_id):
     """Load user's project filter preferences from MongoDB"""
-    if session_keys_collection is None:
+    if user_preferences_collection is None:
         return {
             'min_incentive': None,
-            'min_incentive_auto': False,
             'min_hourly_rate': None,
-            'min_hourly_rate_auto': False,
-            'research_types': [],  # List of allowed research types (empty = show all)
-            'research_types_auto': False
+            'isRemote': None,
+            'auto_hide': False,
+            'topics': []  # List of topic IDs to hide projects for
         }
     try:
-        config_doc = session_keys_collection.find_one({'user_id': user_id})
-        if config_doc and 'filters' in config_doc:
-            filters = config_doc['filters']
+        prefs_doc = user_preferences_collection.find_one({'user_id': user_id})
+        if prefs_doc and 'filters' in prefs_doc:
+            filters = prefs_doc['filters']
+            # Backward compatibility: if old format exists, convert to new format
+            auto_hide = filters.get('auto_hide', False)
+            if not auto_hide:
+                # Check old format for backward compatibility
+                auto_hide = (
+                    filters.get('min_incentive_auto', False) or
+                    filters.get('min_hourly_rate_auto', False) or
+                    filters.get('hide_remote_auto', False)
+                )
+            
+            # Handle isRemote: check for new format first, then backward compatibility
+            is_remote = filters.get('isRemote')
+            if is_remote is None:
+                # Backward compatibility: if old hide_remote exists, convert to isRemote
+                old_hide_remote = filters.get('hide_remote', False)
+                if isinstance(old_hide_remote, str):
+                    old_hide_remote = old_hide_remote.lower() in ('true', '1', 'yes', 'on')
+                if old_hide_remote:
+                    is_remote = True
+            
+            # Ensure isRemote is either None or True (never False)
+            if is_remote is not None and is_remote is not True:
+                if isinstance(is_remote, str):
+                    is_remote = is_remote.lower() in ('true', '1', 'yes', 'on')
+                else:
+                    is_remote = bool(is_remote)
+                if not is_remote:
+                    is_remote = None
+            
             return {
                 'min_incentive': filters.get('min_incentive'),
-                'min_incentive_auto': filters.get('min_incentive_auto', False),
                 'min_hourly_rate': filters.get('min_hourly_rate'),
-                'min_hourly_rate_auto': filters.get('min_hourly_rate_auto', False),
-                'research_types': filters.get('research_types', []),
-                'research_types_auto': filters.get('research_types_auto', False)
+                'isRemote': is_remote,
+                'auto_hide': bool(auto_hide),
+                'topics': filters.get('topics', [])
             }
     except Exception as e:
         print(f"Error loading user filters: {e}")
     return {
         'min_incentive': None,
-        'min_incentive_auto': False,
         'min_hourly_rate': None,
-        'min_hourly_rate_auto': False,
-        'research_types': [],
-        'research_types_auto': False
+        'isRemote': None,
+        'auto_hide': False,
+        'topics': []
     }
 
 
 def save_user_filters(user_id, filters):
-    """Save user's project filter preferences to MongoDB"""
-    if session_keys_collection is None:
+    """Save user's project filter preferences to MongoDB (stored in user_preferences collection)"""
+    if user_preferences_collection is None:
         raise Exception("MongoDB connection not available. Please ensure MongoDB is running.")
+    
+    # Handle None filters - default to empty dict
+    if filters is None:
+        filters = {}
+    
     try:
         # Convert string values to numbers or None
         # Explicitly handle null/None values to ensure cleared settings are saved
@@ -292,43 +323,61 @@ def save_user_filters(user_id, filters):
             except (ValueError, TypeError):
                 min_hourly_rate = None
         
-        # Get auto/manual mode settings (default to False if not provided)
-        min_incentive_auto = filters.get('min_incentive_auto', False)
-        min_hourly_rate_auto = filters.get('min_hourly_rate_auto', False)
-        research_types_auto = filters.get('research_types_auto', False)
+        # Get auto-hide mode setting (default to False if not provided)
+        auto_hide = filters.get('auto_hide', False)
+        
+        # Backward compatibility: check old format if auto_hide not provided
+        if not auto_hide:
+            auto_hide = (
+                filters.get('min_incentive_auto', False) or
+                filters.get('min_hourly_rate_auto', False) or
+                filters.get('hide_remote_auto', False)
+            )
         
         # Convert to boolean if needed
-        if isinstance(min_incentive_auto, str):
-            min_incentive_auto = min_incentive_auto.lower() in ('true', '1', 'yes', 'on')
-        if isinstance(min_hourly_rate_auto, str):
-            min_hourly_rate_auto = min_hourly_rate_auto.lower() in ('true', '1', 'yes', 'on')
-        if isinstance(research_types_auto, str):
-            research_types_auto = research_types_auto.lower() in ('true', '1', 'yes', 'on')
+        if isinstance(auto_hide, str):
+            auto_hide = auto_hide.lower() in ('true', '1', 'yes', 'on')
         
-        # Get research types filter (list of allowed research type IDs)
-        research_types = filters.get('research_types', [])
-        if not isinstance(research_types, list):
-            research_types = []
-        # Convert to integers and filter out invalid values
-        research_types = [int(rt) for rt in research_types if str(rt).isdigit()]
+        # Get remote filter setting (isRemote)
+        is_remote = filters.get('isRemote')
+        # Handle None, True, or string "true" values
+        if is_remote is None or is_remote == '':
+            is_remote = None
+        elif isinstance(is_remote, str):
+            is_remote = is_remote.lower() in ('true', '1', 'yes', 'on')
+            if not is_remote:
+                is_remote = None
+        elif is_remote is False:
+            # Never save False, convert to None
+            is_remote = None
+        else:
+            # Ensure it's True if it's truthy
+            is_remote = True
         
-        # Update the document with filters
-        session_keys_collection.update_one(
+        # Get topics filter (list of topic IDs to hide projects for)
+        topics = filters.get('topics', [])
+        if not isinstance(topics, list):
+            topics = []
+        # Convert to strings and filter out empty values
+        topics = [str(t) for t in topics if t]
+        
+        # Update the document with filters in user_preferences collection
+        user_preferences_collection.update_one(
             {'user_id': user_id},
             {
                 '$set': {
+                    'user_id': user_id,  # Ensure user_id is set when creating new document
                     'filters': {
                         'min_incentive': min_incentive,
-                        'min_incentive_auto': bool(min_incentive_auto),
                         'min_hourly_rate': min_hourly_rate,
-                        'min_hourly_rate_auto': bool(min_hourly_rate_auto),
-                        'research_types': research_types,
-                        'research_types_auto': bool(research_types_auto)
+                        'isRemote': is_remote,
+                        'auto_hide': bool(auto_hide),
+                        'topics': topics
                     },
                     'updated_at': datetime.utcnow()
                 }
             },
-            upsert=False  # Don't create if doesn't exist, user must have config first
+            upsert=True  # Create document if it doesn't exist so filters can always be saved
         )
     except Exception as e:
         raise Exception(f"Failed to save filters to MongoDB: {e}")

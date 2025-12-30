@@ -28,10 +28,11 @@ try:
     from ..preference_learner import (
         record_project_hidden, record_category_hidden, get_user_preferences
     )
-    from ..services.filter_service import should_hide_project
+    from ..services.filter_service import should_hide_project, get_project_is_remote
     from ..db import (
-        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection
+        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection
     )
+    from ..services.topics_service import get_all_topics
 except ImportError:
     from services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_last_synced
     from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile
@@ -49,10 +50,11 @@ except ImportError:
     from preference_learner import (
         record_project_hidden, record_category_hidden, get_user_preferences
     )
-    from services.filter_service import should_hide_project
+    from services.filter_service import should_hide_project, get_project_is_remote
     from db import (
-        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection
+        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection
     )
+    from services.topics_service import get_all_topics
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -145,6 +147,20 @@ def get_filters():
     return jsonify(filters)
 
 
+@bp.route('/topics', methods=['GET'])
+def get_topics():
+    """Get all available topics"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        topics = get_all_topics(topics_collection)
+        return jsonify({'topics': topics})
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
+
+
 @bp.route('/filters', methods=['POST'])
 def save_filters():
     """Save user's project filter preferences"""
@@ -155,14 +171,28 @@ def save_filters():
         user_id = session['user_id']
         data = request.json
         
+        # Default to empty dict if no data provided (save_user_filters handles this)
+        if data is None:
+            data = {}
+        
         save_user_filters(user_id, data)
         
         # Update last synced time when filters are applied
         update_last_synced(user_id)
         
-        # If auto-hide is enabled, start the hide process
-        auto_hide_enabled = data.get('min_incentive_auto') or data.get('min_hourly_rate_auto') or data.get('research_types_auto')
-        if auto_hide_enabled:
+        # Load the saved filters to ensure we use the correct values
+        saved_filters = load_user_filters(user_id)
+        
+        # Check if there are any active filters that would hide projects
+        has_active_filters = (
+            saved_filters.get('min_incentive') is not None or
+            saved_filters.get('min_hourly_rate') is not None or
+            saved_filters.get('isRemote') is True or
+            (saved_filters.get('topics') and len(saved_filters.get('topics', [])) > 0)
+        )
+        
+        # If there are active filters, start the hide process
+        if has_active_filters:
             config = load_user_config(user_id)
             if config and config.get('cookies', {}).get('respondent.session.sid'):
                 profile_id = config.get('profile_id')
@@ -175,7 +205,7 @@ def save_filters():
                     def hide_in_background():
                         try:
                             process_and_hide_projects(
-                                user_id, req_session, profile_id, data,
+                                user_id, req_session, profile_id, saved_filters,
                                 cookies=config.get('cookies', {}),
                                 authorization=config.get('authorization')
                             )
@@ -263,17 +293,32 @@ def preview_hide():
     try:
         user_id = session['user_id']
         data = request.json
+        # Get isRemote filter setting
+        is_remote = data.get('isRemote')
+        # Handle None, True, or string "true" values
+        if is_remote is None or is_remote == '':
+            is_remote = None
+        elif isinstance(is_remote, str):
+            is_remote = is_remote.lower() in ('true', '1', 'yes', 'on')
+            if not is_remote:
+                is_remote = None
+        elif is_remote is False:
+            # Never use False, convert to None
+            is_remote = None
+        else:
+            # Ensure it's True if it's truthy
+            is_remote = True
+        
         filters = {
             'min_incentive': data.get('min_incentive'),
-            'min_incentive_auto': data.get('min_incentive_auto', False),
             'min_hourly_rate': data.get('min_hourly_rate'),
-            'min_hourly_rate_auto': data.get('min_hourly_rate_auto', False),
-            'research_types': data.get('research_types', []),
-            'research_types_auto': data.get('research_types_auto', False)
+            'isRemote': is_remote,
+            'auto_hide': data.get('auto_hide', False),
+            'topics': data.get('topics', [])
         }
         
         # Check if any filters are set
-        if filters['min_incentive'] is None and filters['min_hourly_rate'] is None and not filters['research_types']:
+        if filters['min_incentive'] is None and filters['min_hourly_rate'] is None and filters['isRemote'] is None and not filters['topics']:
             return jsonify({
                 'success': True,
                 'projects': [],
@@ -316,15 +361,12 @@ def preview_hide():
                 if time_minutes > 0:
                     hourly_rate = (remuneration / time_minutes) * 60
                 
-                # Get research type name
-                research_type = project.get('kindOfResearch')
-                research_type_name = None
-                if research_type == 1:
-                    research_type_name = 'Remote'
-                elif research_type == 2:
-                    research_type_name = 'Focus Groups'
-                elif research_type == 8:
-                    research_type_name = 'In-Person'
+                # Get remote status using the same helper function as filtering
+                project_is_remote = get_project_is_remote(project)
+                
+                remote_status = 'Unknown'
+                if project_is_remote is not None:
+                    remote_status = 'Remote' if project_is_remote else 'Not Remote'
                 
                 projects_to_hide.append({
                     'id': project.get('id'),
@@ -332,7 +374,7 @@ def preview_hide():
                     'incentive': remuneration,
                     'hourly_rate': round(hourly_rate, 2),
                     'time_minutes': time_minutes,
-                    'research_type': research_type_name or str(research_type) if research_type else 'Unknown'
+                    'remote_status': remote_status
                 })
         
         return jsonify({

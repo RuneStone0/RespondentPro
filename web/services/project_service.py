@@ -9,15 +9,21 @@ import requests
 
 # Import database collections
 try:
-    from ..db import projects_cache_collection, hidden_projects_log_collection
+    from ..db import projects_cache_collection, hidden_projects_log_collection, project_details_collection, topics_collection
 except ImportError:
-    from web.db import projects_cache_collection, hidden_projects_log_collection
+    from web.db import projects_cache_collection, hidden_projects_log_collection, project_details_collection, topics_collection
 
 # Import cache manager
 try:
-    from ..cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, mark_projects_hidden_in_cache
+    from ..cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, mark_projects_hidden_in_cache, get_cached_project_details, cache_project_details
 except ImportError:
-    from cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, mark_projects_hidden_in_cache
+    from cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, mark_projects_hidden_in_cache, get_cached_project_details, cache_project_details
+
+# Import topics service
+try:
+    from .topics_service import extract_topics_from_project, store_unique_topics
+except ImportError:
+    from services.topics_service import extract_topics_from_project, store_unique_topics
 
 # Import hidden projects tracker
 try:
@@ -43,6 +49,95 @@ except ImportError:
 
 # Store progress for each user (in-memory, could be moved to Redis/MongoDB for persistence)
 hide_progress = {}
+
+
+def fetch_project_details(session, project_id, project_details_collection=None):
+    """
+    Fetch detailed project information from Respondent.io API, checking cache first
+    
+    Args:
+        session: Authenticated requests.Session object
+        project_id: Project ID to fetch details for
+        project_details_collection: Optional MongoDB collection for caching
+        
+    Returns:
+        Dictionary containing the full project details, or None if fetch failed
+    """
+    # First check cache if collection provided
+    if project_details_collection is not None:
+        cached_details = get_cached_project_details(project_details_collection, project_id)
+        if cached_details:
+            print(f"[Project Details] Using cached details for project {project_id}")
+            return cached_details
+    
+    # Fetch from API
+    url = f"https://app.respondent.io/v2/projects/view/{project_id}"
+    
+    headers = {
+        "Sec-Fetch-Site": "same-origin"
+    }
+    
+    try:
+        start_time = time.time()
+        print(f"[Project Details] GET {url}")
+        response = session.get(url, headers=headers, timeout=30)
+        elapsed_time = time.time() - start_time
+        print(f"[Project Details] Response: {response.status_code} ({elapsed_time:.2f}s) - {len(response.content)} bytes")
+        
+        # Check if response is successful
+        if not response.ok:
+            print(f"[Project Details] ERROR: {response.status_code} - {response.text[:500]}")
+            # If we have cached data, return it even if API fails
+            if project_details_collection is not None:
+                cached_details = get_cached_project_details(project_details_collection, project_id)
+                if cached_details:
+                    print(f"[Project Details] API failed, returning cached data for project {project_id}")
+                    return cached_details
+            return None
+        
+        # Parse JSON response
+        try:
+            data = response.json()
+            
+            # Extract the 'response' field which contains the actual project data
+            # The API returns a wrapper with 'response', 'details', etc.
+            response_data = data.get('response', data)  # Fallback to full data if 'response' doesn't exist
+            
+            # Extract project data: move 'project' object to root, keep 'screenerQuestionsLength' if available
+            project_data = {}
+            if 'project' in response_data and isinstance(response_data.get('project'), dict):
+                # Move project data to root
+                project_data = response_data['project'].copy()
+                # Keep screenerQuestionsLength if it exists at response level
+                if 'screenerQuestionsLength' in response_data:
+                    project_data['screenerQuestionsLength'] = response_data['screenerQuestionsLength']
+            else:
+                # Fallback: use response_data as-is if no 'project' field
+                project_data = response_data
+            
+            # Cache only the project data (project at root, with screenerQuestionsLength) if collection provided
+            if project_details_collection is not None:
+                cache_project_details(project_details_collection, project_id, project_data)
+            
+            return project_data
+        except json.JSONDecodeError as e:
+            print(f"[Project Details] Invalid JSON response: {e}")
+            # If we have cached data, return it even if parsing fails
+            if project_details_collection is not None:
+                cached_details = get_cached_project_details(project_details_collection, project_id)
+                if cached_details:
+                    print(f"[Project Details] JSON parse failed, returning cached data for project {project_id}")
+                    return cached_details
+            return None
+    except Exception as e:
+        print(f"[Project Details] ERROR fetching project {project_id}: {e}")
+        # If we have cached data, return it even if request fails
+        if project_details_collection is not None:
+            cached_details = get_cached_project_details(project_details_collection, project_id)
+            if cached_details:
+                print(f"[Project Details] Request failed, returning cached data for project {project_id}")
+                return cached_details
+        return None
 
 
 def fetch_respondent_projects(session, profile_id, page_size=50, page=1, user_id=None, use_cache=True, 
@@ -295,16 +390,64 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
     total_count = total_results if total_results is not None else len(all_projects)
     print(f"[Respondent.io API] Completed fetching all projects: {len(all_projects)} projects fetched (totalResults: {total_count})")
     
-    # Cache the results if user_id provided
+    # Fetch detailed project information for each project
+    print(f"[Project Details] Fetching detailed information for {len(all_projects)} projects...")
+    all_topics = []
+    enriched_projects = []
+    
+    for idx, project in enumerate(all_projects):
+        project_id = project.get('id')
+        if not project_id:
+            enriched_projects.append(project)
+            continue
+        
+        try:
+            # Fetch detailed project information (will check cache first)
+            details = fetch_project_details(session, project_id, project_details_collection)
+            
+            if details:
+                # Merge detailed data into project object
+                # The details now contain the project data at root level (after migration/caching)
+                # with screenerQuestionsLength if available
+                merged_project = project.copy()
+                merged_project.update(details)
+                enriched_projects.append(merged_project)
+                
+                # Extract topics from the detailed project
+                project_topics = extract_topics_from_project(merged_project)
+                all_topics.extend(project_topics)
+            else:
+                # If details fetch failed, use original project
+                enriched_projects.append(project)
+                print(f"[Project Details] Warning: Failed to fetch details for project {project_id}, using basic data")
+        except Exception as e:
+            print(f"[Project Details] Error processing project {project_id}: {e}")
+            # Continue with original project if details fetch fails
+            enriched_projects.append(project)
+        
+        # Progress update every 10 projects
+        if (idx + 1) % 10 == 0:
+            print(f"[Project Details] Processed {idx + 1}/{len(all_projects)} projects...")
+    
+    print(f"[Project Details] Completed fetching details for {len(enriched_projects)} projects")
+    
+    # Store unique topics in topics collection
+    if topics_collection is not None and all_topics:
+        print(f"[Topics] Storing {len(all_topics)} topic references...")
+        store_unique_topics(topics_collection, all_topics)
+        unique_topic_count = len(set(t.get('id') for t in all_topics if t.get('id')))
+        print(f"[Topics] Stored {unique_topic_count} unique topics")
+    
+    # Cache the enriched results if user_id provided
     if user_id and projects_cache_collection is not None:
         refresh_project_cache(
             projects_cache_collection,
             str(user_id),
-            all_projects,
+            enriched_projects,
             total_count
         )
     
-    return all_projects, total_count
+    return enriched_projects, total_count
 
 
 def hide_project_via_api(session, project_id):
@@ -388,16 +531,14 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
                 projects_to_hide.append(project)
         
         total_to_hide = len(projects_to_hide)
+        print(f"[Project Service] Found {total_to_hide} projects to hide out of {len(all_projects)} total projects")
+        print(f"[Project Service] Filters: {filters}")
         hidden_count = 0
         errors = []
         hidden_project_ids = []
         
         # Determine hidden_method based on whether auto-hide is enabled
-        auto_hide_enabled = (
-            filters.get('min_incentive_auto') or 
-            filters.get('min_hourly_rate_auto') or 
-            filters.get('research_types_auto')
-        )
+        auto_hide_enabled = filters.get('auto_hide', False)
         hidden_method = 'auto' if auto_hide_enabled else 'manual'
         
         # Hide each project

@@ -27,6 +27,8 @@ hidden_projects_log_collection = None
 hide_feedback_collection = None
 category_recommendations_collection = None
 user_profiles_collection = None
+project_details_collection = None
+topics_collection = None
 mongo_available = False
 
 try:
@@ -45,6 +47,8 @@ try:
     hide_feedback_collection = db['hide_feedback']
     category_recommendations_collection = db['category_recommendations']
     user_profiles_collection = db['user_profiles']
+    project_details_collection = db['project_details']
+    topics_collection = db['topics']
     
     # Create indexes for new collections (non-blocking - failures won't prevent app from starting)
     try:
@@ -80,6 +84,10 @@ try:
         if user_profiles_collection is not None:
             user_profiles_collection.create_index([('user_id', 1)], unique=True, background=True)
             user_profiles_collection.create_index([('updated_at', 1)], background=True)
+        if project_details_collection is not None:
+            project_details_collection.create_index([('project_id', 1)], unique=True, background=True)
+        if topics_collection is not None:
+            topics_collection.create_index([('topic_id', 1)], unique=True, background=True)
     except Exception as e:
         print(f"Warning: Could not create indexes (this is non-critical): {e}")
     
@@ -110,5 +118,7 @@ except Exception as e:
     hide_feedback_collection = None
     category_recommendations_collection = None
     user_profiles_collection = None
+    project_details_collection = None
+    topics_collection = None
     mongo_available = False
 

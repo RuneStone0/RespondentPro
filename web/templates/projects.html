@@ -270,24 +270,31 @@
                 
                 <div class="filter-group">
                     <div class="filter-header-inline">
-                        <label>Show only these research types:</label>
-                        <button type="button" class="btn-clear-research-types" onclick="clearResearchTypes()" title="Clear all selections">Clear</button>
+                        <label>Remote:</label>
+                        <button type="button" class="btn-clear-research-types" onclick="clearRemoteFilter()" title="Clear selection">Clear</button>
                     </div>
                     <div class="research-type-options">
                         <label class="research-type-option">
-                            <input type="checkbox" id="researchType1" value="1">
-                            <span class="option-label">Remote</span>
+                            <input type="radio" name="isRemote" id="isRemoteAny" value="null" checked>
+                            <span class="option-label">Any</span>
                         </label>
                         <label class="research-type-option">
-                            <input type="checkbox" id="researchType2" value="2">
-                            <span class="option-label">Focus Groups</span>
-                        </label>
-                        <label class="research-type-option">
-                            <input type="checkbox" id="researchType8" value="8">
-                            <span class="option-label">In-Person</span>
+                            <input type="radio" name="isRemote" id="isRemoteOnly" value="true">
+                            <span class="option-label">Remote Only</span>
                         </label>
                     </div>
-                    <div class="help-text">Select one or more research types. Leave all unselected to show all types.</div>
+                    <div class="help-text">Select "Any" to show all projects, or "Remote Only" to hide remote projects.</div>
+                </div>
+                
+                <div class="filter-group">
+                    <div class="filter-header-inline">
+                        <label>Hide projects with these topics:</label>
+                        <button type="button" class="btn-clear-research-types" onclick="clearTopics()" title="Clear all selections">Clear</button>
+                    </div>
+                    <div class="topics-options" id="topicsOptions" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px;">
+                        <div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading topics...</div>
+                    </div>
+                    <div class="help-text">Select topics to hide projects that contain them. Leave all unselected to show all projects.</div>
                 </div>
                 
                 <div class="filter-panel-actions">
@@ -356,7 +363,20 @@
                             <span class="meta-label">Time Required</span>
                             <span class="meta-value">{{ time_minutes }} min</span>
                         </div>
-                        {% if project.kindOfResearch %}
+                        {% set project_is_remote = project.isRemote %}
+                        {% if project_is_remote is none and project.project %}
+                            {% set project_is_remote = project.project.isRemote %}
+                        {% endif %}
+                        {% set kind_of_research_formatted = project.kindOfResearchFormatted %}
+                        {% if kind_of_research_formatted is none and project.project %}
+                            {% set kind_of_research_formatted = project.project.kindOfResearchFormatted %}
+                        {% endif %}
+                        {% if kind_of_research_formatted %}
+                        <div class="meta-item">
+                            <span class="meta-label">Research Type</span>
+                            <span class="meta-value">{{ kind_of_research_formatted }}</span>
+                        </div>
+                        {% elif project.kindOfResearch %}
                         <div class="meta-item">
                             <span class="meta-label">Research Type</span>
                             <span class="meta-value">
@@ -367,7 +387,37 @@
                             </span>
                         </div>
                         {% endif %}
+                        {% if project_is_remote is not none %}
+                        <div class="meta-item">
+                            <span class="meta-label">Remote</span>
+                            <span class="meta-value">{{ 'Yes' if project_is_remote else 'No' }}</span>
+                        </div>
+                        {% endif %}
+                        {% set screener_length = project.screenerQuestionsLength %}
+                        {% if screener_length %}
+                        <div class="meta-item">
+                            <span class="meta-label">Screener Questions</span>
+                            <span class="meta-value">{{ screener_length }}</span>
+                        </div>
+                        {% endif %}
                     </div>
+                    
+                    {% set project_topics = project.topics %}
+                    {% if project_topics is none and project.project %}
+                        {% set project_topics = project.project.topics %}
+                    {% endif %}
+                    {% if project_topics and project_topics|length > 0 %}
+                    <div class="project-topics" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;">Topics:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            {% for topic in project_topics %}
+                            <span style="display: inline-block; padding: 4px 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85em; color: var(--text-primary);">
+                                {{ topic.name }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     {% if project.description %}
                     <div class="project-description">
@@ -518,7 +568,7 @@
         </div>
         <div class="modal-actions" style="padding: 16px 20px; border-top: 1px solid var(--border-color);">
             <button type="button" class="btn-secondary" onclick="closePreviewHideModal()">Cancel</button>
-            <button type="button" class="btn-primary" id="confirmHideBtn" onclick="confirmHideProjects()" disabled>Confirm & Hide Projects</button>
+            <button type="button" class="btn-primary" id="confirmHideBtn" onclick="confirmHideProjects(event)" disabled>Confirm & Hide Projects</button>
         </div>
     </div>
 </div>
@@ -749,9 +799,8 @@
         document.getElementById('minIncentive').value = '';
         document.getElementById('minHourlyRate').value = '';
         document.getElementById('globalAutoMode').checked = false;
-        document.querySelectorAll('input[id^="researchType"]').forEach(checkbox => {
-            checkbox.checked = false;
-        });
+        document.getElementById('isRemoteAny').checked = true;
+        document.getElementById('isRemoteOnly').checked = false;
         
         // Load saved filters if they exist
         {% if filters %}
@@ -765,18 +814,32 @@
             document.getElementById('minHourlyRate').value = filters.min_hourly_rate;
         }
         
-        // Load research types filter
-        if (filters.research_types && Array.isArray(filters.research_types) && filters.research_types.length > 0) {
-            filters.research_types.forEach(typeId => {
-                const checkbox = document.getElementById('researchType' + typeId);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-            });
+        // Load remote filter
+        if (filters.isRemote === true) {
+            document.getElementById('isRemoteOnly').checked = true;
+            document.getElementById('isRemoteAny').checked = false;
+        } else {
+            document.getElementById('isRemoteAny').checked = true;
+            document.getElementById('isRemoteOnly').checked = false;
         }
         
+        // Load topics filter (after topics are loaded)
+        loadTopics().then(() => {
+            {% if filters %}
+            const filters = {{ filters | tojson }};
+            if (filters.topics && Array.isArray(filters.topics) && filters.topics.length > 0) {
+                filters.topics.forEach(topicId => {
+                    const checkbox = document.getElementById('topic' + topicId.replace(/[^a-zA-Z0-9]/g, '_'));
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+            }
+            {% endif %}
+        });
+        
         // Set global auto mode (check if any filter is in auto mode)
-        const isAutoMode = filters.min_incentive_auto || filters.min_hourly_rate_auto || filters.research_types_auto;
+        const isAutoMode = filters.auto_hide || false;
         if (isAutoMode) {
             document.getElementById('globalAutoMode').checked = true;
         }
@@ -814,36 +877,112 @@
         document.getElementById('minHourlyRate').value = '';
         document.getElementById('globalAutoMode').checked = false;
         
-        // Clear research type selection
-        document.querySelectorAll('input[id^="researchType"]').forEach(checkbox => {
+        // Clear remote filter
+        document.getElementById('isRemoteAny').checked = true;
+        document.getElementById('isRemoteOnly').checked = false;
+        
+        // Clear topics selection
+        document.querySelectorAll('input[id^="topic"]').forEach(checkbox => {
             checkbox.checked = false;
         });
         
         updateGlobalMode();
     }
     
+    function clearRemoteFilter() {
+        document.getElementById('isRemoteAny').checked = true;
+        document.getElementById('isRemoteOnly').checked = false;
+    }
+    
+    function clearTopics() {
+        document.querySelectorAll('input[id^="topic"]').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+    }
+    
+    async function loadTopics() {
+        try {
+            const response = await fetch('/api/topics');
+            if (!response.ok) {
+                throw new Error('Failed to load topics');
+            }
+            const data = await response.json();
+            const topics = data.topics || [];
+            
+            const topicsOptions = document.getElementById('topicsOptions');
+            if (topics.length === 0) {
+                topicsOptions.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No topics available yet. Topics will appear after projects are loaded.</div>';
+                return;
+            }
+            
+            topicsOptions.innerHTML = '';
+            topics.forEach(topic => {
+                const label = document.createElement('label');
+                label.className = 'research-type-option';
+                label.style.cssText = 'display: flex; align-items: center; padding: 8px; cursor: pointer;';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = 'topic' + topic.id.replace(/[^a-zA-Z0-9]/g, '_');
+                checkbox.value = topic.id;
+                checkbox.style.marginRight = '8px';
+                
+                const span = document.createElement('span');
+                span.className = 'option-label';
+                span.textContent = topic.name;
+                
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                topicsOptions.appendChild(label);
+            });
+        } catch (error) {
+            console.error('Error loading topics:', error);
+            document.getElementById('topicsOptions').innerHTML = '<div style="text-align: center; padding: 20px; color: var(--error-color);">Error loading topics</div>';
+        }
+    }
+    
     // Store pending filters for confirmation
     let pendingFilters = null;
     
     async function saveFilters() {
-        const minIncentive = document.getElementById('minIncentive').value.trim();
-        const minHourlyRate = document.getElementById('minHourlyRate').value.trim();
+        const minIncentiveInput = document.getElementById('minIncentive').value.trim();
+        const minHourlyRateInput = document.getElementById('minHourlyRate').value.trim();
         const globalAutoMode = document.getElementById('globalAutoMode').checked;
         
-        // Get selected research types
-        const researchTypes = [];
-        document.querySelectorAll('input[id^="researchType"]:checked').forEach(checkbox => {
-            researchTypes.push(parseInt(checkbox.value));
+        // Get remote filter setting
+        const isRemoteOnlyChecked = document.getElementById('isRemoteOnly').checked;
+        const isRemote = isRemoteOnlyChecked ? true : null;
+        
+        // Get selected topics
+        const topics = [];
+        document.querySelectorAll('input[id^="topic"]:checked').forEach(checkbox => {
+            topics.push(checkbox.value);
         });
+        
+        // Parse numeric values, ensuring they're valid numbers or null
+        let minIncentive = null;
+        if (minIncentiveInput) {
+            const parsed = parseFloat(minIncentiveInput);
+            if (!isNaN(parsed) && isFinite(parsed)) {
+                minIncentive = parsed;
+            }
+        }
+        
+        let minHourlyRate = null;
+        if (minHourlyRateInput) {
+            const parsed = parseFloat(minHourlyRateInput);
+            if (!isNaN(parsed) && isFinite(parsed)) {
+                minHourlyRate = parsed;
+            }
+        }
         
         // Apply global auto mode to all filters
         const filters = {
-            min_incentive: minIncentive ? parseFloat(minIncentive) : null,
-            min_incentive_auto: globalAutoMode,
-            min_hourly_rate: minHourlyRate ? parseFloat(minHourlyRate) : null,
-            min_hourly_rate_auto: globalAutoMode,
-            research_types: researchTypes,
-            research_types_auto: globalAutoMode
+            min_incentive: minIncentive,
+            min_hourly_rate: minHourlyRate,
+            isRemote: isRemote,
+            auto_hide: globalAutoMode,
+            topics: topics
         };
         
         // If auto mode is enabled, save and proceed without preview
@@ -908,11 +1047,11 @@
                             <div style="flex: 1;">
                                 <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">${escapeHtml(project.name)}</div>
                                 <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.9em; color: var(--text-secondary);">
-                                    <span><strong>ID:</strong> ${project.id}</span>
+                                    <span><strong>ID:</strong> <a href="https://app.respondent.io/respondents/v2/projects/view/${project.id}" target="_blank" style="color: var(--link-color, #3b82f6); text-decoration: underline;">${project.id}</a></span>
                                     <span><strong>Incentive:</strong> $${project.incentive}</span>
                                     <span><strong>Hourly Rate:</strong> $${project.hourly_rate}/hr</span>
                                     <span><strong>Time:</strong> ${project.time_minutes} min</span>
-                                    <span><strong>Type:</strong> ${project.research_type}</span>
+                                    <span><strong>Remote:</strong> ${project.remote_status || 'Unknown'}</span>
                                 </div>
                             </div>
                         </div>
@@ -935,13 +1074,25 @@
         pendingFilters = null;
     }
     
-    async function confirmHideProjects() {
+    async function confirmHideProjects(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
         if (!pendingFilters) {
             return;
         }
         
+        // Save filters to local variable before closing modal (which clears pendingFilters)
+        const filtersToUse = pendingFilters;
         closePreviewHideModal();
-        await proceedWithHide(pendingFilters);
+        
+        try {
+            await proceedWithHide(filtersToUse);
+        } catch (error) {
+            throw error;
+        }
         pendingFilters = null;
     }
     
@@ -974,13 +1125,14 @@
                         // Start polling for progress
                         startProgressPolling();
                     } else {
-                        // If hide endpoint fails, just reload
-                        location.reload();
+                        // If hide endpoint fails, show error instead of reloading
+                        const errorData = await hideResponse.json().catch(() => ({ error: 'Failed to start hide process' }));
+                        console.error('Hide endpoint failed:', errorData);
+                        showToast('Error starting hide process: ' + (errorData.error || 'Unknown error'), 'error');
                     }
                 } catch (error) {
                     console.error('Error starting hide process:', error);
-                    // If error, just reload
-                    location.reload();
+                    showToast('Error starting hide process: ' + error.message, 'error');
                 }
             }
         } catch (error) {
@@ -995,11 +1147,6 @@
         return div.innerHTML;
     }
     
-    function clearResearchTypes() {
-        document.querySelectorAll('input[id^="researchType"]').forEach(checkbox => {
-            checkbox.checked = false;
-        });
-    }
     
     function toggleProfileMenu() {
         const dropdown = document.getElementById('profileDropdown');
@@ -1267,8 +1414,12 @@
     }
     
     let progressPollingInterval = null;
+    let hasSeenInProgress = false; // Track if we've seen in_progress status
     
     function startProgressPolling() {
+        // Reset the flag when starting new polling
+        hasSeenInProgress = false;
+        
         // Show progress indicator
         const progressEl = document.getElementById('hideProgress');
         if (progressEl) {
@@ -1306,6 +1457,7 @@
             const totalEl = document.getElementById('progressTotal');
             
             if (progress.status === 'in_progress') {
+                hasSeenInProgress = true; // Mark that we've seen in_progress
                 if (progressEl) progressEl.style.display = 'flex';
                 if (currentEl) currentEl.textContent = progress.current || 0;
                 if (totalEl) totalEl.textContent = progress.total || 0;
@@ -1314,7 +1466,7 @@
                 if (progressEl) progressEl.style.display = 'none';
                 stopProgressPolling();
                 
-                // Update hidden count and reload page
+                // Update hidden count
                 if (progress.hidden !== undefined) {
                     const hiddenCountEl = document.getElementById('hiddenCount');
                     if (hiddenCountEl) {
@@ -1322,7 +1474,23 @@
                     }
                 }
                 
-                // Reload page to show updated projects
+                // Only reload if:
+                // 1. We've seen the process go through in_progress (not leftover state)
+                // 2. AND projects were actually hidden (hidden > 0)
+                // This prevents reloading when there are no projects to hide or when the process completes before hiding
+                if (!hasSeenInProgress) {
+                    // Don't reload - just stop polling
+                    return;
+                }
+                
+                if (progress.hidden === 0 || progress.hidden === undefined) {
+                    // Show message that no projects were hidden
+                    showToast('No projects matched your filter criteria to hide.', 'info');
+                    // Don't reload - just stop polling
+                    return;
+                }
+                
+                // Reload page to show updated projects (only if projects were actually hidden)
                 setTimeout(() => {
                     location.reload();
                 }, 500);
@@ -1702,6 +1870,7 @@
         // Load analytics if section is visible
         // loadAnalytics();
     });
+    
     
     // Close modals when clicking outside
     document.getElementById('hideModal')?.addEventListener('click', function(e) {

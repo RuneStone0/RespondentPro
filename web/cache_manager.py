@@ -202,3 +202,59 @@ def mark_projects_hidden_in_cache(
         print(f"Error marking projects as hidden in cache: {e}")
         return False
 
+
+def get_cached_project_details(collection: Collection, project_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve cached project details by project_id
+    
+    Args:
+        collection: MongoDB collection for project_details
+        project_id: Project ID to look up
+        
+    Returns:
+        Dictionary with cached project details (project data at root), or None if not found
+    """
+    try:
+        if collection is None:
+            return None
+        cache_doc = collection.find_one({'project_id': project_id})
+        if cache_doc and 'details' in cache_doc:
+            return cache_doc['details']
+        return None
+    except Exception as e:
+        print(f"Error getting cached project details: {e}")
+        return None
+
+
+def cache_project_details(collection: Collection, project_id: str, details: Dict[str, Any]) -> bool:
+    """
+    Store project details in cache
+    
+    Args:
+        collection: MongoDB collection for project_details
+        project_id: Project ID
+        details: Full project details dictionary from API
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        if collection is None:
+            return False
+        cache_doc = {
+            'project_id': project_id,
+            'details': details,
+            'cached_at': datetime.utcnow(),
+            'last_updated': datetime.utcnow()
+        }
+        
+        collection.update_one(
+            {'project_id': project_id},
+            {'$set': cache_doc},
+            upsert=True
+        )
+        return True
+    except Exception as e:
+        print(f"Error caching project details: {e}")
+        return False
+
