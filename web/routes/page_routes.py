@@ -114,12 +114,14 @@ def projects():
             print(f"Error fetching projects: {traceback.format_exc()}")
             show_config_modal = True
     
-    # Get cache refresh time
+    # Get cache refresh time and total count
     cache_refreshed_utc = None
+    total_projects_count = 0
     if projects_cache_collection is not None:
         try:
             cache_stats = get_cache_stats(projects_cache_collection, str(user_id))
             last_updated = cache_stats.get('last_updated')
+            total_projects_count = cache_stats.get('total_count', 0)
             if last_updated:
                 if isinstance(last_updated, datetime):
                     cache_refreshed_utc = last_updated.isoformat() + 'Z'
@@ -152,6 +154,7 @@ def projects():
         filters=filters,
         cache_refreshed_utc=cache_refreshed_utc,
         error=error,
-        hidden_count=hidden_count
+        hidden_count=hidden_count,
+        total_projects_count=total_projects_count
     )
 

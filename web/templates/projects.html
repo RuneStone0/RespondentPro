@@ -414,12 +414,12 @@
                 <div class="status-dot orange"></div>
                 <span><strong id="hiddenCount">{{ hidden_count }}</strong> Hidden</span>
             </div>
-            {% if projects and projects.count is defined %}
-            <div class="footer-stat" title="Total number of available projects">
-                <span><strong id="totalProjectsCount">{{ projects.count }}</strong> Projects</span>
+            {% if total_projects_count is defined and total_projects_count > 0 %}
+            <div class="footer-stat" title="Total number of projects">
+                <span><strong id="totalProjectsCount">{{ total_projects_count }}</strong> Projects</span>
             </div>
             {% else %}
-            <div class="footer-stat" title="Total number of available projects" style="display: none;">
+            <div class="footer-stat" title="Total number of projects" style="display: none;">
                 <span><strong id="totalProjectsCount">0</strong> Projects</span>
             </div>
             {% endif %}
