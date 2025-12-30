@@ -3,40 +3,52 @@
 Filtering service for Respondent.io Manager
 """
 
+try:
+    from ..cache_manager import get_cached_project_details
+    from ..db import project_details_collection
+except ImportError:
+    from cache_manager import get_cached_project_details
+    from db import project_details_collection
 
-def get_project_is_remote(project):
+
+def get_project_is_remote(project_id):
     """
-    Extract isRemote value from project, checking all possible locations.
+    Look up isRemote value from project_details collection by project_id.
     Returns the boolean value or None if not found.
+    
+    Args:
+        project_id: Project ID string
+        
+    Returns:
+        Boolean value of isRemote, or None if not found
     """
-    project_is_remote = None
-    # Check nested project.project.isRemote
-    if isinstance(project.get('project'), dict):
-        project_is_remote = project.get('project', {}).get('isRemote')
-    # Check details.isRemote (for cached documents that weren't fully merged)
-    if project_is_remote is None and isinstance(project.get('details'), dict):
-        project_is_remote = project.get('details', {}).get('isRemote')
-    # Check root level isRemote (after merge, details contents are at root)
-    if project_is_remote is None:
-        project_is_remote = project.get('isRemote')
-    # Also check if details has a nested details key (some cached structures)
-    if project_is_remote is None and isinstance(project.get('details'), dict):
-        nested_details = project.get('details', {}).get('details')
-        if isinstance(nested_details, dict):
-            project_is_remote = nested_details.get('isRemote')
+    if project_details_collection is None:
+        return None
     
-    # Convert to boolean if found
-    if project_is_remote is not None:
-        # Convert to boolean if needed (handle string "true"/"false")
-        if isinstance(project_is_remote, str):
-            project_is_remote = project_is_remote.lower() in ('true', '1', 'yes')
-        project_is_remote = bool(project_is_remote)
-    
-    return project_is_remote
+    try:
+        details = get_cached_project_details(project_details_collection, project_id)
+        if details:
+            is_remote = details.get('isRemote')
+            # Convert to boolean if found
+            if is_remote is not None:
+                # Convert to boolean if needed (handle string "true"/"false")
+                if isinstance(is_remote, str):
+                    is_remote = is_remote.lower() in ('true', '1', 'yes')
+                return bool(is_remote)
+        return None
+    except Exception as e:
+        print(f"Error getting project isRemote for {project_id}: {e}")
+        return None
 
 
-def should_hide_project(project, filters):
-    """Check if a project should be hidden based on filters"""
+def should_hide_project(project, filters, project_details_collection=None):
+    """Check if a project should be hidden based on filters
+    
+    Args:
+        project: Project data dictionary (must have 'id' field)
+        filters: Filter dictionary with min_incentive, min_hourly_rate, isRemote, topics
+        project_details_collection: MongoDB collection for project_details
+    """
     min_incentive = filters.get('min_incentive')
     min_hourly_rate = filters.get('min_hourly_rate')
     is_remote = filters.get('isRemote')
@@ -66,13 +78,16 @@ def should_hide_project(project, filters):
     
     # Check remote filter - use isRemote if available
     if is_remote is True:
-        project_is_remote = get_project_is_remote(project)
-        
-        # If isRemote is available, check against filter
-        if project_is_remote is not None:
-            # Hide if project is remote and isRemote filter is enabled
-            if project_is_remote:
-                return True
+        project_id = project.get('id')
+        if project_id and project_details_collection is not None:
+            project_is_remote = get_project_is_remote(project_id)
+            
+            # If isRemote is available, check against filter
+            if project_is_remote is not None:
+                # Hide if project is NOT remote when isRemote filter is enabled
+                # (filter "Remote Only" means show only remote, so hide non-remote)
+                if not project_is_remote:
+                    return True
         # If project doesn't have isRemote field, don't hide based on this filter
         # (could be an old project without detailed data - these will show up in preview)
     
@@ -92,9 +107,14 @@ def should_hide_project(project, filters):
     return False
 
 
-def apply_filters_to_projects(projects_data, filters):
+def apply_filters_to_projects(projects_data, filters, project_details_collection=None):
     """Apply user filters to projects list
     
+    Args:
+        projects_data: Dictionary with 'results' list of projects
+        filters: Filter dictionary with min_incentive, min_hourly_rate, isRemote, topics
+        project_details_collection: MongoDB collection for project_details
+        
     Returns:
         tuple: (filtered_projects_data, hidden_count)
     """
@@ -136,13 +156,15 @@ def apply_filters_to_projects(projects_data, filters):
         
         # Check remote filter - use isRemote if available
         if is_remote is True and not should_hide:
-            project_is_remote = get_project_is_remote(project)
-            
-            # If isRemote is available, check against filter
-            if project_is_remote is not None:
-                # Hide if project is remote and isRemote filter is enabled
-                if project_is_remote:
-                    should_hide = True
+            project_id = project.get('id')
+            if project_id and project_details_collection is not None:
+                project_is_remote = get_project_is_remote(project_id)
+                
+                # If isRemote is available, check against filter
+                if project_is_remote is not None:
+                    # Hide if project is NOT remote when isRemote filter is enabled
+                    if not project_is_remote:
+                        should_hide = True
             # If project doesn't have isRemote field, don't hide based on this filter
         
         # Check topics filter

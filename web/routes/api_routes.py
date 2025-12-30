@@ -30,7 +30,8 @@ try:
     )
     from ..services.filter_service import should_hide_project, get_project_is_remote
     from ..db import (
-        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection
+        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection,
+        project_details_collection
     )
     from ..services.topics_service import get_all_topics
 except ImportError:
@@ -52,7 +53,8 @@ except ImportError:
     )
     from services.filter_service import should_hide_project, get_project_is_remote
     from db import (
-        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection
+        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection,
+        project_details_collection
     )
     from services.topics_service import get_all_topics
 
@@ -353,7 +355,8 @@ def preview_hide():
         # Find projects that would be hidden
         projects_to_hide = []
         for project in all_projects:
-            if should_hide_project(project, filters):
+            # Check if project should be hidden
+            if should_hide_project(project, filters, project_details_collection=project_details_collection):
                 # Calculate hourly rate for display
                 remuneration = project.get('respondentRemuneration', 0)
                 time_minutes = project.get('timeMinutesRequired', 0)
@@ -361,8 +364,11 @@ def preview_hide():
                 if time_minutes > 0:
                     hourly_rate = (remuneration / time_minutes) * 60
                 
-                # Get remote status using the same helper function as filtering
-                project_is_remote = get_project_is_remote(project)
+                # Get remote status for display
+                project_id = project.get('id')
+                project_is_remote = None
+                if project_id and project_details_collection is not None:
+                    project_is_remote = get_project_is_remote(project_id)
                 
                 remote_status = 'Unknown'
                 if project_is_remote is not None:
