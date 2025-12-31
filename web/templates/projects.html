@@ -206,12 +206,6 @@
     <div class="content-area">
         <div class="section-header">
             <div class="section-actions">
-                <button class="btn-filter-settings" onclick="openRecommendationsModal()" id="recommendationsBtn" style="margin-right: 8px;">
-                    <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; margin-right: 8px;">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                    </svg>
-                    Recommendations
-                </button>
                 <button class="btn-filter-settings" onclick="toggleFilterPanel()" id="filterSettingsBtn">
                     <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; margin-right: 8px;">
                         <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"/>
@@ -519,14 +513,56 @@
 
 <!-- Hide Project Feedback Modal -->
 <div class="modal-overlay" id="hideModal" style="display: none;">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 700px;">
         <div class="modal-header">
             <h2>Hide Project</h2>
             <button class="btn-close-modal" onclick="closeHideModal()" aria-label="Close">×</button>
         </div>
         <div class="modal-body">
-            <p style="margin-bottom: 16px;">Why are you hiding this project? (optional)</p>
-            <textarea id="hideFeedbackText" placeholder="e.g., Not interested in healthcare projects, Wrong region, etc." rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-family: inherit; resize: vertical;"></textarea>
+            <!-- Project Preview -->
+            <div id="hideProjectPreview" style="margin-bottom: 24px; padding: 16px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div id="hideProjectPreviewLoading" style="text-align: center; padding: 20px;">
+                    <div class="progress-spinner"></div>
+                    <p>Loading project details...</p>
+                </div>
+                <div id="hideProjectPreviewContent" style="display: none;">
+                    <h3 id="hideProjectName" style="margin: 0 0 12px 0; font-size: 18px;"></h3>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; font-size: 14px;">
+                        <div>
+                            <span style="color: var(--text-secondary);">Incentive:</span>
+                            <strong id="hideProjectIncentive" style="margin-left: 8px;"></strong>
+                        </div>
+                        <div>
+                            <span style="color: var(--text-secondary);">Time:</span>
+                            <strong id="hideProjectTime" style="margin-left: 8px;"></strong>
+                        </div>
+                        <div>
+                            <span style="color: var(--text-secondary);">Hourly Rate:</span>
+                            <strong id="hideProjectHourlyRate" style="margin-left: 8px;"></strong>
+                        </div>
+                        <div id="hideProjectTopicsContainer" style="display: none;">
+                            <span style="color: var(--text-secondary);">Topics:</span>
+                            <div id="hideProjectTopics" style="display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 8px;"></div>
+                        </div>
+                    </div>
+                    <div id="hideProjectDescription" style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);"></div>
+                </div>
+            </div>
+            
+            <!-- AI Suggestions -->
+            <div id="hideSuggestionsContainer" style="margin-bottom: 16px;">
+                <p style="margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Suggested reasons to hide:</p>
+                <div id="hideSuggestions" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <!-- Suggestions will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Feedback Textarea -->
+            <div style="margin-bottom: 16px;">
+                <p style="margin-bottom: 8px; font-weight: 500;">Why are you hiding this project? (optional)</p>
+                <textarea id="hideFeedbackText" placeholder="Type your reason or click a suggestion above..." rows="3" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-family: inherit; resize: vertical;"></textarea>
+            </div>
+            
             <div class="modal-actions" style="margin-top: 16px;">
                 <button type="button" class="btn-secondary" onclick="closeHideModal()">Cancel</button>
                 <button type="button" class="btn-secondary" onclick="hideProjectWithoutFeedback()">Hide without feedback</button>
@@ -573,47 +609,24 @@
     </div>
 </div>
 
-<!-- Recommendations Modal -->
-<div class="modal-overlay" id="recommendationsModal" style="display: none;">
-    <div class="modal-content" style="max-width: 800px;">
+<!-- Question Modal -->
+<div class="modal-overlay" id="questionModal" style="display: none;">
+    <div class="modal-content" style="max-width: 500px;">
         <div class="modal-header">
-            <h2>Category Recommendations</h2>
-            <button class="btn-close-modal" onclick="closeRecommendationsModal()" aria-label="Close">×</button>
+            <h2>Help Us Learn Your Preferences</h2>
+            <button class="btn-close-modal" onclick="closeQuestionModal()" aria-label="Close">×</button>
         </div>
         <div class="modal-body">
-            <div id="recommendationsLoading" style="text-align: center; padding: 40px;">
-                <div class="progress-spinner"></div>
-                <p>Generating recommendations...</p>
-            </div>
-            <div id="recommendationsList" style="display: none;">
-                <!-- Recommendations will be populated here -->
+            <p id="questionText" style="margin-bottom: 24px; font-size: 16px; line-height: 1.5;"></p>
+            <div class="modal-actions" style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn-secondary" onclick="skipQuestion()">Skip</button>
+                <button type="button" class="btn-secondary" onclick="answerQuestion(false)">No</button>
+                <button type="button" class="btn-primary" onclick="answerQuestion(true)">Yes</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Category Preview Modal -->
-<div class="modal-overlay" id="previewModal" style="display: none;">
-    <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
-        <div class="modal-header">
-            <h2 id="previewModalTitle">Preview Category</h2>
-            <button class="btn-close-modal" onclick="closePreviewModal()" aria-label="Close">×</button>
-        </div>
-        <div class="modal-body">
-            <div id="previewLoading" style="text-align: center; padding: 40px;">
-                <div class="progress-spinner"></div>
-                <p>Loading projects...</p>
-            </div>
-            <div id="previewProjects" style="display: none;">
-                <!-- Projects will be populated here -->
-            </div>
-            <div class="modal-actions" style="margin-top: 16px;">
-                <button type="button" class="btn-secondary" onclick="closePreviewModal()">Cancel</button>
-                <button type="button" class="btn-primary" onclick="hideCategoryFromPreview()">Hide</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Toast Notification Container -->
 <div class="toast-container" id="toastContainer"></div>
@@ -1515,17 +1528,138 @@
     let currentHideProjectId = null;
     let currentHideProjectName = null;
     
-    function openHideModal(projectId, projectName) {
+    async function openHideModal(projectId, projectName) {
         currentHideProjectId = projectId;
         currentHideProjectName = projectName;
         document.getElementById('hideModal').style.display = 'flex';
         document.getElementById('hideFeedbackText').value = '';
+        
+        // Show loading state
+        document.getElementById('hideProjectPreviewLoading').style.display = 'block';
+        document.getElementById('hideProjectPreviewContent').style.display = 'none';
+        document.getElementById('hideSuggestions').innerHTML = '';
+        
+        // Fetch project details and suggestions
+        try {
+            const response = await fetch('/api/hide-suggestions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project_id: projectId })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    displayProjectPreview(data.project);
+                    displayHideSuggestions(data.suggestions);
+                }
+            } else {
+                // If API fails, show basic info
+                displayBasicProjectInfo(projectName);
+            }
+        } catch (error) {
+            console.error('Error fetching project details:', error);
+            displayBasicProjectInfo(projectName);
+        }
+    }
+    
+    function displayProjectPreview(project) {
+        const previewContent = document.getElementById('hideProjectPreviewContent');
+        const loadingEl = document.getElementById('hideProjectPreviewLoading');
+        
+        // Set project name
+        document.getElementById('hideProjectName').textContent = project.name || 'Untitled Project';
+        
+        // Set incentive
+        document.getElementById('hideProjectIncentive').textContent = `$${project.remuneration || 0}`;
+        
+        // Set time
+        const timeMinutes = project.time_minutes || 0;
+        const timeDisplay = timeMinutes >= 60 
+            ? `${Math.floor(timeMinutes / 60)}h ${timeMinutes % 60}m`
+            : `${timeMinutes}m`;
+        document.getElementById('hideProjectTime').textContent = timeDisplay;
+        
+        // Calculate hourly rate
+        const hourlyRate = timeMinutes > 0 ? ((project.remuneration || 0) / timeMinutes) * 60 : 0;
+        document.getElementById('hideProjectHourlyRate').textContent = `$${hourlyRate.toFixed(2)}/hr`;
+        
+        // Set topics if available
+        if (project.topics && project.topics.length > 0) {
+            const topicsContainer = document.getElementById('hideProjectTopicsContainer');
+            const topicsEl = document.getElementById('hideProjectTopics');
+            topicsContainer.style.display = 'block';
+            topicsEl.innerHTML = project.topics.map(topic => 
+                `<span style="padding: 2px 6px; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px;">${topic.name || topic}</span>`
+            ).join('');
+        } else {
+            document.getElementById('hideProjectTopicsContainer').style.display = 'none';
+        }
+        
+        // Set description
+        const descEl = document.getElementById('hideProjectDescription');
+        if (project.description) {
+            descEl.textContent = project.description.length > 300 
+                ? project.description.substring(0, 300) + '...'
+                : project.description;
+        } else {
+            descEl.textContent = 'No description available';
+        }
+        
+        loadingEl.style.display = 'none';
+        previewContent.style.display = 'block';
+    }
+    
+    function displayBasicProjectInfo(projectName) {
+        const previewContent = document.getElementById('hideProjectPreviewContent');
+        const loadingEl = document.getElementById('hideProjectPreviewLoading');
+        
+        document.getElementById('hideProjectName').textContent = projectName || 'Untitled Project';
+        document.getElementById('hideProjectIncentive').textContent = 'Loading...';
+        document.getElementById('hideProjectTime').textContent = 'Loading...';
+        document.getElementById('hideProjectHourlyRate').textContent = 'Loading...';
+        document.getElementById('hideProjectDescription').textContent = 'Loading project details...';
+        
+        loadingEl.style.display = 'none';
+        previewContent.style.display = 'block';
+    }
+    
+    function displayHideSuggestions(suggestions) {
+        const suggestionsEl = document.getElementById('hideSuggestions');
+        if (!suggestions || suggestions.length === 0) {
+            suggestionsEl.innerHTML = '<p style="color: var(--text-secondary); font-size: 14px;">No suggestions available</p>';
+            return;
+        }
+        
+        suggestionsEl.innerHTML = suggestions.map(suggestion => `
+            <button 
+                type="button" 
+                class="suggestion-chip" 
+                onclick="selectSuggestion('${suggestion.replace(/'/g, "\\'")}')"
+                style="padding: 6px 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; color: var(--text-primary);"
+                onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'; this.style.borderColor='var(--primary-color)'"
+                onmouseout="this.style.background='var(--bg-tertiary)'; this.style.color='var(--text-primary)'; this.style.borderColor='var(--border-color)'"
+            >
+                ${suggestion}
+            </button>
+        `).join('');
+    }
+    
+    function selectSuggestion(suggestion) {
+        const feedbackText = document.getElementById('hideFeedbackText');
+        feedbackText.value = suggestion;
+        feedbackText.focus();
     }
     
     function closeHideModal() {
         document.getElementById('hideModal').style.display = 'none';
         currentHideProjectId = null;
         currentHideProjectName = null;
+        // Reset preview state
+        document.getElementById('hideProjectPreviewLoading').style.display = 'block';
+        document.getElementById('hideProjectPreviewContent').style.display = 'none';
+        document.getElementById('hideSuggestions').innerHTML = '';
+        document.getElementById('hideFeedbackText').value = '';
     }
     
     async function hideProjectWithoutFeedback() {
@@ -1563,263 +1697,95 @@
             // Update hidden count
             await updateHiddenCount();
             
-            // Show notification
-            if (result.auto_hidden_count > 0) {
-                showToast(`Project hidden! ${result.auto_hidden_count} similar project(s) were also automatically hidden.`, 'success');
+            // If there's a question, show the question modal
+            if (result.question) {
+                showQuestionModal(result.question, currentHideProjectId);
             } else {
-                showToast('Project hidden successfully!', 'success');
+                // Show notification
+                if (result.auto_hidden_count > 0) {
+                    showToast(`Project hidden! ${result.auto_hidden_count} similar project(s) were also automatically hidden.`, 'success');
+                } else {
+                    showToast('Project hidden successfully!', 'success');
+                }
+                
+                // Reload page to remove hidden project
+                location.reload();
             }
-            
-            // Reload page to remove hidden project
-            location.reload();
         } catch (error) {
             console.error('Error hiding project:', error);
             showToast('Error hiding project: ' + error.message, 'error');
         }
     }
     
-    // Recommendations modal functions
-    function openRecommendationsModal() {
-        document.getElementById('recommendationsModal').style.display = 'flex';
-        document.getElementById('recommendationsLoading').style.display = 'block';
-        document.getElementById('recommendationsList').style.display = 'none';
-        loadRecommendations();
+    // Question modal functions
+    let currentQuestion = null;
+    let currentQuestionProjectId = null;
+    
+    function showQuestionModal(question, projectId) {
+        currentQuestion = question;
+        currentQuestionProjectId = projectId;
+        document.getElementById('questionText').textContent = question.text || question.question_text || '';
+        document.getElementById('questionModal').style.display = 'flex';
     }
     
-    function closeRecommendationsModal() {
-        document.getElementById('recommendationsModal').style.display = 'none';
+    function closeQuestionModal() {
+        document.getElementById('questionModal').style.display = 'none';
+        currentQuestion = null;
+        currentQuestionProjectId = null;
+        // Reload page to remove hidden project
+        location.reload();
     }
     
-    async function loadRecommendations() {
-        try {
-            const response = await fetch('/api/recommendations');
-            if (!response.ok) {
-                throw new Error('Failed to load recommendations');
-            }
-            
-            const data = await response.json();
-            displayRecommendations(data.recommendations || []);
-        } catch (error) {
-            document.getElementById('recommendationsLoading').innerHTML = 
-                '<p style="color: var(--error-color);">Error loading recommendations: ' + error.message + '</p>';
-        }
+    function skipQuestion() {
+        closeQuestionModal();
     }
     
-    function displayRecommendations(recommendations) {
-        const listEl = document.getElementById('recommendationsList');
-        const loadingEl = document.getElementById('recommendationsLoading');
-        
-        if (recommendations.length === 0) {
-            listEl.innerHTML = '<p>No recommendations available at this time.</p>';
-        } else {
-            listEl.innerHTML = recommendations.map((rec, index) => `
-                <div style="padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                        <div>
-                            <h4 style="margin: 0 0 4px 0;">${rec.category_name || 'Unnamed Category'}</h4>
-                            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">${rec.description || ''}</p>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 18px; font-weight: bold; color: var(--primary-color);">${rec.project_count || 0}</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">projects</div>
-                        </div>
-                    </div>
-                    <button class="btn-primary" onclick="previewCategory(${index}, '${btoa(JSON.stringify(rec.category_pattern))}')" style="width: 100%;">
-                        Preview
-                    </button>
-                </div>
-            `).join('');
-            
-            // Store recommendations globally for preview
-            window.recommendationsData = recommendations;
-        }
-        
-        loadingEl.style.display = 'none';
-        listEl.style.display = 'block';
-    }
-    
-    // Preview modal functions
-    let currentPreviewCategory = null;
-    let currentPreviewPattern = null;
-    
-    function previewCategory(index, patternB64) {
-        const recommendations = window.recommendationsData || [];
-        if (index >= recommendations.length) {
-            console.error('Invalid recommendation index:', index);
-            return;
-        }
-        
-        const rec = recommendations[index];
-        if (!rec || !rec.category_name) {
-            console.error('Invalid recommendation data:', rec);
-            console.error('Error: Invalid category data');
-            showToast('Error: Invalid category data. Please try again.', 'error');
-            return;
-        }
-        
-        // Store category data - make a deep copy to prevent issues
-        currentPreviewCategory = JSON.parse(JSON.stringify(rec));
-        currentPreviewPattern = patternB64;
-        
-        // Also store in modal data attributes as backup
-        const modal = document.getElementById('previewModal');
-        if (modal) {
-            modal.setAttribute('data-category-name', rec.category_name || '');
-            modal.setAttribute('data-category-pattern', patternB64 || '');
-        }
-        
-        document.getElementById('previewModal').style.display = 'flex';
-        document.getElementById('previewModalTitle').textContent = `Preview: ${rec.category_name}`;
-        document.getElementById('previewLoading').style.display = 'block';
-        document.getElementById('previewProjects').style.display = 'none';
-        
-        loadPreviewProjects(patternB64);
-    }
-    
-    function closePreviewModal() {
-        document.getElementById('previewModal').style.display = 'none';
-        // Only clear if not in the middle of a hide operation
-        // The data will be cleared after successful hide
-        clearPreviewData();
-    }
-    
-    function clearPreviewData() {
-        currentPreviewCategory = null;
-        currentPreviewPattern = null;
-    }
-    
-    async function loadPreviewProjects(patternB64) {
-        try {
-            const response = await fetch(`/api/recommendations/preview?category_pattern=${encodeURIComponent(patternB64)}`);
-            if (!response.ok) {
-                throw new Error('Failed to load preview');
-            }
-            
-            const data = await response.json();
-            displayPreviewProjects(data.projects || []);
-        } catch (error) {
-            document.getElementById('previewLoading').innerHTML = 
-                '<p style="color: var(--error-color);">Error loading preview: ' + error.message + '</p>';
-        }
-    }
-    
-    function displayPreviewProjects(projects) {
-        const projectsEl = document.getElementById('previewProjects');
-        const loadingEl = document.getElementById('previewLoading');
-        
-        if (projects.length === 0) {
-            projectsEl.innerHTML = '<p>No projects found in this category.</p>';
-        } else {
-            projectsEl.innerHTML = projects.map(project => {
-                const remuneration = project.respondentRemuneration || 0;
-                const timeMinutes = project.timeMinutesRequired || 0;
-                const hourlyRate = timeMinutes > 0 ? ((remuneration / timeMinutes) * 60).toFixed(2) : '0.00';
-                
-                return `
-                    <div style="padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px;">
-                        <div style="font-weight: bold; margin-bottom: 4px;">${project.name || 'Untitled'}</div>
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
-                            $${hourlyRate}/hr • $${remuneration} • ${timeMinutes} min
-                        </div>
-                        <div style="font-size: 12px; color: var(--text-secondary);">
-                            ${(project.description || '').substring(0, 150)}${(project.description || '').length > 150 ? '...' : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-        
-        loadingEl.style.display = 'none';
-        projectsEl.style.display = 'block';
-    }
-    
-    async function hideCategoryFromPreview() {
-        // Get category data from stored variables or modal data attributes
-        let categoryName = null;
-        let categoryPattern = null;
-        
-        // First try to get from currentPreviewCategory
-        if (currentPreviewCategory && currentPreviewCategory.category_name) {
-            categoryName = currentPreviewCategory.category_name;
-            categoryPattern = currentPreviewCategory.category_pattern;
-        } 
-        // Fallback: try to get from modal data attributes
-        else {
-            const modal = document.getElementById('previewModal');
-            if (modal) {
-                const storedName = modal.getAttribute('data-category-name');
-                const storedPattern = modal.getAttribute('data-category-pattern');
-                
-                if (storedName && storedPattern) {
-                    categoryName = storedName;
-                    try {
-                        categoryPattern = JSON.parse(atob(storedPattern));
-                    } catch (e) {
-                        console.error('Error decoding stored pattern:', e);
-                    }
-                }
-            }
-            
-            // Last resort: try to get from modal title and currentPreviewPattern
-            if (!categoryName && currentPreviewPattern) {
-                const modalTitle = document.getElementById('previewModalTitle');
-                if (modalTitle) {
-                    const titleText = modalTitle.textContent;
-                    if (titleText.startsWith('Preview: ')) {
-                        categoryName = titleText.replace('Preview: ', '');
-                    }
-                }
-                
-                // Decode pattern from base64
-                try {
-                    categoryPattern = JSON.parse(atob(currentPreviewPattern));
-                } catch (e) {
-                    console.error('Error decoding category pattern:', e);
-                }
-            }
-        }
-        
-        if (!categoryName || !categoryPattern) {
-            console.error('Missing category data:', { categoryName, categoryPattern, currentPreviewCategory, currentPreviewPattern });
-            console.error('Missing category data:', { categoryName, categoryPattern, currentPreviewCategory, currentPreviewPattern });
-            showToast('Error: Category information is missing. Please close and reopen the preview to try again.', 'error');
-            return;
-        }
+    async function answerQuestion(answer) {
+        if (!currentQuestion) return;
         
         try {
-            const response = await fetch('/api/recommendations/hide-category', {
+            const response = await fetch('/api/answer-question', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    category_name: categoryName,
-                    category_pattern: categoryPattern
+                    question_id: currentQuestion.id,
+                    question_text: currentQuestion.text || currentQuestion.question_text,
+                    answer: answer,
+                    pattern: currentQuestion.pattern,
+                    project_id: currentQuestionProjectId
                 })
             });
             
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.error || 'Failed to hide category');
+                throw new Error(error.error || 'Failed to submit answer');
             }
             
             const result = await response.json();
+            closeQuestionModal();
             
-            // Clear preview data and close preview modal
-            clearPreviewData();
-            closePreviewModal();
+            // Show notification
+            if (result.auto_hidden_count > 0) {
+                showToast(`Thank you! ${result.auto_hidden_count} similar project(s) were automatically hidden based on your preference.`, 'success');
+            } else {
+                showToast('Thank you! Your preference has been saved.', 'success');
+            }
             
-            // Keep recommendations modal open and refresh the recommendations list
-            // This allows the user to review more recommendations
-            document.getElementById('recommendationsLoading').style.display = 'block';
-            document.getElementById('recommendationsList').style.display = 'none';
-            await loadRecommendations();
-            
-            // Update hidden count
-            await updateHiddenCount();
+            // Reload page to remove hidden project
+            location.reload();
         } catch (error) {
-            console.error('Error hiding category: ', error);
-            // Silently handle error - user can see the issue from the UI state
+            console.error('Error answering question:', error);
+            showToast('Error submitting answer: ' + error.message, 'error');
         }
     }
+    
+    // Close question modal when clicking outside
+    document.getElementById('questionModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeQuestionModal();
+        }
+    });
+    
     
     // Analytics functions
     async function updateHiddenCount() {
@@ -1875,12 +1841,6 @@
     // Close modals when clicking outside
     document.getElementById('hideModal')?.addEventListener('click', function(e) {
         if (e.target === this) closeHideModal();
-    });
-    document.getElementById('recommendationsModal')?.addEventListener('click', function(e) {
-        if (e.target === this) closeRecommendationsModal();
-    });
-    document.getElementById('previewModal')?.addEventListener('click', function(e) {
-        if (e.target === this) closePreviewModal();
     });
 </script>
 {% endblock %}

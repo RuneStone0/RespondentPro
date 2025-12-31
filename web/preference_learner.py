@@ -251,14 +251,18 @@ def get_user_preferences(
                 'hidden_projects': [],
                 'kept_projects': [],
                 'hidden_categories': [],
-                'learned_patterns': []
+                'learned_patterns': [],
+                'question_answers': [],
+                'learned_exclusions': []
             }
         
         return {
             'hidden_projects': prefs.get('hidden_projects', []),
             'kept_projects': prefs.get('kept_projects', []),
             'hidden_categories': prefs.get('hidden_categories', []),
-            'learned_patterns': prefs.get('learned_patterns', [])
+            'learned_patterns': prefs.get('learned_patterns', []),
+            'question_answers': prefs.get('question_answers', []),
+            'learned_exclusions': prefs.get('learned_exclusions', [])
         }
     except Exception as e:
         print(f"Error getting user preferences: {e}")
@@ -266,7 +270,9 @@ def get_user_preferences(
             'hidden_projects': [],
             'kept_projects': [],
             'hidden_categories': [],
-            'learned_patterns': []
+            'learned_patterns': [],
+            'question_answers': [],
+            'learned_exclusions': []
         }
 
 
@@ -309,6 +315,154 @@ def should_hide_project(
         return False
     except Exception as e:
         print(f"Error checking if should hide project: {e}")
+        return False
+
+
+def should_hide_based_on_ai_preferences(
+    user_preferences_collection: Collection,
+    user_id: str,
+    project: Dict[str, Any]
+) -> bool:
+    """
+    Check if project should be hidden based on AI-learned exclusion patterns only
+    
+    This function checks learned_exclusions which are patterns the user has explicitly
+    indicated they want to exclude (e.g., "not a healthcare professional").
+    
+    Args:
+        user_preferences_collection: Collection for user_preferences
+        user_id: User ID
+        project: Project data
+        
+    Returns:
+        True if project should be hidden based on AI-learned preferences only
+    """
+    try:
+        prefs = get_user_preferences(user_preferences_collection, user_id)
+        
+        # Check learned exclusions (from question answers where user said "no")
+        learned_exclusions = prefs.get('learned_exclusions', [])
+        if not learned_exclusions:
+            return False
+        
+        project_name = project.get('name', '').lower()
+        project_description = project.get('description', '').lower()
+        project_text = f"{project_name} {project_description}"
+        
+        # Get extracted metadata if available
+        metadata = project.get('extracted_metadata', {})
+        metadata_regions = [r.lower() for r in metadata.get('regions', [])]
+        metadata_professions = [p.lower() for p in metadata.get('professions', [])]
+        metadata_industries = [i.lower() for i in metadata.get('industries', [])]
+        
+        # Check each learned exclusion pattern
+        for exclusion in learned_exclusions:
+            pattern = exclusion.get('pattern', {})
+            if not pattern:
+                continue
+            
+            # Check keywords
+            keywords = pattern.get('keywords', [])
+            if keywords:
+                if any(keyword.lower() in project_text for keyword in keywords):
+                    return True
+            
+            # Check regions
+            regions = pattern.get('regions', [])
+            if regions:
+                if any(region.lower() in metadata_regions for region in regions):
+                    return True
+                # Also check in project text
+                if any(region.lower() in project_text for region in regions):
+                    return True
+            
+            # Check professions
+            professions = pattern.get('professions', [])
+            if professions:
+                if any(prof.lower() in metadata_professions for prof in professions):
+                    return True
+                # Also check in project text
+                if any(prof.lower() in project_text for prof in professions):
+                    return True
+            
+            # Check industries
+            industries = pattern.get('industries', [])
+            if industries:
+                if any(ind.lower() in metadata_industries for ind in industries):
+                    return True
+                # Also check in project text
+                if any(ind.lower() in project_text for ind in industries):
+                    return True
+        
+        return False
+    except Exception as e:
+        print(f"Error checking AI preferences: {e}")
+        return False
+
+
+def store_question_answer(
+    user_preferences_collection: Collection,
+    user_id: str,
+    question_id: str,
+    question_text: str,
+    answer: bool,
+    pattern: Dict[str, Any],
+    project_id: Optional[str] = None
+) -> bool:
+    """
+    Store a user's answer to an AI-generated question
+    
+    Args:
+        user_preferences_collection: Collection for user_preferences
+        user_id: User ID
+        question_id: Unique question ID
+        question_text: The question text
+        answer: User's answer (True/False)
+        pattern: Pattern associated with the question
+        project_id: Optional project ID that triggered the question
+        
+    Returns:
+        True if successful
+    """
+    try:
+        # Store the question answer
+        question_answer = {
+            'question_id': question_id,
+            'question_text': question_text,
+            'answer': answer,
+            'pattern': pattern,
+            'project_id': project_id,
+            'answered_at': datetime.utcnow()
+        }
+        
+        user_preferences_collection.update_one(
+            {'user_id': user_id},
+            {
+                '$addToSet': {'question_answers': question_answer},
+                '$set': {'updated_at': datetime.utcnow()}
+            },
+            upsert=True
+        )
+        
+        # If answer is False (user doesn't match the requirement), add to learned exclusions
+        if not answer:
+            learned_exclusion = {
+                'question_id': question_id,
+                'pattern': pattern,
+                'learned_at': datetime.utcnow()
+            }
+            user_preferences_collection.update_one(
+                {'user_id': user_id},
+                {
+                    '$addToSet': {'learned_exclusions': learned_exclusion},
+                    '$set': {'updated_at': datetime.utcnow()}
+                },
+                upsert=True
+            )
+        
+        return True
+    except Exception as e:
+        print(f"Error storing question answer: {e}")
         return False
 
 
