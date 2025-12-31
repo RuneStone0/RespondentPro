@@ -23,10 +23,10 @@ try:
         get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats
     )
     from ..ai_analyzer import (
-        generate_category_recommendations, get_projects_in_category, validate_category_pattern
+        generate_question_from_project, find_similar_projects, generate_hide_suggestions
     )
     from ..preference_learner import (
-        record_project_hidden, record_category_hidden, get_user_preferences
+        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences
     )
     from ..services.filter_service import should_hide_project, get_project_is_remote
     from ..db import (
@@ -46,10 +46,10 @@ except ImportError:
         get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats
     )
     from ai_analyzer import (
-        generate_category_recommendations, get_projects_in_category, validate_category_pattern
+        generate_question_from_project, find_similar_projects, generate_hide_suggestions
     )
     from preference_learner import (
-        record_project_hidden, record_category_hidden, get_user_preferences
+        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences
     )
     from services.filter_service import should_hide_project, get_project_is_remote
     from db import (
@@ -410,7 +410,7 @@ def get_hide_progress_route():
 
 @bp.route('/hide-project', methods=['POST'])
 def hide_project():
-    """Hide a single project with optional feedback"""
+    """Hide a single project with optional feedback and generate AI question"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
@@ -441,6 +441,20 @@ def hide_project():
         
         hidden_method = 'feedback_based' if feedback_text else 'manual'
         
+        # Get project data for AI analysis
+        project_data = None
+        if projects_cache_collection is not None:
+            cached = get_cached_projects(projects_cache_collection, user_id)
+            if cached and cached.get('projects'):
+                for proj in cached.get('projects', []):
+                    if proj.get('id') == project_id:
+                        project_data = proj
+                        break
+        
+        # If not in cache, try to fetch it (simplified - just use basic data)
+        if not project_data:
+            project_data = {'id': project_id, 'name': '', 'description': ''}
+        
         if user_preferences_collection is not None and hidden_projects_log_collection is not None:
             record_project_hidden(
                 hidden_projects_log_collection,
@@ -451,10 +465,22 @@ def hide_project():
                 hidden_method=hidden_method
             )
         
+        # Generate AI question if no feedback provided (feedback means user already explained)
+        question = None
+        if not feedback_text and project_data:
+            # Check if we've already asked this type of question before
+            prefs = get_user_preferences(user_preferences_collection, user_id) if user_preferences_collection is not None else {}
+            existing_question_ids = {qa.get('question_id') for qa in prefs.get('question_answers', [])}
+            
+            question_data = generate_question_from_project(project_data)
+            if question_data and question_data.get('id') not in existing_question_ids:
+                question = question_data
+        
         return jsonify({
             'success': True,
             'auto_hidden_count': 0,
-            'auto_hidden_ids': []
+            'auto_hidden_ids': [],
+            'question': question
         })
         
     except Exception as e:
@@ -462,171 +488,153 @@ def hide_project():
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
-@bp.route('/recommendations', methods=['GET'])
-def get_recommendations():
-    """Get AI-generated category recommendations"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    try:
-        user_id = str(session['user_id'])
-        
-        config = load_user_config(user_id)
-        if not config or not config.get('cookies', {}).get('respondent.session.sid'):
-            return jsonify({'error': 'Session keys not configured'}), 400
-        
-        profile_id = config.get('profile_id')
-        if not profile_id:
-            return jsonify({'error': 'Profile ID not found'}), 400
-        
-        cached = None
-        if projects_cache_collection is not None:
-            cached = get_cached_projects(projects_cache_collection, user_id)
-        
-        if not cached or not cached.get('projects'):
-            req_session = create_respondent_session(
-                cookies=config.get('cookies', {}),
-                authorization=config.get('authorization')
-            )
-            projects_data = fetch_respondent_projects(
-                session=req_session,
-                profile_id=profile_id,
-                page_size=100,
-                page=1,
-                user_id=user_id
-            )
-            all_projects = projects_data.get('results', [])
-        else:
-            all_projects = cached.get('projects', [])
-        
-        hidden_projects = []
-        if user_preferences_collection is not None:
-            prefs = get_user_preferences(user_preferences_collection, user_id)
-            hidden_projects = prefs.get('hidden_projects', [])
-        
-        recommendations = generate_category_recommendations(
-            user_id,
-            all_projects,
-            hidden_projects
-        )
-        
-        return jsonify({'recommendations': recommendations})
-        
-    except Exception as e:
-        import traceback
-        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
-
-
-@bp.route('/recommendations/preview', methods=['GET'])
-def preview_category():
-    """Preview projects in a category"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    try:
-        user_id = str(session['user_id'])
-        category_pattern_b64 = request.args.get('category_pattern')
-        
-        if not category_pattern_b64:
-            return jsonify({'error': 'category_pattern is required'}), 400
-        
-        try:
-            category_pattern_json = base64.urlsafe_b64decode(category_pattern_b64 + '==').decode('utf-8')
-            category_pattern = json.loads(category_pattern_json)
-        except Exception as e:
-            return jsonify({'error': f'Invalid category_pattern: {e}'}), 400
-        
-        if not validate_category_pattern(category_pattern):
-            return jsonify({'error': 'Invalid category pattern'}), 400
-        
-        cached = None
-        if projects_cache_collection is not None:
-            cached = get_cached_projects(projects_cache_collection, user_id)
-        
-        if not cached or not cached.get('projects'):
-            return jsonify({'error': 'No cached projects available'}), 400
-        
-        all_projects = cached.get('projects', [])
-        matching_projects = get_projects_in_category(category_pattern, all_projects)
-        
-        return jsonify({
-            'projects': matching_projects,
-            'count': len(matching_projects)
-        })
-        
-    except Exception as e:
-        import traceback
-        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
-
-
-@bp.route('/recommendations/hide-category', methods=['POST'])
-def hide_category():
-    """Hide all projects in a category"""
+@bp.route('/hide-suggestions', methods=['POST'])
+def get_hide_suggestions():
+    """Get AI-generated suggestions for why a user might hide a project"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
         user_id = str(session['user_id'])
         data = request.json
-        category_name = data.get('category_name')
-        category_pattern = data.get('category_pattern')
+        project_id = data.get('project_id')
         
-        if not category_name or not category_pattern:
-            return jsonify({'error': 'category_name and category_pattern are required'}), 400
+        if not project_id:
+            return jsonify({'error': 'project_id is required'}), 400
         
-        if not validate_category_pattern(category_pattern):
-            return jsonify({'error': 'Invalid category pattern'}), 400
-        
-        config = load_user_config(user_id)
-        if not config or not config.get('cookies', {}).get('respondent.session.sid'):
-            return jsonify({'error': 'Session keys not configured'}), 400
-        
-        cached = None
+        # Get project data from cache
+        project_data = None
         if projects_cache_collection is not None:
             cached = get_cached_projects(projects_cache_collection, user_id)
+            if cached and cached.get('projects'):
+                for proj in cached.get('projects', []):
+                    if proj.get('id') == project_id:
+                        project_data = proj
+                        break
         
-        if not cached or not cached.get('projects'):
-            return jsonify({'error': 'No cached projects available'}), 400
+        if not project_data:
+            return jsonify({'error': 'Project not found'}), 404
         
-        all_projects = cached.get('projects', [])
-        matching_projects = get_projects_in_category(category_pattern, all_projects)
-        
-        if not matching_projects:
-            return jsonify({'error': 'No projects found in category'}), 404
-        
-        req_session = create_respondent_session(
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
-        )
-        
-        project_ids = []
-        hidden_count = 0
-        for project in matching_projects:
-            project_id = project.get('id')
-            if project_id:
-                success = hide_project_via_api(req_session, project_id)
-                if success:
-                    project_ids.append(project_id)
-                    hidden_count += 1
-                    time.sleep(0.1)
-        
-        if hidden_projects_log_collection is not None and user_preferences_collection is not None:
-            record_category_hidden(
-                hidden_projects_log_collection,
-                user_preferences_collection,
-                user_id,
-                category_name,
-                category_pattern,
-                project_ids
-            )
-        
-        if projects_cache_collection is not None and project_ids:
-            mark_projects_hidden_in_cache(projects_cache_collection, user_id, project_ids)
+        # Generate suggestions
+        suggestions = generate_hide_suggestions(project_data)
         
         return jsonify({
             'success': True,
-            'hidden_count': hidden_count,
-            'project_ids': project_ids
+            'suggestions': suggestions,
+            'project': {
+                'id': project_data.get('id'),
+                'name': project_data.get('name', 'Untitled Project'),
+                'description': project_data.get('description', ''),
+                'remuneration': project_data.get('respondentRemuneration', 0),
+                'time_minutes': project_data.get('timeMinutesRequired', 0),
+                'topics': project_data.get('topics', [])
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
+
+
+@bp.route('/answer-question', methods=['POST'])
+def answer_question():
+    """Answer an AI-generated question and auto-hide similar projects if applicable"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        user_id = str(session['user_id'])
+        data = request.json
+        question_id = data.get('question_id')
+        question_text = data.get('question_text')
+        answer = data.get('answer')  # True/False
+        pattern = data.get('pattern')
+        project_id = data.get('project_id')
+        
+        if question_id is None or question_text is None or answer is None or pattern is None:
+            return jsonify({'error': 'question_id, question_text, answer, and pattern are required'}), 400
+        
+        # Convert answer to boolean if needed
+        if isinstance(answer, str):
+            answer = answer.lower() in ('true', 'yes', '1', 'on')
+        answer = bool(answer)
+        
+        # Store the answer
+        if user_preferences_collection is not None:
+            store_question_answer(
+                user_preferences_collection,
+                user_id,
+                question_id,
+                question_text,
+                answer,
+                pattern,
+                project_id
+            )
+        
+        # If answer is False (user doesn't match requirement), find and auto-hide similar projects
+        auto_hidden_count = 0
+        auto_hidden_ids = []
+        
+        if not answer:  # User said "no" - they don't match the requirement
+            config = load_user_config(user_id)
+            if config and config.get('cookies', {}).get('respondent.session.sid'):
+                profile_id = config.get('profile_id')
+                if profile_id:
+                    # Get all projects
+                    cached = None
+                    if projects_cache_collection is not None:
+                        cached = get_cached_projects(projects_cache_collection, user_id)
+                    
+                    if cached and cached.get('projects'):
+                        all_projects = cached.get('projects', [])
+                        
+                        # Find similar projects using the pattern
+                        similar_projects = find_similar_projects(
+                            user_id,
+                            project_id or '',
+                            all_projects,
+                            pattern
+                        )
+                        
+                        # Filter out already hidden projects
+                        prefs = get_user_preferences(user_preferences_collection, user_id) if user_preferences_collection is not None else {}
+                        hidden_projects = set(prefs.get('hidden_projects', []))
+                        
+                        projects_to_hide = [p for p in similar_projects if p.get('id') not in hidden_projects]
+                        
+                        if projects_to_hide:
+                            req_session = create_respondent_session(
+                                cookies=config.get('cookies', {}),
+                                authorization=config.get('authorization')
+                            )
+                            
+                            for project in projects_to_hide[:20]:  # Limit to 20 to avoid rate limiting
+                                proj_id = project.get('id')
+                                if proj_id:
+                                    success = hide_project_via_api(req_session, proj_id)
+                                    if success:
+                                        auto_hidden_ids.append(proj_id)
+                                        auto_hidden_count += 1
+                                        time.sleep(0.1)
+                            
+                            # Update cache and log
+                            if projects_cache_collection is not None and auto_hidden_ids:
+                                mark_projects_hidden_in_cache(projects_cache_collection, user_id, auto_hidden_ids)
+                            
+                            if hidden_projects_log_collection is not None and user_preferences_collection is not None:
+                                for proj_id in auto_hidden_ids:
+                                    record_project_hidden(
+                                        hidden_projects_log_collection,
+                                        user_preferences_collection,
+                                        user_id,
+                                        proj_id,
+                                        hidden_method='ai_auto'
+                                    )
+        
+        return jsonify({
+            'success': True,
+            'auto_hidden_count': auto_hidden_count,
+            'auto_hidden_ids': auto_hidden_ids
         })
         
     except Exception as e:

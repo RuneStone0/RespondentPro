@@ -41,23 +41,22 @@ def get_project_is_remote(project_id):
         return None
 
 
-def should_hide_project(project, filters, project_details_collection=None):
+def should_hide_project(project, filters, project_details_collection=None, user_id=None, user_preferences_collection=None):
     """Check if a project should be hidden based on filters
     
     Args:
         project: Project data dictionary (must have 'id' field)
         filters: Filter dictionary with min_incentive, min_hourly_rate, isRemote, topics
         project_details_collection: MongoDB collection for project_details
+        user_id: Optional user ID for AI preference checking
+        user_preferences_collection: Optional MongoDB collection for user_preferences
     """
     min_incentive = filters.get('min_incentive')
     min_hourly_rate = filters.get('min_hourly_rate')
     is_remote = filters.get('isRemote')
     topics = filters.get('topics', [])
     
-    # If no filters set, don't hide anything
-    if min_incentive is None and min_hourly_rate is None and is_remote is None and not topics:
-        return False
-    
+    # Check simple filters first (fast, deterministic)
     # Check minimum incentive filter
     if min_incentive is not None:
         remuneration = project.get('respondentRemuneration', 0)
@@ -103,6 +102,16 @@ def should_hide_project(project, filters, project_details_collection=None):
             # If project has any topic in the filter list, hide it
             if project_topic_ids & filter_topic_ids:
                 return True
+    
+    # If project passes all simple filters, check AI-learned preferences
+    if user_id and user_preferences_collection is not None:
+        try:
+            from ..preference_learner import should_hide_based_on_ai_preferences
+        except ImportError:
+            from preference_learner import should_hide_based_on_ai_preferences
+        
+        if should_hide_based_on_ai_preferences(user_preferences_collection, user_id, project):
+            return True
     
     return False
 

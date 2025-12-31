@@ -447,3 +447,164 @@ def validate_category_pattern(category_pattern: Dict[str, Any]) -> bool:
     
     return has_keywords or has_regions or has_professions or has_industries
 
+
+def generate_hide_suggestions(project_data: Dict[str, Any]) -> List[str]:
+    """
+    Generate suggestions for why a user might want to hide a project
+    
+    Args:
+        project_data: Project data dictionary with name, description, etc.
+        
+    Returns:
+        List of 3-5 suggestion strings
+    """
+    name = project_data.get('name', '')
+    description = project_data.get('description', '')
+    remuneration = project_data.get('respondentRemuneration', 0)
+    time_minutes = project_data.get('timeMinutesRequired', 0)
+    
+    hourly_rate = 0
+    if time_minutes > 0:
+        hourly_rate = (remuneration / time_minutes) * 60
+    
+    prompt = f"""Analyze the following project and suggest 3-5 specific, concise reasons why a user might want to hide it. 
+Focus on practical, actionable reasons based on the project details.
+
+Project Name: {name}
+Description: {description}
+Incentive: ${remuneration}
+Time Required: {time_minutes} minutes
+Hourly Rate: ${hourly_rate:.2f}/hour
+
+Return ONLY a valid JSON array of suggestion strings (3-5 items), no additional text:
+[
+  "Reason 1 (e.g., Requires healthcare professionals)",
+  "Reason 2 (e.g., Only available in California)",
+  "Reason 3 (e.g., Low hourly rate)",
+  "Reason 4 (e.g., Too time-consuming)",
+  "Reason 5 (e.g., Not interested in this industry)"
+]
+
+Make each suggestion specific to this project and actionable."""
+
+    response = _call_grok_api(prompt)
+    if not response:
+        # Fallback suggestions if AI fails
+        return [
+            "Not interested in this type of project",
+            "Incentive is too low",
+            "Time commitment is too high",
+            "Geographic location doesn't match",
+            "Not qualified for this project"
+        ]
+    
+    try:
+        # Try to extract JSON from response
+        response = response.strip()
+        if response.startswith('```json'):
+            response = response[7:]
+        if response.startswith('```'):
+            response = response[3:]
+        if response.endswith('```'):
+            response = response[:-3]
+        response = response.strip()
+        
+        suggestions = json.loads(response)
+        if isinstance(suggestions, list) and len(suggestions) > 0:
+            # Ensure we have 3-5 suggestions
+            return suggestions[:5] if len(suggestions) >= 3 else suggestions + [
+                "Not interested in this type of project",
+                "Doesn't match my preferences"
+            ][:5-len(suggestions)]
+        else:
+            raise ValueError("Invalid response format")
+    except Exception as e:
+        print(f"Error parsing hide suggestions: {e}")
+        # Return fallback suggestions
+        return [
+            "Not interested in this type of project",
+            "Incentive is too low",
+            "Time commitment is too high",
+            "Geographic location doesn't match",
+            "Not qualified for this project"
+        ]
+
+
+def generate_question_from_project(project_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Generate a contextual question from a project to learn user preferences
+    
+    Analyzes a project to detect key disqualifying factors (professions, regions, 
+    industries, requirements) and generates a question that can help learn user preferences.
+    
+    Args:
+        project_data: Project data dictionary with name, description, etc.
+        
+    Returns:
+        Question object with question_text, question_type, pattern_to_learn, or None if no pattern detected
+    """
+    name = project_data.get('name', '')
+    description = project_data.get('description', '')
+    
+    prompt = f"""Analyze the following project that a user just hid. Generate a single, clear question that would help understand why they hid it.
+
+Project Name: {name}
+Description: {description}
+
+Identify the most likely reason this project was hidden. Common reasons include:
+- Requiring specific professions (e.g., "healthcare professionals", "IT leaders")
+- Requiring specific locations/regions (e.g., "California residents", "New York only")
+- Requiring specific industries or sectors
+- Other specific requirements or disqualifiers
+
+Return ONLY a valid JSON object with no additional text:
+{{
+  "question_text": "Are you a healthcare professional?",
+  "question_type": "profession",
+  "pattern": {{
+    "keywords": ["healthcare", "medical", "doctor", "nurse"],
+    "professions": ["healthcare professionals"],
+    "regions": [],
+    "industries": ["healthcare"]
+  }}
+}}
+
+Question types can be: "profession", "region", "industry", or "other"
+If no clear pattern is detected, return null or an empty object."""
+
+    response = _call_grok_api(prompt)
+    if not response:
+        return None
+    
+    try:
+        # Try to extract JSON from response
+        response = response.strip()
+        if response.startswith('```json'):
+            response = response[7:]
+        if response.startswith('```'):
+            response = response[3:]
+        if response.endswith('```'):
+            response = response[:-3]
+        response = response.strip()
+        
+        # Check for null or empty responses
+        if not response or response.lower() in ('null', 'none', '{}'):
+            return None
+        
+        question_data = json.loads(response)
+        
+        # Validate that we have required fields
+        if not question_data.get('question_text') or not question_data.get('pattern'):
+            return None
+        
+        # Generate a unique question ID based on the pattern
+        import hashlib
+        pattern_str = json.dumps(question_data.get('pattern', {}), sort_keys=True)
+        question_id = hashlib.md5(pattern_str.encode()).hexdigest()[:16]
+        question_data['id'] = question_id
+        
+        return question_data
+    except Exception as e:
+        print(f"Error parsing question generation response: {e}")
+        return None
+
