@@ -66,7 +66,6 @@
 </button>
 <div class="container">
     <h1>Respondent Pro</h1>
-    <p class="subtitle">Secure login with passkeys</p>
     
     <div class="error" id="error"></div>
     <div class="success" id="success"></div>
@@ -78,8 +77,8 @@
     
     <div id="loginForm">
         <div class="form-group">
-            <label for="loginUsername">Username</label>
-            <input type="text" id="loginUsername" placeholder="Enter your username" autocomplete="username">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" placeholder="Enter your email" autocomplete="email">
         </div>
         <div class="button-group">
             <button class="btn-primary" onclick="login()">Login with Passkey</button>
@@ -89,8 +88,8 @@
     
     <div id="registerForm" style="display: none;">
         <div class="form-group">
-            <label for="registerUsername">Username</label>
-            <input type="text" id="registerUsername" placeholder="Choose a username" autocomplete="username">
+            <label for="registerEmail">Email</label>
+            <input type="email" id="registerEmail" placeholder="Enter your email" autocomplete="email">
         </div>
         <div class="button-group">
             <button class="btn-primary" onclick="register()">Register with Passkey</button>
@@ -117,10 +116,19 @@
         hideMessage();
     }
     
+    function validateEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+    
     async function register() {
-        const username = document.getElementById('registerUsername').value.trim();
-        if (!username) {
-            showError('Please enter a username');
+        const email = document.getElementById('registerEmail').value.trim();
+        if (!email) {
+            showError('Please enter your email address');
+            return;
+        }
+        if (!validateEmail(email)) {
+            showError('Please enter a valid email address');
             return;
         }
         
@@ -132,7 +140,7 @@
             const beginResponse = await fetch('/api/register/begin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
+                body: JSON.stringify({ email })
             });
             
             if (!beginResponse.ok) {
@@ -209,9 +217,13 @@
     }
     
     async function login() {
-        const username = document.getElementById('loginUsername').value.trim();
-        if (!username) {
-            showError('Please enter your username');
+        const email = document.getElementById('loginEmail').value.trim();
+        if (!email) {
+            showError('Please enter your email address');
+            return;
+        }
+        if (!validateEmail(email)) {
+            showError('Please enter a valid email address');
             return;
         }
         
@@ -223,7 +235,7 @@
             const beginResponse = await fetch('/api/login/begin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
+                body: JSON.stringify({ email })
             });
             
             if (!beginResponse.ok) {
@@ -303,11 +315,11 @@
     }
     
     // Allow Enter key to submit
-    document.getElementById('loginUsername').addEventListener('keypress', (e) => {
+    document.getElementById('loginEmail').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
     });
     
-    document.getElementById('registerUsername').addEventListener('keypress', (e) => {
+    document.getElementById('registerEmail').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') register();
     });
 </script>

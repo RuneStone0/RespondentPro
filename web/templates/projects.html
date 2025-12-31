@@ -162,13 +162,13 @@
         <div class="header-right">
             <div class="profile-menu-container">
                 <button class="profile-icon-btn" onclick="toggleProfileMenu()" aria-label="Profile menu">
-                    <div class="user-avatar">{{ username[0].upper() if username else 'U' }}</div>
+                    <div class="user-avatar">{{ email[0].upper() if email else 'U' }}</div>
                 </button>
                 <div class="profile-dropdown" id="profileDropdown">
                     <div class="profile-dropdown-header">
-                        <div class="profile-dropdown-avatar">{{ username[0].upper() if username else 'U' }}</div>
+                        <div class="profile-dropdown-avatar">{{ email[0].upper() if email else 'U' }}</div>
                         <div class="profile-dropdown-info">
-                            <div class="profile-dropdown-name">{{ username }}</div>
+                            <div class="profile-dropdown-name">{{ email }}</div>
                             <div class="profile-dropdown-id" id="profileAccountId">ID: {{ config.profile_id[:8] if config and config.profile_id else 'Not configured' }}</div>
                         </div>
                     </div>

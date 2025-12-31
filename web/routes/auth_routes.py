@@ -35,12 +35,12 @@ except ImportError:
 # Import user service
 try:
     from ..services.user_service import (
-        user_exists, create_user, get_user_by_username,
+        user_exists_by_email, create_user, get_user_by_email,
         load_credentials_by_user_id, save_credentials_by_user_id
     )
 except ImportError:
     from services.user_service import (
-        user_exists, create_user, get_user_by_username,
+        user_exists_by_email, create_user, get_user_by_email,
         load_credentials_by_user_id, save_credentials_by_user_id
     )
 
@@ -66,14 +66,20 @@ def register_begin():
     """Begin passkey registration"""
     try:
         data = request.json
-        username = data.get('username')
+        email = data.get('email')
         
-        if not username:
-            return jsonify({'error': 'Username is required'}), 400
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Validate email format
+        import re
+        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_pattern, email):
+            return jsonify({'error': 'Invalid email format'}), 400
         
         # Check if user already exists
-        if user_exists(username):
-            return jsonify({'error': 'Username already exists'}), 400
+        if user_exists_by_email(email):
+            return jsonify({'error': 'Email already registered'}), 400
         
         # Generate registration options
         hostname = request.host.split(':')[0]
@@ -85,9 +91,9 @@ def register_begin():
         options = generate_registration_options(
             rp_id=rp_id,
             rp_name="Respondent Pro",
-            user_id=username.encode('utf-8'),
-            user_name=username,
-            user_display_name=username,
+            user_id=email.encode('utf-8'),
+            user_name=email,
+            user_display_name=email,
             authenticator_selection=AuthenticatorSelectionCriteria(
                 authenticator_attachment=AuthenticatorAttachment.CROSS_PLATFORM,
                 user_verification=UserVerificationRequirement.PREFERRED
@@ -95,7 +101,7 @@ def register_begin():
         )
         
         session['challenge'] = base64.urlsafe_b64encode(options.challenge).decode('utf-8').rstrip('=')
-        session['registration_username'] = username
+        session['registration_email'] = email
         session['registration'] = True
         
         options_json_str = options_to_json(options)
@@ -124,10 +130,10 @@ def register_complete():
         if 'registration' not in session or not session['registration']:
             return jsonify({'error': 'No registration in progress'}), 400
         
-        username = session.get('registration_username')
+        email = session.get('registration_email')
         challenge_b64 = session.get('challenge')
         
-        if not username or not challenge_b64:
+        if not email or not challenge_b64:
             return jsonify({'error': 'Session expired'}), 400
         
         data = request.json
@@ -181,7 +187,7 @@ def register_complete():
                 expected_origin=origin
             )
             
-            user_id = create_user(username)
+            user_id = create_user(email)
             
             save_credentials_by_user_id(user_id, {
                 'credential_id': verification.credential_id,
@@ -190,9 +196,9 @@ def register_complete():
             })
             
             session['user_id'] = user_id
-            session['username'] = username
+            session['email'] = email
             session.pop('registration', None)
-            session.pop('registration_username', None)
+            session.pop('registration_email', None)
             session.pop('challenge', None)
             
             return jsonify({'success': True, 'redirect': url_for('page.dashboard')})
@@ -210,12 +216,18 @@ def login_begin():
     """Begin passkey authentication"""
     try:
         data = request.json
-        username = data.get('username')
+        email = data.get('email')
         
-        if not username:
-            return jsonify({'error': 'Username is required'}), 400
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
         
-        user_id = get_user_by_username(username)
+        # Validate email format
+        import re
+        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_pattern, email):
+            return jsonify({'error': 'Invalid email format'}), 400
+        
+        user_id = get_user_by_email(email)
         if not user_id:
             return jsonify({'error': 'User not found'}), 404
         
@@ -254,7 +266,7 @@ def login_begin():
         
         session['challenge'] = base64.urlsafe_b64encode(options.challenge).decode('utf-8').rstrip('=')
         session['login_user_id'] = user_id
-        session['login_username'] = username
+        session['login_email'] = email
         
         options_json_str = options_to_json(options)
         if isinstance(options_json_str, str):
@@ -284,7 +296,7 @@ def login_complete():
             return jsonify({'error': 'No login in progress'}), 400
         
         user_id = session.get('login_user_id')
-        username = session.get('login_username')
+        email = session.get('login_email')
         challenge_b64 = session.get('challenge')
         
         if not user_id or not challenge_b64:
@@ -359,9 +371,9 @@ def login_complete():
             })
             
             session['user_id'] = user_id
-            session['username'] = username
+            session['email'] = email
             session.pop('login_user_id', None)
-            session.pop('login_username', None)
+            session.pop('login_email', None)
             session.pop('challenge', None)
             
             return jsonify({'success': True, 'redirect': url_for('page.dashboard')})

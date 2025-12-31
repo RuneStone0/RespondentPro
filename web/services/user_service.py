@@ -14,12 +14,13 @@ except ImportError:
     from web.db import users_collection, session_keys_collection, user_preferences_collection
 
 
-def get_user_by_username(username):
-    """Get user document by username, returns user_id (_id)"""
+def get_user_by_email(email):
+    """Get user document by email (stored in username field), returns user_id (_id)"""
     if users_collection is None:
         raise Exception("MongoDB connection not available. Please ensure MongoDB is running.")
     try:
-        user_doc = users_collection.find_one({'username': username})
+        # Email is stored in the username field for backward compatibility
+        user_doc = users_collection.find_one({'username': email})
         if user_doc:
             return str(user_doc['_id'])  # Return user_id as string
         return None
@@ -34,37 +35,58 @@ def get_user_by_username(username):
         raise Exception(f"Failed to get user from MongoDB: {e}")
 
 
-def get_username_by_user_id(user_id):
-    """Get username by user_id"""
+def get_user_by_username(username):
+    """Legacy function - use get_user_by_email instead. Kept for backward compatibility."""
+    return get_user_by_email(username)
+
+
+def get_email_by_user_id(user_id):
+    """Get email (stored in username field) by user_id"""
     if users_collection is None:
         raise Exception("MongoDB connection not available. Please ensure MongoDB is running.")
     try:
         user_doc = users_collection.find_one({'_id': ObjectId(user_id)})
         if user_doc:
-            return user_doc.get('username')
+            return user_doc.get('username')  # Email is stored in username field
         return None
     except Exception as e:
-        raise Exception(f"Failed to get username from MongoDB: {e}")
+        raise Exception(f"Failed to get email from MongoDB: {e}")
+
+
+def get_username_by_user_id(user_id):
+    """Legacy function - use get_email_by_user_id instead. Kept for backward compatibility."""
+    return get_email_by_user_id(user_id)
+
+
+def user_exists_by_email(email):
+    """Check if user exists by email"""
+    return get_user_by_email(email) is not None
 
 
 def user_exists(username):
-    """Check if user exists by username"""
-    return get_user_by_username(username) is not None
+    """Legacy function - use user_exists_by_email instead. Kept for backward compatibility."""
+    return user_exists_by_email(username)
 
 
-def create_user(username):
-    """Create a new user and return user_id (_id)"""
+def create_user(email):
+    """Create a new user with email (stored in username field) and return user_id (_id)"""
     if users_collection is None:
         raise Exception("MongoDB connection not available. Please ensure MongoDB is running.")
     try:
+        # Validate email format
+        import re
+        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_pattern, email):
+            raise ValueError("Invalid email format")
+        
         # Check if user already exists
-        existing_user = users_collection.find_one({'username': username})
+        existing_user = users_collection.find_one({'username': email})
         if existing_user:
             return str(existing_user['_id'])
         
-        # Create new user
+        # Create new user - email is stored in username field for backward compatibility
         result = users_collection.insert_one({
-            'username': username,
+            'username': email,  # Email stored in username field
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         })

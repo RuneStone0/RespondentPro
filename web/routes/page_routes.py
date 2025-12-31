@@ -38,7 +38,7 @@ def projects():
         return redirect(url_for('auth.login'))
     
     user_id = session['user_id']
-    username = session.get('username', 'User')
+    email = session.get('email', 'User')
     config = load_user_config(user_id)
     filters = load_user_filters(user_id)
     
@@ -154,7 +154,7 @@ def projects():
     
     return render_template(
         'projects.html',
-        username=username,
+        email=email,
         config=config,
         projects=projects_data,
         has_config=has_config,
