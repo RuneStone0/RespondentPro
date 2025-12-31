@@ -62,6 +62,9 @@ except ImportError:
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
+# Store progress for preview-hide operations (in-memory)
+preview_hide_progress = {}
+
 
 @bp.route('/session-keys', methods=['POST'])
 def save_session_keys():
@@ -296,7 +299,17 @@ def preview_hide():
     
     try:
         user_id = session['user_id']
+        user_id_str = str(user_id)
         data = request.json
+        
+        # Initialize progress tracking
+        preview_hide_progress[user_id_str] = {
+            'status': 'processing',
+            'current': 0,
+            'total': 0,
+            'matched': 0
+        }
+        
         # Get isRemote filter setting
         is_remote = data.get('isRemote')
         # Handle None, True, or string "true" values
@@ -324,6 +337,7 @@ def preview_hide():
         
         # Check if any filters are set
         if filters['min_incentive'] is None and filters['min_hourly_rate'] is None and filters['isRemote'] is None and not filters['topics'] and not filters['hide_using_ai']:
+            preview_hide_progress[user_id_str]['status'] = 'completed'
             return jsonify({
                 'success': True,
                 'projects': [],
@@ -334,10 +348,12 @@ def preview_hide():
         # Get cached projects or fetch them
         config = load_user_config(user_id)
         if not config or not config.get('cookies', {}).get('respondent.session.sid'):
+            preview_hide_progress[user_id_str]['status'] = 'error'
             return jsonify({'error': 'Session keys not configured'}), 400
         
         profile_id = config.get('profile_id')
         if not profile_id:
+            preview_hide_progress[user_id_str]['status'] = 'error'
             return jsonify({'error': 'Profile ID not found'}), 400
         
         # Try to get from cache first, otherwise fetch projects
@@ -355,13 +371,18 @@ def preview_hide():
             authorization=config.get('authorization')
         )
         
+        # Update total count
+        preview_hide_progress[user_id_str]['total'] = len(all_projects)
+        
         # Find projects that would be hidden
         # Pass user_id and user_preferences_collection for AI filtering when hide_using_ai is enabled
         hide_using_ai = filters.get('hide_using_ai', False)
-        user_id_str = str(user_id)
         
         projects_to_hide = []
-        for project in all_projects:
+        for idx, project in enumerate(all_projects):
+            # Update progress
+            preview_hide_progress[user_id_str]['current'] = idx + 1
+            
             # Check if project should be hidden
             if should_hide_project(
                 project, 
@@ -371,6 +392,8 @@ def preview_hide():
                 user_preferences_collection=user_preferences_collection if hide_using_ai else None,
                 ai_analysis_cache_collection=ai_analysis_cache_collection if hide_using_ai else None
             ):
+                preview_hide_progress[user_id_str]['matched'] += 1
+                
                 # Calculate hourly rate for display
                 remuneration = project.get('respondentRemuneration', 0)
                 time_minutes = project.get('timeMinutesRequired', 0)
@@ -397,15 +420,51 @@ def preview_hide():
                     'remote_status': remote_status
                 })
         
-        return jsonify({
+        # Mark as completed and prepare response
+        result = {
             'success': True,
             'projects': projects_to_hide,
             'count': len(projects_to_hide)
-        })
+        }
+        
+        # Clear progress after a short delay to allow frontend to get final status
+        def clear_progress():
+            time.sleep(2)  # Wait 2 seconds before clearing
+            if user_id_str in preview_hide_progress:
+                del preview_hide_progress[user_id_str]
+        
+        # Clear progress in background thread
+        threading.Thread(target=clear_progress, daemon=True).start()
+        
+        preview_hide_progress[user_id_str]['status'] = 'completed'
+        
+        return jsonify(result)
         
     except Exception as e:
         import traceback
+        user_id_str = str(session.get('user_id', 'unknown'))
+        if user_id_str in preview_hide_progress:
+            preview_hide_progress[user_id_str]['status'] = 'error'
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
+
+
+@bp.route('/preview-hide-progress', methods=['GET'])
+def get_preview_hide_progress():
+    """Get the current preview-hide progress for a user"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        user_id_str = str(session['user_id'])
+        progress = preview_hide_progress.get(user_id_str, {
+            'status': 'not_started',
+            'current': 0,
+            'total': 0,
+            'matched': 0
+        })
+        return jsonify(progress)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @bp.route('/hide-progress', methods=['GET'])

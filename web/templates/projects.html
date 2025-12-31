@@ -49,7 +49,7 @@
     /* Toast Notification System */
     .toast-container {
         position: fixed;
-        top: 20px;
+        bottom: 60px;
         right: 20px;
         z-index: 10000;
         display: flex;
@@ -61,7 +61,9 @@
         min-width: 300px;
         max-width: 400px;
         padding: 16px 20px;
-        background: var(--card-bg);
+        background: var(--card-bg, #ffffff) !important;
+        background-color: var(--card-bg, #ffffff) !important;
+        opacity: 1 !important;
         border: 1px solid var(--border-color);
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -70,6 +72,13 @@
         gap: 12px;
         animation: slideInRight 0.3s ease-out;
         position: relative;
+    }
+    
+    /* Ensure toast background is solid in dark mode */
+    body.dark-mode .toast,
+    [data-theme="dark"] .toast {
+        background: var(--card-bg, #1f2937) !important;
+        background-color: var(--card-bg, #1f2937) !important;
     }
     
     .toast.success {
@@ -620,7 +629,8 @@
         <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 20px;">
             <div id="previewHideLoading" style="text-align: center; padding: 40px;">
                 <div class="progress-spinner"></div>
-                <p>Loading preview...</p>
+                <p id="previewHideLoadingText">Loading preview...</p>
+                <p id="previewHideProgressText" style="margin-top: 12px; font-size: 0.9em; color: var(--text-secondary);"></p>
             </div>
             <div id="previewHideContent" style="display: none;">
                 <p style="margin-bottom: 16px; color: var(--text-secondary);">
@@ -1057,6 +1067,8 @@
         await showPreviewHideModal(filters);
     }
     
+    let previewHideProgressInterval = null;
+    
     async function showPreviewHideModal(filters) {
         const modal = document.getElementById('previewHideModal');
         const loading = document.getElementById('previewHideLoading');
@@ -1065,6 +1077,8 @@
         const error = document.getElementById('previewHideError');
         const projectsList = document.getElementById('previewHideProjectsList');
         const confirmBtn = document.getElementById('confirmHideBtn');
+        const loadingText = document.getElementById('previewHideLoadingText');
+        const progressText = document.getElementById('previewHideProgressText');
         
         // Show modal and loading state
         modal.style.display = 'flex';
@@ -1073,6 +1087,40 @@
         empty.style.display = 'none';
         error.style.display = 'none';
         confirmBtn.disabled = true;
+        loadingText.textContent = 'Loading preview...';
+        progressText.textContent = '';
+        
+        // Start polling for progress
+        if (previewHideProgressInterval) {
+            clearInterval(previewHideProgressInterval);
+        }
+        previewHideProgressInterval = setInterval(async () => {
+            try {
+                const progressResponse = await fetch('/api/preview-hide-progress');
+                if (progressResponse.ok) {
+                    const progress = await progressResponse.json();
+                    if (progress.status === 'processing') {
+                        if (progress.total > 0) {
+                            const percentage = Math.round((progress.current / progress.total) * 100);
+                            loadingText.textContent = `Processing projects...`;
+                            progressText.textContent = `Processed ${progress.current} of ${progress.total} projects (${percentage}%)`;
+                            if (progress.matched > 0) {
+                                progressText.textContent += ` • ${progress.matched} match(es) found`;
+                            }
+                        } else {
+                            loadingText.textContent = 'Preparing to process...';
+                            progressText.textContent = '';
+                        }
+                    } else if (progress.status === 'completed' || progress.status === 'error') {
+                        clearInterval(previewHideProgressInterval);
+                        previewHideProgressInterval = null;
+                    }
+                }
+            } catch (e) {
+                // Ignore progress polling errors
+                console.debug('Progress polling error:', e);
+            }
+        }, 200); // Poll every 200ms for smooth updates
         
         try {
             const response = await fetch('/api/preview-hide', {
@@ -1080,6 +1128,12 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(filters)
             });
+            
+            // Stop polling
+            if (previewHideProgressInterval) {
+                clearInterval(previewHideProgressInterval);
+                previewHideProgressInterval = null;
+            }
             
             if (!response.ok) {
                 const errorData = await response.json();
@@ -1123,6 +1177,11 @@
                 confirmBtn.disabled = false;
             }
         } catch (err) {
+            // Stop polling on error
+            if (previewHideProgressInterval) {
+                clearInterval(previewHideProgressInterval);
+                previewHideProgressInterval = null;
+            }
             loading.style.display = 'none';
             error.style.display = 'block';
             document.getElementById('previewHideErrorMessage').textContent = err.message;
@@ -1131,6 +1190,11 @@
     }
     
     function closePreviewHideModal() {
+        // Stop progress polling if active
+        if (previewHideProgressInterval) {
+            clearInterval(previewHideProgressInterval);
+            previewHideProgressInterval = null;
+        }
         document.getElementById('previewHideModal').style.display = 'none';
         pendingFilters = null;
     }
@@ -1724,18 +1788,32 @@
     async function hideProject(feedbackText) {
         if (!currentHideProjectId) return;
         
+        // Store the project ID before making the request
+        const projectIdToHide = currentHideProjectId;
+        
+        // Start visual feedback immediately - find and fade the card
+        const card = findProjectCard(projectIdToHide);
+        if (card) {
+            card.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+            card.style.opacity = '0.5';
+        }
+        
         try {
             const response = await fetch('/api/hide-project', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    project_id: currentHideProjectId,
+                    project_id: projectIdToHide,
                     feedback_text: feedbackText || null
                 })
             });
             
             if (!response.ok) {
                 const error = await response.json();
+                // Restore card visibility on error
+                if (card) {
+                    card.style.opacity = '1';
+                }
                 throw new Error(error.error || 'Failed to hide project');
             }
             
@@ -1743,14 +1821,14 @@
             closeHideModal();
             
             // Remove project card from DOM without page reload
-            removeProjectCard(currentHideProjectId);
+            removeProjectCard(projectIdToHide);
             
             // Update hidden count
             await updateHiddenCount();
             
             // If there's a question, show the question modal
             if (result.question) {
-                showQuestionModal(result.question, currentHideProjectId);
+                showQuestionModal(result.question, projectIdToHide);
             } else {
                 // Show notification
                 if (result.auto_hidden_count > 0) {
@@ -1763,6 +1841,34 @@
             console.error('Error hiding project:', error);
             showToast('Error hiding project: ' + error.message, 'error');
         }
+    }
+    
+    // Helper function to find project card by ID
+    function findProjectCard(projectId) {
+        if (!projectId) return null;
+        
+        const projectIdStr = String(projectId);
+        
+        // Try multiple selector strategies
+        let card = document.querySelector(`.project-card[data-project-id="${projectIdStr}"]`);
+        
+        if (!card) {
+            card = document.querySelector(`.project-card[data-project-id='${projectIdStr}']`);
+        }
+        
+        // If still not found, iterate through all cards
+        if (!card) {
+            const allCards = document.querySelectorAll('.project-card');
+            for (let i = 0; i < allCards.length; i++) {
+                const cardId = allCards[i].getAttribute('data-project-id');
+                if (cardId === projectIdStr || cardId === projectId) {
+                    card = allCards[i];
+                    break;
+                }
+            }
+        }
+        
+        return card;
     }
     
     // Question modal functions
@@ -1936,33 +2042,44 @@
     }
     
     function removeProjectCard(projectId) {
-        // Find and remove the project card from the DOM using data attribute
-        const card = document.querySelector(`.project-card[data-project-id="${projectId}"]`);
+        if (!projectId) {
+            console.warn('removeProjectCard called without projectId');
+            return;
+        }
+        
+        const card = findProjectCard(projectId);
+        
         if (!card) {
-            console.warn(`Project card with ID ${projectId} not found in DOM`);
+            console.warn(`Project card with ID ${projectId} not found in DOM. Available cards:`, 
+                Array.from(document.querySelectorAll('.project-card')).map(c => c.getAttribute('data-project-id')));
             return;
         }
         
         // Add fade-out animation
-        card.style.transition = 'opacity 0.3s ease-out';
+        card.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
         card.style.opacity = '0';
+        card.style.transform = 'translateX(20px)';
+        
         setTimeout(() => {
-            card.remove();
-            // Check if project list is now empty
-            const projectList = document.querySelector('.project-list');
-            if (projectList && projectList.children.length === 0) {
-                // Show empty state if no projects left
-                const projectsContainer = document.querySelector('.projects-container');
-                if (projectsContainer) {
-                    projectsContainer.innerHTML = `
-                        <div class="empty-state">
-                            <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg>
-                            <h3>No projects available</h3>
-                            <p>All projects have been hidden or there are no matching projects.</p>
-                        </div>
-                    `;
+            if (card && card.parentNode) {
+                card.remove();
+                
+                // Check if project list is now empty
+                const projectList = document.querySelector('.project-list');
+                if (projectList && projectList.children.length === 0) {
+                    // Show empty state if no projects left
+                    const projectsContainer = document.querySelector('.projects-container');
+                    if (projectsContainer) {
+                        projectsContainer.innerHTML = `
+                            <div class="empty-state">
+                                <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <h3>No projects available</h3>
+                                <p>All projects have been hidden or there are no matching projects.</p>
+                            </div>
+                        `;
+                    }
                 }
             }
         }, 300);
