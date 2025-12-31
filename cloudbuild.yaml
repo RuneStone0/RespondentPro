@@ -45,5 +45,3 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  # Use cheaper machine type for builds (E2_HIGHCPU_2 is much cheaper than E2_HIGHCPU_8)
-  machineType: 'E2_HIGHCPU_2'
