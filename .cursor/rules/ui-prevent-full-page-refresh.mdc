@@ -5,4 +5,17 @@ description: Rule to guide agents to always avoid building UI that causes a full
 
 # Overview
 
-* While building Web UI components ensure that we won't do a full page refresh, unless absolutely nessesary
+When building web UI components in our Flask application, avoid full page reloads whenever possible to deliver a smooth, modern user experience. Prefer client-side updates using techniques such as:
+
+* Fetching data via fetch() or HTMX and updating the DOM dynamically
+* Rendering partial templates and injecting them into the page (e.g., via HTMX hx-swap, Turbo, or custom JavaScript)
+* Using Flask endpoints that return JSON or HTML fragments instead of full page renders
+
+Full page refreshes (i.e., traditional form submissions or links that trigger complete reloads) are allowed only when strictly necessary, such as:
+
+* Initial page load
+* Authentication flows (login/logout redirects)
+* Critical error pages (e.g., 403, 404, 500)
+* Cases where client-side updates would add unnecessary complexity or risk
+
+Always consider whether the interaction can be made partial/spa-like before defaulting to a full reload.
