@@ -89,12 +89,26 @@ def projects():
                     authorization=config.get('authorization')
                 )
                 
+                # Sort projects by hourly rate (highest first)
+                def calculate_hourly_rate(project):
+                    remuneration = project.get('respondentRemuneration', 0) or 0
+                    time_minutes = project.get('timeMinutesRequired', 0) or 0
+                    if time_minutes > 0:
+                        return (remuneration / time_minutes) * 60
+                    return 0
+                
+                sorted_projects = sorted(
+                    all_projects,
+                    key=calculate_hourly_rate,
+                    reverse=True
+                )
+                
                 # Convert to the format expected by the template
                 projects_data = {
-                    'results': all_projects,
+                    'results': sorted_projects,
                     'count': total_count,
                     'page': 1,
-                    'pageSize': len(all_projects)
+                    'pageSize': len(sorted_projects)
                 }
                 
                 # Get persistent hidden count from MongoDB
