@@ -150,3 +150,43 @@ if (document.readyState === 'loading') {
     loadTheme();
 }
 
+/* ============================================
+   Modal Management
+   ============================================ */
+
+/**
+ * Open the Learn More modal
+ */
+function openLearnMoreModal() {
+    const modal = document.getElementById('learnMoreModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        // Focus on close button for accessibility
+        const closeBtn = modal.querySelector('.btn-close-modal');
+        if (closeBtn) {
+            setTimeout(() => closeBtn.focus(), 100);
+        }
+    }
+}
+
+/**
+ * Close the Learn More modal
+ */
+function closeLearnMoreModal() {
+    const modal = document.getElementById('learnMoreModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('learnMoreModal');
+        if (modal && modal.style.display === 'flex') {
+            closeLearnMoreModal();
+        }
+    }
+});
