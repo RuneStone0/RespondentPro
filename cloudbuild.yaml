@@ -1,7 +1,7 @@
 # Cloud Build configuration for deploying to Cloud Run
 # Uses Artifact Registry (modern, cheaper alternative to Container Registry)
 steps:
-  # Create Artifact Registry repository if it doesn't exist
+  # Create Artifact Registry repository if it doesn't exist (public access)
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
@@ -9,13 +9,16 @@ steps:
       - |
         # Check if repository exists, create if it doesn't
         if ! gcloud artifacts repositories describe ${_REPOSITORY} --location=${_REGION} --format="value(name)" 2>/dev/null; then
-          echo "Creating Artifact Registry repository: ${_REPOSITORY}"
+          echo "Creating public Artifact Registry repository: ${_REPOSITORY}"
           gcloud artifacts repositories create ${_REPOSITORY} \
             --repository-format=docker \
             --location=${_REGION} \
-            --description="Docker repository for RespondentPro"
+            --description="Docker repository for RespondentPro" \
+            --public
         else
-          echo "Repository ${_REPOSITORY} already exists, skipping creation"
+          echo "Repository ${_REPOSITORY} already exists, ensuring public access"
+          # Make repository public if it's not already
+          gcloud artifacts repositories set-public ${_REPOSITORY} --location=${_REGION} || true
         fi
   
   # Build the container image
