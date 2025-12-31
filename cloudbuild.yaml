@@ -1,0 +1,49 @@
+# Cloud Build configuration for deploying to Cloud Run
+# Uses Artifact Registry (modern, cheaper alternative to Container Registry)
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/respondentpro:$SHORT_SHA', '.']
+  
+  # Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/respondentpro:$SHORT_SHA']
+  
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'respondentpro'
+      - '--image'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/respondentpro:$SHORT_SHA'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '1'
+      - '--cpu'
+      - '1'
+      - '--memory'
+      - '256Mi'
+      # Uncomment the following lines if you want to require authentication
+      # - '--no-allow-unauthenticated'
+    env:
+      - 'CLOUDSDK_RUN_PLATFORM=managed'
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/respondentpro:$SHORT_SHA'
+
+# Substitutions for Artifact Registry (set via --substitutions flag or defaults)
+substitutions:
+  _REGION: 'us-central1'
+  _REPOSITORY: 'respondentpro-repo'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # Use cheaper machine type for builds (E2_HIGHCPU_2 is much cheaper than E2_HIGHCPU_8)
+  machineType: 'E2_HIGHCPU_2'
