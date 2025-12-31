@@ -1049,6 +1049,84 @@ def refresh_cache():
             authorization=config.get('authorization')
         )
         
+        # Check if AI-based hiding is enabled and hide matching projects
+        filters = load_user_filters(user_id)
+        hide_using_ai = filters.get('hide_using_ai', False)
+        hidden_count = 0
+        hidden_project_ids = []
+        errors = []
+        
+        if hide_using_ai:
+            print(f"[Cache Refresh] AI-based hiding is enabled, checking {len(all_projects)} projects")
+            
+            # Find projects that should be hidden based on AI preferences
+            projects_to_hide = []
+            for project in all_projects:
+                if should_hide_project(
+                    project,
+                    filters,
+                    project_details_collection=project_details_collection,
+                    user_id=user_id,
+                    user_preferences_collection=user_preferences_collection,
+                    ai_analysis_cache_collection=ai_analysis_cache_collection
+                ):
+                    projects_to_hide.append(project)
+            
+            print(f"[Cache Refresh] Found {len(projects_to_hide)} projects to hide based on AI preferences")
+            
+            # Hide each project via API
+            for project in projects_to_hide:
+                project_id = project.get('id')
+                if project_id:
+                    try:
+                        success = hide_project_via_api(req_session, project_id)
+                        if success:
+                            hidden_count += 1
+                            hidden_project_ids.append(project_id)
+                            
+                            # Log the hidden project
+                            if hidden_projects_log_collection is not None and user_preferences_collection is not None:
+                                record_project_hidden(
+                                    hidden_projects_log_collection,
+                                    user_preferences_collection,
+                                    user_id,
+                                    project_id,
+                                    feedback_text=None,
+                                    hidden_method='ai_auto'
+                                )
+                        else:
+                            errors.append(project_id)
+                            print(f"[Cache Refresh] Failed to hide project {project_id}")
+                    except Exception as e:
+                        errors.append(project_id)
+                        print(f"[Cache Refresh] Error hiding project {project_id}: {e}")
+                    
+                    # Small delay to avoid rate limiting
+                    time.sleep(0.1)
+            
+            # Update cache to mark projects as hidden
+            if projects_cache_collection is not None and hidden_project_ids:
+                mark_projects_hidden_in_cache(projects_cache_collection, user_id, hidden_project_ids)
+                print(f"[Cache Refresh] Marked {len(hidden_project_ids)} projects as hidden in cache")
+            
+            # Refresh cache from API to get updated project list after hiding
+            if projects_cache_collection is not None and hidden_project_ids:
+                try:
+                    print(f"[Cache Refresh] Refreshing cache after hiding {len(hidden_project_ids)} projects")
+                    all_projects, total_count = fetch_all_respondent_projects(
+                        session=req_session,
+                        profile_id=profile_id,
+                        page_size=50,
+                        user_id=user_id,
+                        use_cache=False,
+                        cookies=config.get('cookies', {}),
+                        authorization=config.get('authorization')
+                    )
+                    print(f"[Cache Refresh] Cache refreshed: {len(all_projects)} projects now in cache")
+                except Exception as e:
+                    print(f"[Cache Refresh] Error refreshing cache after hiding: {e}")
+                    # Don't fail the whole operation if cache refresh fails
+        
         last_updated_iso = None
         if projects_cache_collection is not None:
             cache_stats = get_cache_stats(projects_cache_collection, user_id)
@@ -1067,12 +1145,21 @@ def refresh_cache():
                     elif hasattr(last_updated, 'strftime'):
                         last_updated_iso = datetime.fromtimestamp(last_updated.timestamp()).isoformat() + 'Z'
         
-        return jsonify({
+        response_data = {
             'success': True,
             'message': 'Cache refreshed successfully',
             'last_updated': last_updated_iso,
             'total_count': total_count
-        })
+        }
+        
+        # Include hiding results if AI-based hiding was enabled
+        if hide_using_ai:
+            response_data['ai_hidden_count'] = hidden_count
+            response_data['ai_hidden_ids'] = hidden_project_ids
+            if errors:
+                response_data['ai_hide_errors'] = errors
+        
+        return jsonify(response_data)
         
     except Exception as e:
         import traceback
