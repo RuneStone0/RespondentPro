@@ -1,0 +1,105 @@
+---
+description: Best practices and patterns for MongoDB with Python and Flask
+globs: **/*.py, src/**/*.py, tests/**/*.py
+---
+
+# MongoDB with Python and Flask Best Practices
+
+## Project Structure
+- Use src-layout: `src/your_package/`
+- Organize by feature/domain where possible
+- Models/Schemas: `src/models/{feature}.py` or `src/schemas/{feature}.py`
+- Routes/Views: `src/routes/{feature}.py` or Blueprints in `src/blueprints/`
+- Utilities: `src/utils/{function}.py`
+- Database config/connection: `src/db.py` or in app factory
+- Background tasks: `src/tasks/{feature}.py`
+- Tests: `tests/`
+
+## Database Integration
+- Use Flask-PyMongo for simple PyMongo integration or Flask-MongoEngine for ODM
+- Prefer PyMongo for fine-grained control; use MongoEngine for richer schema/validation features
+- Centralize MongoDB connection in app factory or separate module
+- Use connection pooling (handled automatically by PyMongo)
+- Configure via environment variables (e.g., MONGO_URI, database name)
+
+## MongoDB Patterns
+- Design documents with common query patterns in mind
+- Embed related data when read-heavy and relationships are one-to-few/one-to-many (bounded)
+- Use references (DBRef or manual ID references) for many-to-many or unbounded growth
+- Create proper indexes:
+  - Single field indexes for frequent filters/sorts
+  - Compound indexes matching common query patterns (respect Equality-Sort-Range order)
+  - Text indexes for full-text search
+  - Multikey indexes for arrays carefully
+- Use aggregation pipelines for complex queries, reporting, and data transformation
+- Implement cursor-based pagination (use _id or indexed field with $gt/$lt) over offset/skip
+- Respect 16MB document size limit; use GridFS for large files
+- Use transactions only when multi-document atomicity is required (requires replica set)
+
+## Schema and Validation
+- With PyMongo: Validate data using Pydantic, Marshmallow, or cerberus before insert/update
+- With MongoEngine: Define Document classes with field types, required, unique, etc.
+- Enforce validation at application level even if using MongoDB schema validation
+- Optionally add MongoDB collection validation rules (JSON Schema) for defense in depth
+
+## Query Best Practices
+- Always use projection to return only needed fields
+- Avoid heavy $lookup pipelines; denormalize where performance matters
+- Use explain() during development to verify index usage
+- Sort using indexed fields when possible
+- Limit results appropriately
+- Handle ObjectId correctly (import from bson)
+
+## Code Style & Python Practices
+- Use type hints everywhere (parameters, returns, variables)
+- Define Pydantic models or dataclass for request/response serialization
+- Prefer absolute imports
+- Use Black formatting and isort
+- Follow PEP 8 naming: snake_case for functions/variables, PascalCase for classes
+- Use descriptive names with auxiliary verbs (e.g., is_active, has_permission)
+
+## Flask Integration Patterns
+- Use application factory pattern
+- Register Blueprints for modular routes
+- Use before_request/after_request for DB connection management if needed
+- Implement custom error handlers for MongoDB exceptions (e.g., DuplicateKeyError → 409)
+- Use Flask extensions consistently (e.g., Flask-PyMongo's pymongo() helper)
+
+## Security Best Practices
+- Validate and sanitize all user inputs
+- Use parameterized queries (PyMongo handles this automatically)
+- Implement proper authentication and authorization
+- Store secrets (connection strings) in environment variables
+- Use principle of least privilege for MongoDB users
+- Enable TLS/SSL for connections in production
+- Implement rate limiting on public endpoints
+- Use HTTPS everywhere
+
+## Performance Optimization
+- Profile slow queries with MongoDB Atlas or mongostat
+- Create indexes based on actual query patterns
+- Implement caching (Redis or Flask-Caching) for frequent reads
+- Use aggregation for complex joins instead of application-side processing
+- Batch writes when possible
+- Monitor connection pool usage
+
+## Error Handling
+- Catch specific PyMongo exceptions (e.g., ConnectionFailure, DuplicateKeyError)
+- Log meaningful errors without exposing sensitive data
+- Return appropriate HTTP status codes (400 for validation, 409 for duplicates, 500 for server errors)
+- Create custom exception classes for domain-specific errors
+
+## Testing
+- Use pytest with fixtures for MongoDB (e.g., temporary test database or in-memory)
+- Mock external dependencies
+- Test query logic and index usage
+- Write integration tests for routes touching the database
+- Test error scenarios (duplicates, connection loss)
+
+## Development Workflow
+- Use virtual environments
+- Pin dependencies with exact versions
+- Implement pre-commit hooks (Black, isort, flake8/mypy)
+- Use MongoDB Atlas or local Docker container for consistent environments
+- Regularly check for security vulnerabilities in dependencies
+- Monitor slow queries in staging/production
