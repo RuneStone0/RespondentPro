@@ -9,10 +9,10 @@ from bson import ObjectId
 from pymongo.collection import Collection
 try:
     from .hidden_projects_tracker import log_hidden_project, is_project_hidden
-    from .ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects
+    from .ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
 except ImportError:
     from hidden_projects_tracker import log_hidden_project, is_project_hidden
-    from ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects
+    from ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
 
 
 def record_project_hidden(
@@ -158,7 +158,7 @@ def analyze_feedback_and_learn(
     project_data: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Use Grok AI to analyze feedback and update preferences
+    Store raw feedback text in user preferences for AI-based hiding decisions
     
     Args:
         user_preferences_collection: Collection for user_preferences
@@ -168,21 +168,18 @@ def analyze_feedback_and_learn(
         project_data: Project data
         
     Returns:
-        Dictionary with extracted reasons and patterns
+        Dictionary with feedback information
     """
     try:
-        analysis = analyze_hide_feedback(feedback_text, project_data)
-        patterns = analysis.get('patterns', {})
-        
-        # Store patterns in user preferences for future use
+        # Store raw feedback text in user preferences
         user_preferences_collection.update_one(
             {'user_id': user_id},
             {
                 '$push': {
-                    'learned_patterns': {
+                    'hide_feedback': {
+                        'feedback_text': feedback_text,
                         'project_id': project_id,
-                        'patterns': patterns,
-                        'learned_at': datetime.utcnow()
+                        'hidden_at': datetime.utcnow()
                     }
                 },
                 '$set': {'updated_at': datetime.utcnow()}
@@ -190,10 +187,10 @@ def analyze_feedback_and_learn(
             upsert=True
         )
         
-        return analysis
+        return {'feedback_text': feedback_text, 'project_id': project_id}
     except Exception as e:
-        print(f"Error analyzing feedback and learning: {e}")
-        return {'reasons': [], 'patterns': {}}
+        print(f"Error storing feedback: {e}")
+        return {'feedback_text': feedback_text, 'project_id': project_id}
 
 
 def update_user_preferences(
@@ -253,7 +250,8 @@ def get_user_preferences(
                 'hidden_categories': [],
                 'learned_patterns': [],
                 'question_answers': [],
-                'learned_exclusions': []
+                'learned_exclusions': [],
+                'hide_feedback': []
             }
         
         return {
@@ -262,7 +260,8 @@ def get_user_preferences(
             'hidden_categories': prefs.get('hidden_categories', []),
             'learned_patterns': prefs.get('learned_patterns', []),
             'question_answers': prefs.get('question_answers', []),
-            'learned_exclusions': prefs.get('learned_exclusions', [])
+            'learned_exclusions': prefs.get('learned_exclusions', []),
+            'hide_feedback': prefs.get('hide_feedback', [])
         }
     except Exception as e:
         print(f"Error getting user preferences: {e}")
@@ -272,7 +271,8 @@ def get_user_preferences(
             'hidden_categories': [],
             'learned_patterns': [],
             'question_answers': [],
-            'learned_exclusions': []
+            'learned_exclusions': [],
+            'hide_feedback': []
         }
 
 
@@ -324,10 +324,10 @@ def should_hide_based_on_ai_preferences(
     project: Dict[str, Any]
 ) -> bool:
     """
-    Check if project should be hidden based on AI-learned exclusion patterns only
+    Check if project should be hidden based on user's raw feedback using AI
     
-    This function checks learned_exclusions which are patterns the user has explicitly
-    indicated they want to exclude (e.g., "not a healthcare professional").
+    This function uses AI to analyze the project against all stored raw feedback
+    to determine if it should be hidden based on the user's previous reasons.
     
     Args:
         user_preferences_collection: Collection for user_preferences
@@ -335,66 +335,18 @@ def should_hide_based_on_ai_preferences(
         project: Project data
         
     Returns:
-        True if project should be hidden based on AI-learned preferences only
+        True if project should be hidden based on AI analysis of user feedback
     """
     try:
         prefs = get_user_preferences(user_preferences_collection, user_id)
         
-        # Check learned exclusions (from question answers where user said "no")
-        learned_exclusions = prefs.get('learned_exclusions', [])
-        if not learned_exclusions:
+        # Get all stored raw feedback
+        hide_feedback = prefs.get('hide_feedback', [])
+        if not hide_feedback:
             return False
         
-        project_name = project.get('name', '').lower()
-        project_description = project.get('description', '').lower()
-        project_text = f"{project_name} {project_description}"
-        
-        # Get extracted metadata if available
-        metadata = project.get('extracted_metadata', {})
-        metadata_regions = [r.lower() for r in metadata.get('regions', [])]
-        metadata_professions = [p.lower() for p in metadata.get('professions', [])]
-        metadata_industries = [i.lower() for i in metadata.get('industries', [])]
-        
-        # Check each learned exclusion pattern
-        for exclusion in learned_exclusions:
-            pattern = exclusion.get('pattern', {})
-            if not pattern:
-                continue
-            
-            # Check keywords
-            keywords = pattern.get('keywords', [])
-            if keywords:
-                if any(keyword.lower() in project_text for keyword in keywords):
-                    return True
-            
-            # Check regions
-            regions = pattern.get('regions', [])
-            if regions:
-                if any(region.lower() in metadata_regions for region in regions):
-                    return True
-                # Also check in project text
-                if any(region.lower() in project_text for region in regions):
-                    return True
-            
-            # Check professions
-            professions = pattern.get('professions', [])
-            if professions:
-                if any(prof.lower() in metadata_professions for prof in professions):
-                    return True
-                # Also check in project text
-                if any(prof.lower() in project_text for prof in professions):
-                    return True
-            
-            # Check industries
-            industries = pattern.get('industries', [])
-            if industries:
-                if any(ind.lower() in metadata_industries for ind in industries):
-                    return True
-                # Also check in project text
-                if any(ind.lower() in project_text for ind in industries):
-                    return True
-        
-        return False
+        # Use AI to determine if project should be hidden based on feedback
+        return should_hide_project_based_on_feedback(project, hide_feedback)
     except Exception as e:
         print(f"Error checking AI preferences: {e}")
         return False

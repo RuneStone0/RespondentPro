@@ -19,13 +19,14 @@ GROK_API_KEY = os.environ.get('GROK_API_KEY')
 GROK_API_URL = os.environ.get('GROK_API_URL', 'https://api.x.ai/v1/chat/completions')
 
 
-def _call_grok_api(prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+def _call_grok_api(prompt: str, system_prompt: Optional[str] = None, model: str = 'grok-4-1-fast-reasoning') -> Optional[str]:
     """
     Make a call to Grok API
     
     Args:
         prompt: User prompt
         system_prompt: Optional system prompt
+        model: Grok model to use (default: 'grok-4-1-fast-reasoning')
         
     Returns:
         Response text or None if error
@@ -45,8 +46,7 @@ def _call_grok_api(prompt: str, system_prompt: Optional[str] = None) -> Optional
             messages.append({'role': 'system', 'content': system_prompt})
         messages.append({'role': 'user', 'content': prompt})
         
-        # Use the correct Grok model
-        model = 'grok-4-1-fast-reasoning'
+        # Use the specified Grok model
         
         payload = {
             'model': model,
@@ -456,46 +456,36 @@ def generate_hide_suggestions(project_data: Dict[str, Any]) -> List[str]:
         project_data: Project data dictionary with name, description, etc.
         
     Returns:
-        List of 3-5 suggestion strings
+        List of exactly 3 suggestion strings
     """
     name = project_data.get('name', '')
     description = project_data.get('description', '')
-    remuneration = project_data.get('respondentRemuneration', 0)
-    time_minutes = project_data.get('timeMinutesRequired', 0)
     
-    hourly_rate = 0
-    if time_minutes > 0:
-        hourly_rate = (remuneration / time_minutes) * 60
-    
-    prompt = f"""Analyze the following project and suggest 3-5 specific, concise reasons why a user might want to hide it. 
-Focus on practical, actionable reasons based on the project details.
+    prompt = f"""Analyze the following project and suggest exactly 3 short, precise reasons why a user might want to hide it. 
+Focus on the user's personal perspective - express why this project doesn't matter to them personally.
+Write suggestions in FIRST PERSON from the user's viewpoint (e.g., "I don't...", "I'm not...", "I don't know...").
+Base your suggestions ONLY on the project title and description - do not consider rates, time, or other details.
+Keep each suggestion SHORT and PRECISE - aim for 5-10 words maximum.
 
 Project Name: {name}
 Description: {description}
-Incentive: ${remuneration}
-Time Required: {time_minutes} minutes
-Hourly Rate: ${hourly_rate:.2f}/hour
 
-Return ONLY a valid JSON array of suggestion strings (3-5 items), no additional text:
+Return ONLY a valid JSON array of exactly 3 short, precise suggestion strings, no additional text:
 [
-  "Reason 1 (e.g., Requires healthcare professionals)",
-  "Reason 2 (e.g., Only available in California)",
-  "Reason 3 (e.g., Low hourly rate)",
-  "Reason 4 (e.g., Too time-consuming)",
-  "Reason 5 (e.g., Not interested in this industry)"
+  "Reason 1 (e.g., I don't know how law firms operate)",
+  "Reason 2 (e.g., I'm not a law firm leader)",
+  "Reason 3 (e.g., I'm not interested in legal topics)"
 ]
 
-Make each suggestion specific to this project and actionable."""
+Make each suggestion specific to this project, written in first person, short and precise (5-10 words max), expressing the user's personal reasons for hiding it based on the project content."""
 
-    response = _call_grok_api(prompt)
+    response = _call_grok_api(prompt, model='grok-4-1-fast-non-reasoning')
     if not response:
         # Fallback suggestions if AI fails
         return [
-            "Not interested in this type of project",
-            "Incentive is too low",
-            "Time commitment is too high",
-            "Geographic location doesn't match",
-            "Not qualified for this project"
+            "I'm not interested in this",
+            "I don't have relevant experience",
+            "This doesn't match my background"
         ]
     
     try:
@@ -511,23 +501,92 @@ Make each suggestion specific to this project and actionable."""
         
         suggestions = json.loads(response)
         if isinstance(suggestions, list) and len(suggestions) > 0:
-            # Ensure we have 3-5 suggestions
-            return suggestions[:5] if len(suggestions) >= 3 else suggestions + [
-                "Not interested in this type of project",
-                "Doesn't match my preferences"
-            ][:5-len(suggestions)]
+            # Ensure we have exactly 3 suggestions
+            if len(suggestions) >= 3:
+                return suggestions[:3]
+            else:
+                # Pad with fallback suggestions if needed
+                fallback = [
+                    "I'm not interested in this",
+                    "I don't have relevant experience",
+                    "This doesn't match my background"
+                ]
+                return (suggestions + fallback)[:3]
         else:
             raise ValueError("Invalid response format")
     except Exception as e:
         print(f"Error parsing hide suggestions: {e}")
         # Return fallback suggestions
         return [
-            "Not interested in this type of project",
-            "Incentive is too low",
-            "Time commitment is too high",
-            "Geographic location doesn't match",
-            "Not qualified for this project"
+            "I'm not interested in this",
+            "I don't have relevant experience",
+            "This doesn't match my background"
         ]
+
+
+def should_hide_project_based_on_feedback(
+    project_data: Dict[str, Any],
+    feedback_list: List[Dict[str, Any]]
+) -> bool:
+    """
+    Use AI to determine if a project should be hidden based on user's previous feedback
+    
+    Args:
+        project_data: Project data dictionary with name, description, etc.
+        feedback_list: List of feedback entries with feedback_text, project_id, hidden_at
+        
+    Returns:
+        True if project should be hidden, False otherwise
+    """
+    if not feedback_list:
+        return False
+    
+    name = project_data.get('name', '')
+    description = project_data.get('description', '')
+    
+    # Format feedback list for the prompt
+    feedback_texts = []
+    for feedback in feedback_list:
+        feedback_text = feedback.get('feedback_text', '')
+        if feedback_text:
+            feedback_texts.append(f'  - "{feedback_text}"')
+    
+    feedback_summary = '\n'.join(feedback_texts) if feedback_texts else '  (no feedback)'
+    
+    prompt = f"""Analyze the following project and determine if it should be hidden based on the user's previous feedback.
+
+Project Name: {name}
+Description: {description}
+
+User's Previous Feedback (reasons they hid other projects):
+{feedback_summary}
+
+Based on the user's previous feedback, should this project be hidden?
+Consider the context and meaning of the feedback. For example, if the user said "I'm not a law firm professional", 
+then projects about law firms should be hidden.
+
+Return ONLY "true" or "false" (lowercase, no quotes, no additional text)."""
+
+    response = _call_grok_api(prompt, model='grok-4-1-fast-non-reasoning')
+    if not response:
+        return False
+    
+    try:
+        response = response.strip().lower()
+        # Remove any quotes or whitespace
+        response = response.strip('"\'')
+        
+        if response == 'true':
+            return True
+        elif response == 'false':
+            return False
+        else:
+            # If response is unclear, default to False (don't hide)
+            print(f"Unexpected AI response for hide decision: {response}")
+            return False
+    except Exception as e:
+        print(f"Error parsing AI hide decision: {e}")
+        return False
 
 
 def generate_question_from_project(project_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

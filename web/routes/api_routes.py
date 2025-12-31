@@ -26,7 +26,8 @@ try:
         generate_question_from_project, find_similar_projects, generate_hide_suggestions
     )
     from ..preference_learner import (
-        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences
+        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences,
+        analyze_feedback_and_learn
     )
     from ..services.filter_service import should_hide_project, get_project_is_remote
     from ..db import (
@@ -49,7 +50,8 @@ except ImportError:
         generate_question_from_project, find_similar_projects, generate_hide_suggestions
     )
     from preference_learner import (
-        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences
+        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences,
+        analyze_feedback_and_learn
     )
     from services.filter_service import should_hide_project, get_project_is_remote
     from db import (
@@ -464,6 +466,16 @@ def hide_project():
                 feedback_text=feedback_text,
                 hidden_method=hidden_method
             )
+            
+            # Analyze feedback and learn patterns if feedback was provided
+            if feedback_text and project_data:
+                analyze_feedback_and_learn(
+                    user_preferences_collection,
+                    user_id,
+                    project_id,
+                    feedback_text,
+                    project_data
+                )
         
         # Generate AI question if no feedback provided (feedback means user already explained)
         question = None
