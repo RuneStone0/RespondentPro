@@ -1,5 +1,4 @@
 requests>=2.31.0
-click>=8.1.0
 Flask>=3.0.0
 webauthn>=2.0.0
 pymongo>=4.6.0
