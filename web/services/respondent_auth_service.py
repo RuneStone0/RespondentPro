@@ -20,13 +20,12 @@ except ImportError:
     from services.user_service import load_user_config
 
 
-def create_respondent_session(cookies, authorization=None):
+def create_respondent_session(cookies):
     """
     Create a requests session with Respondent.io authentication
     
     Args:
         cookies: Dictionary of cookie name-value pairs
-        authorization: Optional authorization header value
         
     Returns:
         Configured requests.Session object
@@ -43,20 +42,15 @@ def create_respondent_session(cookies, authorization=None):
         "X-Requested-With": "XMLHttpRequest"
     })
     
-    # Set Authorization header if provided
-    if authorization:
-        session.headers.update({"Authorization": authorization})
-    
     return session
 
 
-def verify_respondent_authentication(cookies, authorization=None):
+def verify_respondent_authentication(cookies):
     """
     Verify authentication with Respondent.io API using the same logic as CLI
     
     Args:
         cookies: Dictionary of cookie name-value pairs
-        authorization: Optional authorization header value
         
     Returns:
         Dictionary with 'success' (bool), 'message' (str), and optional 'profile_id' and 'first_name'
@@ -76,10 +70,6 @@ def verify_respondent_authentication(cookies, authorization=None):
         req_session.headers.update({
             "X-Requested-With": "XMLHttpRequest"
         })
-        
-        # Set Authorization header if provided
-        if authorization:
-            req_session.headers.update({"Authorization": authorization})
         
         # Make the request
         start_time = time.time()
@@ -371,15 +361,13 @@ def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
         
         # Create authenticated session
         req_session = create_respondent_session(
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         
         # If respondent_user_id not provided, try to get it from verification
         if not respondent_user_id:
             verification_result = verify_respondent_authentication(
-                cookies=config.get('cookies', {}),
-                authorization=config.get('authorization')
+                cookies=config.get('cookies', {})
             )
             if verification_result.get('success'):
                 respondent_user_id = verification_result.get('user_id')

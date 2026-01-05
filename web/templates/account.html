@@ -10,6 +10,15 @@
     .success-message {
         @apply bg-success text-success-content p-3 rounded-lg mb-5 hidden;
     }
+    .error {
+        @apply bg-error text-error-content p-3 rounded-lg mb-4 hidden;
+    }
+    .success {
+        @apply bg-success text-success-content p-3 rounded-lg mb-4 hidden;
+    }
+    .error.show, .success.show {
+        @apply block;
+    }
     .btn-loading {
         position: relative;
         pointer-events: none;
@@ -45,12 +54,91 @@
         <div id="errorMessage" class="error-message"></div>
         <div id="successMessage" class="success-message"></div>
         
+        <!-- Respondent.io Credentials Section -->
         <div class="mb-8">
-            <div class="flex justify-between items-center mb-4">
+            <div class="mb-4">
+                <h2 class="text-lg font-semibold text-base-content">Respondent.io Credentials</h2>
+            </div>
+            
+            <div class="bg-base-200 border-2 border-base-300 rounded-lg p-6">
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm text-base-content/70">Connect your respondent.io account to start using Respondent Pro</p>
+                        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('sessionKeysModal').showModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            How to Get Session Keys
+                        </button>
+                    </div>
+                    
+                    <div class="error" id="credentialsError"></div>
+                    <div class="success" id="credentialsSuccess"></div>
+                    
+                    <form id="credentialsForm" class="space-y-4">
+                        <div class="form-control">
+                            <div class="flex items-center gap-2">
+                                <div class="relative flex-1">
+                                    <input type="text" 
+                                           id="session_sid" 
+                                           placeholder="s%3AvDYrxyRM_m854jqPq90t05fkyVodoUc-..." 
+                                           name="session_sid" 
+                                           value="{{ session_sid or '' }}" 
+                                           class="input input-bordered w-full pr-10"
+                                           required>
+                                    <div id="sessionValidationIcon" class="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none hidden">
+                                        <!-- Checkmark icon -->
+                                        <svg id="checkmarkIcon" class="h-5 w-5 text-success hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <!-- Cross icon -->
+                                        <svg id="crossIcon" class="h-5 w-5 text-error hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-ghost btn-sm" id="saveBtn">
+                                    <span class="btn-text">Check</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Session Keys Instructions Modal -->
+        <dialog id="sessionKeysModal" class="modal">
+            <div class="modal-box">
+                <form method="dialog">
+                    <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+                </form>
+                <h3 class="font-bold text-lg mb-4">How to Get Your Session Keys</h3>
+                <div class="space-y-4">
+                    <p class="text-sm">If you don't have a respondent.io account yet, <a href="https://app.respondent.io/r/runekristensen-88dc9aa5d817" target="_blank" rel="noopener noreferrer" class="link link-primary">register using our referral link</a> to get started.</p>
+                    <ol class="list-decimal list-inside space-y-2 text-sm">
+                        <li>Log into <strong>respondent.io</strong> in your browser</li>
+                        <li>Open <strong>Developer Tools</strong> (press <code class="bg-base-300 px-1 rounded">F12</code> or right-click → Inspect)</li>
+                        <li>Go to the <strong>Network</strong> tab</li>
+                        <li>Refresh the page or click around until you see requests to <code class="bg-base-300 px-1 rounded">app.respondent.io</code></li>
+                        <li>Click any request (e.g., one to <code class="bg-base-300 px-1 rounded">/api/v1/projects</code> or <code class="bg-base-300 px-1 rounded">/api/v1/me</code>)</li>
+                        <li>In the <strong>Request Headers</strong> section, find and copy:
+                            <ul class="list-disc list-inside ml-4 mt-1 space-y-1">
+                                <li><strong>Cookies</strong>: Find <code class="bg-base-300 px-1 rounded">respondent.session.sid=</code> and copy the entire cookie value</li>
+                            </ul>
+                        </li>
+                        <li>Paste the value into the form above</li>
+                    </ol>
+                </div>
+            </div>
+            <form method="dialog" class="modal-backdrop">
+                <button>close</button>
+            </form>
+        </dialog>
+        
+        <div class="mb-8">
+            <div class="mb-4">
                 <h2 class="text-lg font-semibold text-base-content">Passkeys</h2>
-                <button id="addPasskeyBtn" class="btn bg-gradient-to-r from-accent-purple to-purple-600 text-white border-none hover:opacity-90" onclick="addPasskey()">
-                    <span class="btn-text">Add Passkey</span>
-                </button>
             </div>
             
             <div id="passkeysList" class="flex flex-col gap-3">
@@ -79,6 +167,12 @@
                         <p class="mt-2 text-sm">Click "Add Passkey" to register a new passkey for this domain.</p>
                     </div>
                 {% endif %}
+            </div>
+            
+            <div class="flex justify-end mt-4">
+                <button id="addPasskeyBtn" class="btn btn-ghost btn-sm" onclick="addPasskey()">
+                    <span class="btn-text">Add Passkey</span>
+                </button>
             </div>
         </div>
         
@@ -174,4 +268,276 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/account.js') }}"></script>
+<script>
+    /**
+     * Extract respondent.session.sid from a cookie blob string
+     * Handles cases where user pastes the entire Cookie header value
+     */
+    function extractSessionSidFromCookieBlob(cookieString) {
+        if (!cookieString || typeof cookieString !== 'string') {
+            return null;
+        }
+        
+        cookieString = cookieString.trim();
+        
+        if (!cookieString.includes(';') || !cookieString.includes('respondent.session.sid')) {
+            return null;
+        }
+        
+        const cookies = cookieString.split(';');
+        
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.startsWith('respondent.session.sid=')) {
+                return cookie.substring('respondent.session.sid='.length).trim();
+            }
+        }
+        
+        return null;
+    }
+    
+    function showError(message) {
+        const errorEl = document.getElementById('credentialsError');
+        const successEl = document.getElementById('credentialsSuccess');
+        if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+        }
+        if (successEl) {
+            successEl.classList.remove('show');
+        }
+    }
+    
+    function showSuccess(message) {
+        const errorEl = document.getElementById('credentialsError');
+        const successEl = document.getElementById('credentialsSuccess');
+        if (successEl) {
+            successEl.textContent = message;
+            successEl.classList.add('show');
+        }
+        if (errorEl) {
+            errorEl.classList.remove('show');
+        }
+    }
+    
+    function hideMessage() {
+        const errorEl = document.getElementById('credentialsError');
+        const successEl = document.getElementById('credentialsSuccess');
+        if (errorEl) errorEl.classList.remove('show');
+        if (successEl) successEl.classList.remove('show');
+    }
+    
+    // Validation icon elements
+    const validationIcon = document.getElementById('sessionValidationIcon');
+    const checkmarkIcon = document.getElementById('checkmarkIcon');
+    const crossIcon = document.getElementById('crossIcon');
+    
+    // Function to update validation icon
+    function updateValidationIcon(isValid) {
+        if (!validationIcon || !checkmarkIcon || !crossIcon) return;
+        
+        if (isValid === null) {
+            // Hide both icons
+            validationIcon.classList.add('hidden');
+            checkmarkIcon.classList.add('hidden');
+            crossIcon.classList.add('hidden');
+        } else if (isValid) {
+            // Show checkmark
+            validationIcon.classList.remove('hidden');
+            checkmarkIcon.classList.remove('hidden');
+            crossIcon.classList.add('hidden');
+        } else {
+            // Show cross
+            validationIcon.classList.remove('hidden');
+            checkmarkIcon.classList.add('hidden');
+            crossIcon.classList.remove('hidden');
+        }
+    }
+    
+    // Function to validate session key
+    let validationTimeout;
+    async function validateSessionKey(session_sid) {
+        if (!session_sid || session_sid.trim().length === 0) {
+            updateValidationIcon(null);
+            return;
+        }
+        
+        // Extract from cookie blob if needed
+        if (session_sid.includes(';') && session_sid.includes('respondent.session.sid')) {
+            const extracted = extractSessionSidFromCookieBlob(session_sid);
+            if (extracted) {
+                session_sid = extracted;
+            }
+        }
+        
+        try {
+            const response = await fetch('/api/session-keys/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_sid: session_sid.trim() })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                updateValidationIcon(result.valid);
+            } else {
+                updateValidationIcon(false);
+            }
+        } catch (error) {
+            console.error('Validation error:', error);
+            updateValidationIcon(false);
+        }
+    }
+    
+    // Add paste event listener to session_sid input field
+    const sessionSidInput = document.getElementById('session_sid');
+    
+    if (sessionSidInput) {
+        // Set initial validation state
+        {% if has_valid_credentials and session_sid %}
+        updateValidationIcon(true);
+        {% else %}
+        updateValidationIcon(null);
+        {% endif %}
+        
+        // Validate on input (debounced)
+        sessionSidInput.addEventListener('input', function(e) {
+            clearTimeout(validationTimeout);
+            const value = e.target.value.trim();
+            
+            if (value.length === 0) {
+                updateValidationIcon(null);
+                return;
+            }
+            
+            // Debounce validation
+            validationTimeout = setTimeout(() => {
+                validateSessionKey(value);
+            }, 500);
+        });
+        
+        // Validate on blur
+        sessionSidInput.addEventListener('blur', function(e) {
+            clearTimeout(validationTimeout);
+            validateSessionKey(e.target.value);
+        });
+        
+        sessionSidInput.addEventListener('paste', function(e) {
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+            const extractedSid = extractSessionSidFromCookieBlob(pastedText);
+            
+            if (extractedSid) {
+                e.preventDefault();
+                sessionSidInput.value = extractedSid;
+                const originalPlaceholder = sessionSidInput.placeholder;
+                sessionSidInput.placeholder = '✓ Session ID extracted from cookie blob!';
+                setTimeout(() => {
+                    sessionSidInput.placeholder = originalPlaceholder;
+                }, 3000);
+                
+                // Validate after paste
+                setTimeout(() => {
+                    validateSessionKey(extractedSid);
+                }, 100);
+            }
+        });
+    }
+    
+    // Handle credentials form submission
+    const credentialsForm = document.getElementById('credentialsForm');
+    if (credentialsForm) {
+        credentialsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessage();
+            
+            let session_sid = document.getElementById('session_sid').value.trim();
+            
+            if (session_sid.includes(';') && session_sid.includes('respondent.session.sid')) {
+                const extracted = extractSessionSidFromCookieBlob(session_sid);
+                if (extracted) {
+                    session_sid = extracted;
+                }
+            }
+            
+            if (!session_sid) {
+                showError('respondent.session.sid is required');
+                return;
+            }
+            
+            const saveBtn = document.getElementById('saveBtn');
+            const saveBtnText = saveBtn.querySelector('.btn-text');
+            saveBtn.disabled = true;
+            if (saveBtnText) {
+                saveBtnText.textContent = 'Checking...';
+            } else {
+                saveBtn.textContent = 'Checking...';
+            }
+            
+            try {
+                const response = await fetch('/api/session-keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_sid
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to save session keys');
+                }
+                
+                const result = await response.json();
+                
+                if (result.verification) {
+                    const verification = result.verification;
+                    if (verification.success) {
+                        showSuccess(
+                            `✅ ${result.message}\n` +
+                            `✅ Authentication verified!\n` +
+                            `Profile ID: ${verification.profile_id}\n` +
+                            `First Name: ${verification.first_name}\n\n` +
+                            `Redirecting to projects page...`
+                        );
+                        
+                        // Update validation icon
+                        if (verification.success) {
+                            updateValidationIcon(true);
+                        } else {
+                            updateValidationIcon(false);
+                        }
+                        
+                        setTimeout(() => {
+                            window.location.href = '/projects';
+                        }, 2000);
+                    } else {
+                        showError(`Session keys saved, but verification failed:\n${verification.message}`);
+                        saveBtn.disabled = false;
+                        const saveBtnText = saveBtn.querySelector('.btn-text');
+                        if (saveBtnText) {
+                            saveBtnText.textContent = 'Check';
+                        } else {
+                            saveBtn.textContent = 'Check';
+                        }
+                    }
+                } else {
+                    showSuccess(result.message || 'Session keys saved successfully! Redirecting...');
+                    setTimeout(() => {
+                        window.location.href = '/projects';
+                    }, 1500);
+                }
+                
+            } catch (error) {
+                showError(error.message || 'Failed to save session keys');
+                saveBtn.disabled = false;
+                const saveBtnText = saveBtn.querySelector('.btn-text');
+                if (saveBtnText) {
+                    saveBtnText.textContent = 'Test';
+                } else {
+                    saveBtn.textContent = 'Test';
+                }
+            }
+        });
+    }
+</script>
 {% endblock %}

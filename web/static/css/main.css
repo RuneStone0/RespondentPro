@@ -182,8 +182,7 @@ textarea {
     font-family: monospace;
 }
 
-input[type="text"][name="session_sid"],
-input[type="text"][name="authorization"] {
+input[type="text"][name="session_sid"] {
     font-family: monospace;
 }
 

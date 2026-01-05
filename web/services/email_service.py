@@ -269,7 +269,7 @@ You can manage your notification preferences: {notifications_url}
 def send_session_token_expired_email(email):
     """Send session token expired notification email"""
     config = get_smtp_config()
-    onboarding_url = f"{config['app_url']}/onboarding"
+    onboarding_url = f"{config['app_url']}/account"
     notifications_url = f"{config['app_url']}/notifications"
     
     # Load email template

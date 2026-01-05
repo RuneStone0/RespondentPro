@@ -476,7 +476,6 @@ def load_user_config(user_id):
         if config_doc:
             return {
                 'cookies': config_doc.get('cookies', {}),
-                'authorization': config_doc.get('authorization'),
                 'profile_id': config_doc.get('profile_id'),
                 'last_synced': config_doc.get('last_synced')
             }
@@ -511,7 +510,6 @@ def save_user_config(user_id, config, profile_id=None):
         update_data = {
             'user_id': user_id,
             'cookies': config.get('cookies', {}),
-            'authorization': config.get('authorization'),
             'updated_at': datetime.utcnow()
         }
         if profile_id:

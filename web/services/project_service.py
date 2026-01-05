@@ -240,7 +240,7 @@ def fetch_respondent_projects(session, profile_id, page_size=50, page=1, user_id
         raise Exception(f"Invalid JSON response: {e}")
 
 
-def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=None, use_cache=True, cookies=None, authorization=None):
+def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=None, use_cache=True, cookies=None):
     """
     Fetch all pages of projects from Respondent.io API, checking cache first
     
@@ -254,24 +254,14 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
         user_id: Optional user ID for cache lookup
         use_cache: Whether to use cache (default: True)
         cookies: Optional cookies dict for session validation
-        authorization: Optional authorization header for session validation
         
     Returns:
         tuple: (all_projects_list, total_count)
     """
-    # Verify session keys are still valid before fetching (if cookies/authorization provided)
-    if cookies and authorization is not None:
+    # Verify session keys are still valid before fetching (if cookies provided)
+    if cookies:
         print(f"[Respondent.io API] Verifying session keys before fetching projects...")
-        verification = verify_respondent_authentication(cookies, authorization)
-        if not verification.get('success'):
-            error_msg = verification.get('message', 'Session keys are invalid or expired')
-            print(f"[Respondent.io API] {error_msg}")
-            raise Exception(f"Session keys are invalid or expired: {error_msg}")
-        print(f"[Respondent.io API] Session keys verified successfully")
-    elif cookies:
-        # Only cookies provided, still try to verify
-        print(f"[Respondent.io API] Verifying session keys before fetching projects...")
-        verification = verify_respondent_authentication(cookies, None)
+        verification = verify_respondent_authentication(cookies)
         if not verification.get('success'):
             error_msg = verification.get('message', 'Session keys are invalid or expired')
             print(f"[Respondent.io API] {error_msg}")
@@ -492,7 +482,7 @@ def get_hidden_count(user_id):
         return 0
 
 
-def process_and_hide_projects(user_id, session, profile_id, filters, page_size=50, cookies=None, authorization=None):
+def process_and_hide_projects(user_id, session, profile_id, filters, page_size=50, cookies=None):
     """
     Process all projects and hide matching ones via API
     
@@ -503,7 +493,6 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         filters: Filter criteria dict
         page_size: Number of results per page
         cookies: Optional cookies dict for cache refresh
-        authorization: Optional authorization header for cache refresh
         
     Returns:
         dict with results: total_processed, total_hidden, failures
@@ -537,9 +526,9 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
     }
     
     try:
-        # Fetch all pages - note: cookies and authorization not available in this context
-        # Session validation will be skipped if cookies/authorization not provided
-        all_projects, total_count = fetch_all_respondent_projects(session, profile_id, page_size, user_id=user_id, use_cache=True, cookies=None, authorization=None)
+        # Fetch all pages - note: cookies not available in this context
+        # Session validation will be skipped if cookies not provided
+        all_projects, total_count = fetch_all_respondent_projects(session, profile_id, page_size, user_id=user_id, use_cache=True, cookies=None)
         
         hide_progress[user_id_str]['total'] = len(all_projects)
         
@@ -607,7 +596,7 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
                 # Fetch fresh data from API (bypassing cache)
                 all_projects_refreshed, total_count_refreshed = fetch_all_respondent_projects(
                     session, profile_id, page_size, user_id=user_id, use_cache=False, 
-                    cookies=cookies, authorization=authorization
+                    cookies=cookies
                 )
                 print(f"[Project Service] Cache refreshed: {len(all_projects_refreshed)} projects now in cache")
             except Exception as e:

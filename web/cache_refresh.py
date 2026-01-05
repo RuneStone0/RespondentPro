@@ -68,7 +68,6 @@ def refresh_stale_caches(db, max_age_hours: int = 24):
                     continue
                 
                 cookies = config_doc.get('cookies', {})
-                authorization = config_doc.get('authorization')
                 profile_id = config_doc.get('profile_id')
                 
                 if not cookies.get('respondent.session.sid') or not profile_id:

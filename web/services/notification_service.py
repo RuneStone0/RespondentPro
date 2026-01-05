@@ -163,8 +163,7 @@ def get_visible_projects_count(user_id: str) -> int:
             try:
                 # Verify authentication first
                 verification = verify_respondent_authentication(
-                    cookies=config.get('cookies', {}),
-                    authorization=config.get('authorization')
+                    cookies=config.get('cookies', {})
                 )
                 
                 if not verification.get('success'):
@@ -177,8 +176,7 @@ def get_visible_projects_count(user_id: str) -> int:
                 
                 # Create session and fetch projects
                 req_session = create_respondent_session(
-                    cookies=config.get('cookies', {}),
-                    authorization=config.get('authorization')
+                    cookies=config.get('cookies', {})
                 )
                 
                 all_projects, _ = fetch_all_respondent_projects(
@@ -187,8 +185,7 @@ def get_visible_projects_count(user_id: str) -> int:
                     page_size=50,
                     user_id=user_id,
                     use_cache=True,
-                    cookies=config.get('cookies', {}),
-                    authorization=config.get('authorization')
+                    cookies=config.get('cookies', {})
                 )
             except Exception as e:
                 print(f"Error fetching projects for notification count: {e}")
@@ -234,8 +231,7 @@ def check_session_token_validity(user_id: str) -> bool:
         
         # Verify authentication
         verification = verify_respondent_authentication(
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         
         return verification.get('success', False)

@@ -57,34 +57,38 @@ def dashboard():
     if has_config:
         try:
             verification = verify_respondent_authentication(
-                cookies=config.get('cookies', {}),
-                authorization=config.get('authorization')
+                cookies=config.get('cookies', {})
             )
             if verification.get('success', False):
                 return redirect(url_for('page.projects'))
         except Exception:
             pass
     
-    # No valid credentials, redirect to onboarding
-    return redirect(url_for('page.onboarding'))
+    # No valid credentials, redirect to account
+    return redirect(url_for('page.account'))
 
 
 @bp.route('/onboarding')
 @require_verified
 def onboarding():
-    """Onboarding page - checklist for setting up respondent.io account and credentials"""
+    """Onboarding page - redirect to account page for backward compatibility"""
+    return redirect(url_for('page.account'))
+
+
+@bp.route('/account')
+@require_verified
+def account():
+    """Account page - manage passkeys and respondent.io credentials"""
     user_id = session['user_id']
     email = session.get('email', 'User')
     config = load_user_config(user_id)
-    has_account = get_user_onboarding_status(user_id)
     
     # Check if credentials are valid
     has_valid_credentials = False
     if config and config.get('cookies', {}).get('respondent.session.sid'):
         try:
             verification = verify_respondent_authentication(
-                cookies=config.get('cookies', {}),
-                authorization=config.get('authorization')
+                cookies=config.get('cookies', {})
             )
             has_valid_credentials = verification.get('success', False)
         except Exception:
@@ -92,28 +96,8 @@ def onboarding():
     
     # Pre-fill form if config exists
     session_sid = None
-    authorization = None
     if config and config.get('cookies', {}).get('respondent.session.sid'):
         session_sid = config['cookies']['respondent.session.sid']
-        authorization = config.get('authorization')
-    
-    return render_template(
-        'onboarding.html',
-        email=email,
-        has_account=has_account,
-        has_valid_credentials=has_valid_credentials,
-        session_sid=session_sid,
-        authorization=authorization,
-        config=config
-    )
-
-
-@bp.route('/account')
-@require_verified
-def account():
-    """Account page - manage passkeys"""
-    user_id = session['user_id']
-    email = session.get('email', 'User')
     
     # Load all credentials
     try:
@@ -155,7 +139,15 @@ def account():
             'projects_remaining': 500
         }
     
-    return render_template('account.html', email=email, passkeys=passkeys, billing_info=billing_info)
+    return render_template(
+        'account.html',
+        email=email,
+        passkeys=passkeys,
+        billing_info=billing_info,
+        has_valid_credentials=has_valid_credentials,
+        session_sid=session_sid,
+        config=config
+    )
 
 
 @bp.route('/notifications')
@@ -264,18 +256,19 @@ def projects():
     if has_config:
         try:
             verification = verify_respondent_authentication(
-                cookies=config.get('cookies', {}),
-                authorization=config.get('authorization')
+                cookies=config.get('cookies', {})
             )
             if not verification.get('success', False):
-                # Credentials are invalid, redirect to onboarding
-                return redirect(url_for('page.onboarding'))
-        except Exception:
-            # Error verifying, redirect to onboarding
-            return redirect(url_for('page.onboarding'))
+                # Credentials are invalid, redirect to account
+                return redirect(url_for('page.account'))
+        except Exception as e:
+            # Error verifying, redirect to account
+            import traceback
+            print(f"Error verifying authentication in projects route: {e}\n{traceback.format_exc()}")
+            return redirect(url_for('page.account'))
     else:
-        # No credentials configured, redirect to onboarding
-        return redirect(url_for('page.onboarding'))
+        # No credentials configured, redirect to account
+        return redirect(url_for('page.account'))
     
     projects_data = None
     error = None
@@ -290,8 +283,7 @@ def projects():
             if not profile_id:
                 # Try to get profile_id by verifying authentication
                 verification = verify_respondent_authentication(
-                    cookies=config.get('cookies', {}),
-                    authorization=config.get('authorization')
+                    cookies=config.get('cookies', {})
                 )
                 if verification.get('success') and verification.get('profile_id'):
                     profile_id = verification.get('profile_id')
@@ -305,8 +297,7 @@ def projects():
             if profile_id:
                 # Create authenticated session
                 req_session = create_respondent_session(
-                    cookies=config.get('cookies', {}),
-                    authorization=config.get('authorization')
+                    cookies=config.get('cookies', {})
                 )
                 
                 # Fetch all projects (will use cache if available, otherwise fetches all pages)
@@ -316,8 +307,7 @@ def projects():
                     page_size=50,
                     user_id=user_id,
                     use_cache=True,
-                    cookies=config.get('cookies', {}),
-                    authorization=config.get('authorization')
+                    cookies=config.get('cookies', {})
                 )
                 
                 # Sort projects by hourly rate (highest first)

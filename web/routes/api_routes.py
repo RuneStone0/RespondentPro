@@ -97,21 +97,6 @@ def extract_session_sid_from_cookie_blob(cookie_string):
     return None
 
 
-def extract_bearer_token(auth_string):
-    """Extract Bearer token from authorization string"""
-    if not auth_string or not isinstance(auth_string, str):
-        return None
-    
-    auth_string = auth_string.strip()
-    
-    # If it starts with "Bearer ", remove that prefix
-    if auth_string.lower().startswith('bearer '):
-        return auth_string[7:].strip()
-    
-    # Otherwise, return as-is (assuming it's just the token)
-    return auth_string
-
-
 @bp.route('/session-keys', methods=['POST'])
 def save_session_keys():
     """Save user's Respondent.io session keys to MongoDB and test them"""
@@ -121,19 +106,12 @@ def save_session_keys():
     try:
         data = request.json
         session_sid = data.get('session_sid', '').strip()
-        authorization = data.get('authorization', '').strip()
         
         # If session_sid looks like a cookie blob, try to extract it
         if session_sid and ';' in session_sid and 'respondent.session.sid' in session_sid:
             extracted = extract_session_sid_from_cookie_blob(session_sid)
             if extracted:
                 session_sid = extracted
-        
-        # If authorization is provided, ensure it has "Bearer " prefix if it's a token
-        if authorization:
-            extracted = extract_bearer_token(authorization)
-            if extracted:
-                authorization = 'Bearer ' + extracted
         
         if not session_sid:
             return jsonify({'error': 'respondent.session.sid is required'}), 400
@@ -142,14 +120,12 @@ def save_session_keys():
         config = {
             'cookies': {
                 'respondent.session.sid': session_sid
-            },
-            'authorization': authorization if authorization else None
+            }
         }
         
         # Test the credentials first
         verification_result = verify_respondent_authentication(
-            cookies=config['cookies'],
-            authorization=config.get('authorization')
+            cookies=config['cookies']
         )
         
         # Save the config with profile_id if verification succeeded
@@ -195,9 +171,48 @@ def get_session_keys():
     config = load_user_config(user_id)
     
     if not config:
-        return jsonify({'cookies': {}, 'authorization': None})
+        return jsonify({'cookies': {}})
     
     return jsonify(config)
+
+
+@bp.route('/session-keys/validate', methods=['POST'])
+def validate_session_keys():
+    """Validate session keys without saving them"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        data = request.json
+        session_sid = data.get('session_sid', '').strip()
+        
+        # If session_sid looks like a cookie blob, try to extract it
+        if session_sid and ';' in session_sid and 'respondent.session.sid' in session_sid:
+            extracted = extract_session_sid_from_cookie_blob(session_sid)
+            if extracted:
+                session_sid = extracted
+        
+        if not session_sid:
+            return jsonify({'valid': False, 'message': 'Session ID is required'})
+        
+        # Test the credentials without saving
+        config = {
+            'cookies': {
+                'respondent.session.sid': session_sid
+            }
+        }
+        
+        verification_result = verify_respondent_authentication(
+            cookies=config['cookies']
+        )
+        
+        return jsonify({
+            'valid': verification_result.get('success', False),
+            'message': verification_result.get('message', '')
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'valid': False, 'message': str(e)}), 500
 
 
 @bp.route('/onboarding/has-account', methods=['POST'])
@@ -291,16 +306,14 @@ def save_filters():
                 profile_id = config.get('profile_id')
                 if profile_id:
                     req_session = create_respondent_session(
-                        cookies=config.get('cookies', {}),
-                        authorization=config.get('authorization')
+                        cookies=config.get('cookies', {})
                     )
                     
                     def hide_in_background():
                         try:
                             process_and_hide_projects(
                                 user_id, req_session, profile_id, saved_filters,
-                                cookies=config.get('cookies', {}),
-                                authorization=config.get('authorization')
+                                cookies=config.get('cookies', {})
                             )
                         except Exception as e:
                             import traceback
@@ -362,16 +375,14 @@ def hide_projects():
             return jsonify({'error': 'Profile ID not found'}), 400
         
         req_session = create_respondent_session(
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         
         def hide_in_background():
             try:
                 process_and_hide_projects(
                     user_id, req_session, profile_id, filters,
-                    cookies=config.get('cookies', {}),
-                    authorization=config.get('authorization')
+                    cookies=config.get('cookies', {})
                 )
             except Exception as e:
                 import traceback
@@ -462,8 +473,7 @@ def preview_hide():
         
         # Try to get from cache first, otherwise fetch projects
         req_session = create_respondent_session(
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         all_projects, _ = fetch_all_respondent_projects(
             session=req_session,
@@ -471,8 +481,7 @@ def preview_hide():
             page_size=50,
             user_id=user_id,
             use_cache=True,
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         
         # Update total count
@@ -624,8 +633,7 @@ def hide_project():
             return jsonify({'error': 'Session keys not configured'}), 400
         
         req_session = create_respondent_session(
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         
         success = hide_project_via_api(req_session, project_id)
@@ -825,8 +833,7 @@ def answer_question():
                         
                         if projects_to_hide:
                             req_session = create_respondent_session(
-                                cookies=config.get('cookies', {}),
-                                authorization=config.get('authorization')
+                                cookies=config.get('cookies', {})
                             )
                             
                             for project in projects_to_hide[:20]:  # Limit to 20 to avoid rate limiting
@@ -1172,8 +1179,7 @@ def refresh_cache():
             return jsonify({'error': 'Profile ID not found'}), 400
         
         req_session = create_respondent_session(
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         
         all_projects, total_count = fetch_all_respondent_projects(
@@ -1182,8 +1188,7 @@ def refresh_cache():
             page_size=50,
             user_id=user_id,
             use_cache=False,
-            cookies=config.get('cookies', {}),
-            authorization=config.get('authorization')
+            cookies=config.get('cookies', {})
         )
         
         # Check if AI-based hiding is enabled and hide matching projects
@@ -1256,8 +1261,7 @@ def refresh_cache():
                         page_size=50,
                         user_id=user_id,
                         use_cache=False,
-                        cookies=config.get('cookies', {}),
-                        authorization=config.get('authorization')
+                        cookies=config.get('cookies', {})
                     )
                     print(f"[Cache Refresh] Cache refreshed: {len(all_projects)} projects now in cache")
                 except Exception as e:
