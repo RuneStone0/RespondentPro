@@ -55,6 +55,22 @@ except ImportError:
 bp = Blueprint('auth', __name__)
 
 
+def get_request_origin():
+    """
+    Get the correct origin for the request, handling reverse proxy scenarios.
+    Checks X-Forwarded-Proto header first (set by reverse proxies like load balancers),
+    then falls back to request.scheme.
+    """
+    # Check for X-Forwarded-Proto header (set by reverse proxies)
+    forwarded_proto = request.headers.get('X-Forwarded-Proto', '').lower()
+    if forwarded_proto in ('http', 'https'):
+        scheme = forwarded_proto
+    else:
+        scheme = request.scheme
+    
+    return f"{scheme}://{request.host}"
+
+
 @bp.route('/')
 def index():
     """Home page - show about page"""
@@ -219,7 +235,7 @@ def register_complete():
                 type=credential_data.get('type', 'public-key')
             )
             
-            origin = f"{request.scheme}://{request.host}"
+            origin = get_request_origin()
             hostname = request.host.split(':')[0]
             if hostname == '0.0.0.0':
                 expected_rp_id = 'localhost'
@@ -495,7 +511,7 @@ def login_complete():
                 type=credential_data.get('type', 'public-key')
             )
             
-            origin = f"{request.scheme}://{request.host}"
+            origin = get_request_origin()
             expected_rp_id = rp_id
             
             verification = verify_authentication_response(
@@ -804,7 +820,7 @@ def add_passkey_complete():
             type=credential_data.get('type', 'public-key')
         )
         
-        origin = f"{request.scheme}://{request.host}"
+        origin = get_request_origin()
         hostname = request.host.split(':')[0]
         if hostname == '0.0.0.0':
             expected_rp_id = 'localhost'

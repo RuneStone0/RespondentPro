@@ -164,7 +164,7 @@ root_logger.addFilter(SSLCertificateFilter())
 @app.route('/health', methods=['GET'])
 def health_check():
     """
-    Health check endpoint that reports status of database, Grok API, and application.
+    Health check endpoint that reports status of database, Grok API, SMTP, and application.
     Returns 200 if all services are healthy, 503 if any critical service is down.
     """
     overall_status = "healthy"
@@ -264,11 +264,83 @@ def health_check():
         'error': grok_error
     }
     
+    # SMTP health check
+    smtp_status = "healthy"
+    smtp_configured = False
+    smtp_reachable = False
+    smtp_response_time_ms = None
+    smtp_error = None
+    
+    try:
+        import smtplib
+        from .services.email_service import get_smtp_config
+    except ImportError:
+        try:
+            import smtplib
+            from services.email_service import get_smtp_config
+        except ImportError:
+            smtp_error = "Email service not available"
+            smtp_status = "degraded"
+    
+    if smtp_error is None:
+        try:
+            config = get_smtp_config()
+            
+            # Check if SMTP credentials are configured
+            if config.get('user') and config.get('password') and config.get('from_email'):
+                smtp_configured = True
+                
+                # Perform a lightweight connectivity test
+                try:
+                    start_time = time.time()
+                    host = config.get('host', 'smtp.mailgun.org')
+                    port = config.get('port', 587)
+                    
+                    # Try to connect to SMTP server (with timeout)
+                    server = smtplib.SMTP(timeout=2)
+                    server.connect(host, port)
+                    server.quit()
+                    
+                    smtp_response_time_ms = round((time.time() - start_time) * 1000, 2)
+                    smtp_reachable = True
+                except smtplib.SMTPConnectError as e:
+                    smtp_error = f"SMTP connection error: {str(e)}"
+                    smtp_status = "degraded"
+                    smtp_reachable = False
+                except smtplib.SMTPException as e:
+                    smtp_error = f"SMTP error: {str(e)}"
+                    smtp_status = "degraded"
+                    smtp_reachable = False
+                except Exception as e:
+                    if "timeout" in str(e).lower() or "connection" in str(e).lower():
+                        smtp_error = f"SMTP connection timeout/error: {str(e)}"
+                        smtp_status = "degraded"
+                        smtp_reachable = False
+                    else:
+                        # Other errors might indicate server is reachable but has issues
+                        smtp_reachable = True
+                        smtp_error = f"SMTP check warning: {str(e)}"
+            else:
+                smtp_error = "SMTP credentials not fully configured (missing SMTP_USER, SMTP_PASSWORD, or SMTP_FROM_EMAIL)"
+                smtp_status = "degraded"
+        except Exception as e:
+            smtp_error = str(e)
+            smtp_status = "degraded"
+            # SMTP is optional, so don't mark overall as unhealthy
+    
+    services['smtp'] = {
+        'status': smtp_status,
+        'configured': smtp_configured,
+        'reachable': smtp_reachable,
+        'response_time_ms': smtp_response_time_ms,
+        'error': smtp_error
+    }
+    
     # If database is down, mark overall as unhealthy
     if db_status == "unhealthy":
         overall_status = "unhealthy"
         http_status = 503
-    elif grok_status == "degraded" and db_status == "healthy":
+    elif (grok_status == "degraded" or smtp_status == "degraded") and db_status == "healthy":
         overall_status = "degraded"
         # Still return 200 for degraded (non-critical service)
     
