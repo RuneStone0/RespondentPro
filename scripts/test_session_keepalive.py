@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Session Timeout Test Script
+Session Keep-Alive Test Script
 
-Tests cookie session timeout by repeatedly sending GET requests with
-cumulative 4-hour delays until the session expires.
+Tests how long a session can be kept alive by sending requests at regular
+intervals (every 1 hour). The script will continue until the session expires.
 """
 import requests
 import time
@@ -11,12 +11,10 @@ from datetime import datetime, timedelta
 
 
 # Configuration
-#intercom-id-mzi9ntpw=1615f15b-8574-4c69-ac33-38e6807e5045; intercom-device-id-mzi9ntpw=8690c5cf-f070-4e86-a9f8-b49ceaae042e; _csrf=wWkMlkf9GxVhYtKx48e6zeJt; intercom-session-mzi9ntpw=; consentMode=%7B%22security_storage%22%3A%22granted%22%2C%22analytics_storage%22%3A%22denied%22%2C%22functionality_storage%22%3A%22denied%22%2C%22personalization_storage%22%3A%22denied%22%2C%22ad_storage%22%3A%22denied%22%7D; respondent.session.sid=s%3AZZEAUMYURr8iP-f-6Tg6aQ1n-Ua6fPgB.uGMG7dN96b1zzWLquWgByIoxrJ55indw%2FHlkVUCYCyc; XSRF-TOKEN=MLJKQ7RV-cvDOcngjdwKvswoA50BADLIZHdw
-
 URL = "https://app.respondent.io/api/v4/profiles/user/691f593aabd77eb5a29c7b35"
-COOKIE_VALUE = "s"
-DELAY_INCREMENT_HOURS = 1
-REQUEST_TIMEOUT = 10  # Request timeout in seconds (2 minutes)
+COOKIE_VALUE = ""
+REQUEST_INTERVAL_HOURS = 1  # Send request every 1 hour
+REQUEST_TIMEOUT = 120  # Request timeout in seconds (2 minutes)
 
 # Headers
 headers = {
@@ -55,12 +53,12 @@ def print_raw_request(method, url, headers):
 
 
 def main():
-    """Main function to test session timeout."""
+    """Main function to test session keep-alive."""
     print("=" * 80)
-    print("Session Timeout Test Script")
+    print("Session Keep-Alive Test Script")
     print("=" * 80)
     print(f"Target URL: {URL}")
-    print(f"Starting delay increment: {DELAY_INCREMENT_HOURS} hours")
+    print(f"Request interval: {REQUEST_INTERVAL_HOURS} hour(s)")
     print("=" * 80)
     print()
 
@@ -86,7 +84,7 @@ def main():
             print("=" * 80)
             return
         
-        print("  ✓ Session is valid. Starting timeout test...")
+        print("  ✓ Session is valid. Starting keep-alive test...")
         print()
         
     except requests.exceptions.RequestException as e:
@@ -100,10 +98,9 @@ def main():
         return
 
     request_count = 0
-    delay_hours = 0
     start_time = datetime.now()
     last_request_time = None
-    total_elapsed = timedelta(0)
+    request_interval_seconds = REQUEST_INTERVAL_HOURS * 3600
 
     try:
         while True:
@@ -118,11 +115,15 @@ def main():
             else:
                 time_since_last_str = "N/A (first request)"
             
+            # Calculate total elapsed time
+            total_elapsed = current_time - start_time
+            total_elapsed_hours = total_elapsed.total_seconds() / 3600
+            
             # Log request timestamp and time since last request
             print(f"[Request #{request_count}]")
             print(f"  Timestamp: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"  Time since last request: {time_since_last_str}")
-            print(f"  Current delay: {delay_hours} hours")
+            print(f"  Total session age: {format_time_delta(total_elapsed_hours)}")
             print_raw_request("GET", URL, headers)
             print("  Sending request...", end=" ", flush=True)
             
@@ -135,7 +136,7 @@ def main():
                 if response.status_code != 200:
                     print()
                     print("=" * 80)
-                    print("SESSION TIMEOUT DETECTED")
+                    print("SESSION EXPIRED")
                     print("=" * 80)
                     print()
                     
@@ -161,39 +162,41 @@ def main():
                     print()
                     
                     # Summary
-                    total_elapsed = current_time - start_time
-                    total_elapsed_hours = total_elapsed.total_seconds() / 3600
-                    
                     print("Summary:")
                     print("-" * 80)
                     print(f"Total requests made: {request_count}")
-                    print(f"Total time elapsed: {format_time_delta(total_elapsed_hours)}")
-                    print(f"Delay before timeout: {format_time_delta(delay_hours)}")
+                    print(f"Total session lifetime: {format_time_delta(total_elapsed_hours)}")
+                    print(f"Request interval: {format_time_delta(REQUEST_INTERVAL_HOURS)}")
                     print(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-                    print(f"Timeout detected at: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    print(f"Session expired at: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
                     print("=" * 80)
                     break
                 
             except requests.exceptions.RequestException as e:
                 print(f"ERROR: {e}")
-                print("Retrying in 60 seconds...")
-                time.sleep(60)
-                continue
+                print()
+                print("=" * 80)
+                print("ERROR: Request failed!")
+                print("=" * 80)
+                print(f"Error: {e}")
+                print(f"Total requests made: {request_count}")
+                print(f"Total session lifetime: {format_time_delta(total_elapsed_hours)}")
+                print(f"Last successful request at: {last_request_time.strftime('%Y-%m-%d %H:%M:%S') if last_request_time else 'N/A'}")
+                print("=" * 80)
+                break
             
             # Update last request time
             last_request_time = current_time
             
-            # Calculate next delay (cumulative: 0h, 4h, 8h, 12h, 16h, etc.)
-            delay_hours += DELAY_INCREMENT_HOURS
-            delay_seconds = delay_hours * 3600
-            
-            print(f"  Waiting {format_time_delta(delay_hours)} before next request...")
+            # Calculate next request time
+            next_request_time = current_time + timedelta(seconds=request_interval_seconds)
+            print(f"  Next request in {format_time_delta(REQUEST_INTERVAL_HOURS)} at {next_request_time.strftime('%Y-%m-%d %H:%M:%S')}")
             print()
             
-            # Sleep for the delay with progress updates
+            # Sleep for the interval with progress updates
             sleep_start = datetime.now()
             sleep_interval = 3600  # Update every 1 hour (3600 seconds)
-            remaining_seconds = delay_seconds
+            remaining_seconds = request_interval_seconds
             
             while remaining_seconds > 0:
                 # Sleep in chunks to allow progress updates
@@ -206,8 +209,9 @@ def main():
                     elapsed = (datetime.now() - sleep_start).total_seconds()
                     elapsed_hours = elapsed / 3600
                     remaining_hours = remaining_seconds / 3600
-                    print(f"  [Progress] Elapsed: {format_time_delta(elapsed_hours)}, "
-                          f"Remaining: {format_time_delta(remaining_hours)}", flush=True)
+                    total_session_age = (datetime.now() - start_time).total_seconds() / 3600
+                    print(f"  [Progress] Session age: {format_time_delta(total_session_age)}, "
+                          f"Next request in: {format_time_delta(remaining_hours)}", flush=True)
             
             print(f"  Wait complete. Proceeding to next request...")
             print()
@@ -221,8 +225,9 @@ def main():
             total_elapsed = datetime.now() - start_time
             total_elapsed_hours = total_elapsed.total_seconds() / 3600
             print(f"Total requests made: {request_count}")
-            print(f"Total time elapsed: {format_time_delta(total_elapsed_hours)}")
-            print(f"Last delay was: {format_time_delta(delay_hours)}")
+            print(f"Total session lifetime: {format_time_delta(total_elapsed_hours)}")
+            print(f"Request interval: {format_time_delta(REQUEST_INTERVAL_HOURS)}")
+            print(f"Last request at: {last_request_time.strftime('%Y-%m-%d %H:%M:%S') if last_request_time else 'N/A'}")
         print("=" * 80)
 
 
