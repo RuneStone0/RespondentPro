@@ -394,3 +394,19 @@ if mongo_available and db is not None:
             print(f"[Notifications] Failed to start notification scheduler: {e}")
     except Exception as e:
         print(f"[Notifications] Failed to start notification scheduler: {e}")
+
+# Initialize background cache refresh if MongoDB is available
+if mongo_available and db is not None:
+    try:
+        from .cache_refresh import start_background_refresh
+        cache_refresh_thread = start_background_refresh(db, check_interval_hours=1, cache_max_age_hours=24)
+        print("[Cache Refresh] Background cache refresh started (check interval: 1h, max age: 24h)")
+    except ImportError:
+        try:
+            from cache_refresh import start_background_refresh
+            cache_refresh_thread = start_background_refresh(db, check_interval_hours=1, cache_max_age_hours=24)
+            print("[Cache Refresh] Background cache refresh started (check interval: 1h, max age: 24h)")
+        except Exception as e:
+            print(f"[Cache Refresh] Failed to start background cache refresh: {e}")
+    except Exception as e:
+        print(f"[Cache Refresh] Failed to start background cache refresh: {e}")
