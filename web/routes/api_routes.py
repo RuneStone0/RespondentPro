@@ -1196,7 +1196,6 @@ def get_cache_stats_api():
         last_sync = None
         if hidden_projects_log_collection is not None:
             last_sync = get_last_sync_time(hidden_projects_log_collection, user_id)
-            print(f"[Cache Stats] Last sync from hidden_projects_log: {last_sync}, type: {type(last_sync)}")
         
         # Convert to ISO format for client-side timezone conversion
         last_sync_iso = None
