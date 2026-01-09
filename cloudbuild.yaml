@@ -1,30 +1,8 @@
 steps:
-  # Deploy Firestore rules and indexes
+  # Deploy all Firebase services (Firestore rules/indexes, Functions, and Hosting)
   - name: 'us-docker.pkg.dev/firebase-cli/us/firebase'
     args:
       - 'deploy'
-      - '--only'
-      - 'firestore:rules,firestore:indexes'
-      - '--project=respondentpro-xyz'
-      - '--non-interactive'
-      - '--token=${_FIREBASE_TOKEN}'
-
-  # Deploy Cloud Functions
-  - name: 'us-docker.pkg.dev/firebase-cli/us/firebase'
-    args:
-      - 'deploy'
-      - '--only'
-      - 'functions'
-      - '--project=respondentpro-xyz'
-      - '--non-interactive'
-      - '--token=${_FIREBASE_TOKEN}'
-
-  # Deploy Hosting
-  - name: 'us-docker.pkg.dev/firebase-cli/us/firebase'
-    args:
-      - 'deploy'
-      - '--only'
-      - 'hosting'
       - '--project=respondentpro-xyz'
       - '--non-interactive'
       - '--token=${_FIREBASE_TOKEN}'
@@ -37,8 +15,3 @@ substitutions:
 
 # Build timeout (optional, adjust as needed)
 timeout: '1200s'
-
-# Options
-options:
-  machineType: 'E2_HIGHCPU_8'
-  logging: CLOUD_LOGGING_ONLY
