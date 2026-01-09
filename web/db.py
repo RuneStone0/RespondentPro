@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
 """
 Database connection and collection setup for Respondent.io Manager
+Firestore implementation
 """
 
 import os
-from pymongo import MongoClient
+import logging
+import firebase_admin
+from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 from pathlib import Path
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 PROJECT_ROOT = Path(__file__).parent.parent
 load_dotenv(PROJECT_ROOT / '.env')
 
-# MongoDB connection
-MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/')
-MONGODB_DB = os.environ.get('MONGODB_DB', 'respondent_manager')
+# Firebase/Firestore connection
+# Use GCP_PROJECT or GCLOUD_PROJECT (set by Cloud Functions) or PROJECT_ID (for local dev)
+# Note: Cannot use FIREBASE_PROJECT_ID as env var (reserved prefix in Cloud Functions)
+FIREBASE_PROJECT_ID = (os.environ.get('GCP_PROJECT') or 
+                       os.environ.get('GCLOUD_PROJECT') or 
+                       os.environ.get('PROJECT_ID'))
 
 # Initialize collections as None (will be set if connection succeeds)
-client = None
 db = None
 users_collection = None
 session_keys_collection = None
@@ -31,93 +39,159 @@ project_details_collection = None
 topics_collection = None
 ai_analysis_cache_collection = None
 user_notifications_collection = None
-mongo_available = False
+firestore_available = False
 
 try:
-    if not MONGODB_DB:
-        raise ValueError("MONGODB_DB environment variable is not set")
-    client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
-    # Test connection
-    client.server_info()
-    db = client[MONGODB_DB]
-    # Collections
-    users_collection = db['users']
-    session_keys_collection = db['session_keys']
-    projects_cache_collection = db['projects_cache']
-    user_preferences_collection = db['user_preferences']
-    hidden_projects_log_collection = db['hidden_projects_log']
-    hide_feedback_collection = db['hide_feedback']
-    category_recommendations_collection = db['category_recommendations']
-    user_profiles_collection = db['user_profiles']
-    project_details_collection = db['project_details']
-    topics_collection = db['topics']
-    ai_analysis_cache_collection = db['ai_analysis_cache']
-    user_notifications_collection = db['user_notifications']
-    
-    # Create indexes for new collections (non-blocking - failures won't prevent app from starting)
+    # Check if we're in cloud environment - if so, ensure GOOGLE_APPLICATION_CREDENTIALS is unset
+    # before getting Firestore client (google.auth.default() checks this env var)
     try:
-        if projects_cache_collection is not None:
-            projects_cache_collection.create_index([('user_id', 1)], background=True)
-            projects_cache_collection.create_index([('project_id', 1)], unique=True, sparse=True, background=True)
-        if user_preferences_collection is not None:
-            user_preferences_collection.create_index([('user_id', 1)], background=True)
-        if hidden_projects_log_collection is not None:
-            hidden_projects_log_collection.create_index([('user_id', 1)], background=True)
-            hidden_projects_log_collection.create_index([('project_id', 1)], background=True)
-            hidden_projects_log_collection.create_index([('hidden_at', 1)], background=True)
-            # Unique compound index to prevent duplicate project_id entries per user
-            # Drop existing non-unique index if it exists, then create unique one
+        from .firebase_init import is_cloud_environment
+    except ImportError:
+        from firebase_init import is_cloud_environment
+    
+    # Check if Firebase Admin is already initialized (e.g., from main.py)
+    if firebase_admin._apps:
+        logger.info("Firebase Admin already initialized, will get Firestore client...")
+        # Ensure GOOGLE_APPLICATION_CREDENTIALS is unset in cloud before getting client
+        # This is critical because firestore.client() calls google.auth.default() which checks this env var
+        if is_cloud_environment() and 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+            old_creds = os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS')
+            logger.info(f"Unsetting GOOGLE_APPLICATION_CREDENTIALS ({old_creds}) before getting Firestore client")
+    else:
+        # Use centralized initialization function
+        try:
+            from .firebase_init import initialize_firebase_admin
+            initialize_firebase_admin(project_id=FIREBASE_PROJECT_ID, project_root=PROJECT_ROOT)
+        except ImportError:
+            # Fallback if firebase_init not available (shouldn't happen, but be safe)
             try:
-                # Try to drop the existing non-unique index if it exists
-                hidden_projects_log_collection.drop_index('user_id_1_project_id_1')
-            except Exception:
-                # Index doesn't exist or has different name, that's fine
-                pass
-            # Create unique compound index
-            hidden_projects_log_collection.create_index(
-                [('user_id', 1), ('project_id', 1)], 
-                unique=True, 
-                background=True,
-                name='user_id_1_project_id_1_unique'
-            )
-        if hide_feedback_collection is not None:
-            hide_feedback_collection.create_index([('user_id', 1)], background=True)
-            hide_feedback_collection.create_index([('project_id', 1)], background=True)
-        if category_recommendations_collection is not None:
-            category_recommendations_collection.create_index([('user_id', 1)], background=True)
-        if user_profiles_collection is not None:
-            user_profiles_collection.create_index([('user_id', 1)], unique=True, background=True)
-            user_profiles_collection.create_index([('updated_at', 1)], background=True)
-        if project_details_collection is not None:
-            project_details_collection.create_index([('project_id', 1)], unique=True, background=True)
-        if topics_collection is not None:
-            topics_collection.create_index([('topic_id', 1)], unique=True, background=True)
-        if ai_analysis_cache_collection is not None:
-            ai_analysis_cache_collection.create_index([('user_id', 1), ('project_id', 1)], unique=True, background=True)
-            ai_analysis_cache_collection.create_index([('cached_at', 1)], background=True)
-        if user_notifications_collection is not None:
-            user_notifications_collection.create_index([('user_id', 1)], unique=True, background=True)
-    except Exception as e:
-        print(f"Warning: Could not create indexes (this is non-critical): {e}")
+                from firebase_init import initialize_firebase_admin
+                initialize_firebase_admin(project_id=FIREBASE_PROJECT_ID, project_root=PROJECT_ROOT)
+            except ImportError:
+                logger.warning("Could not import firebase_init, using basic initialization")
+                firebase_admin.initialize_app()
     
-    # Test read/write permissions by attempting a simple operation
+    # Get Firestore client (whether we just initialized or it was already initialized)
+    # CRITICAL: Ensure GOOGLE_APPLICATION_CREDENTIALS is unset in cloud before calling firestore.client()
+    # because firestore.client() internally calls google.auth.default() which checks this env var
+    if is_cloud_environment() and 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+        old_creds = os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS')
+        logger.info(f"Unsetting GOOGLE_APPLICATION_CREDENTIALS ({old_creds}) before calling firestore.client()")
+    
+    logger.debug("Getting Firestore client...")
     try:
-        users_collection.find_one({})
+        db = firestore.client()
+        logger.info("Firestore client obtained successfully")
+    except Exception as client_error:
+        logger.error(f"Failed to get Firestore client: {client_error}", exc_info=True)
+        raise  # Re-raise to be caught by outer exception handler
+    
+    # Collections (Firestore collections are accessed via db.collection())
+    logger.debug("Setting up Firestore collections...")
+    users_collection = db.collection('users')
+    session_keys_collection = db.collection('session_keys')
+    projects_cache_collection = db.collection('projects_cache')
+    user_preferences_collection = db.collection('user_preferences')
+    hidden_projects_log_collection = db.collection('hidden_projects_log')
+    hide_feedback_collection = db.collection('hide_feedback')
+    category_recommendations_collection = db.collection('category_recommendations')
+    user_profiles_collection = db.collection('user_profiles')
+    project_details_collection = db.collection('project_details')
+    topics_collection = db.collection('topics')
+    ai_analysis_cache_collection = db.collection('ai_analysis_cache')
+    user_notifications_collection = db.collection('user_notifications')
+    logger.debug("Firestore collections set up successfully")
+    
+    # Test connection by attempting a simple operation
+    try:
+        # Try to read from a collection (this will fail if permissions are wrong)
+        logger.debug("Testing Firestore connection...")
+        list(users_collection.limit(1).stream())
+        logger.debug("Firestore connection test successful")
     except Exception as perm_error:
-        print(f"Warning: MongoDB permissions issue: {perm_error}")
-        print("The MongoDB user may not have read/write permissions.")
-        print("For MongoDB Atlas, ensure your database user has 'readWrite' role on the database.")
+        logger.warning(
+            f"Firestore permissions issue during test: {perm_error}. "
+            "Please ensure your service account has proper Firestore permissions.",
+            exc_info=True
+        )
         # Don't fail completely, but warn the user
-    mongo_available = True
+    
+    firestore_available = True
+    logger.info("Firestore connection established successfully")
+    
+except ValueError as e:
+    # Check if Firebase Admin is already initialized (this is OK)
+    error_msg = str(e).lower()
+    if "already exists" in error_msg or "already initialized" in error_msg:
+        try:
+            logger.info("Firebase Admin already initialized, getting Firestore client...")
+            # Firebase Admin is already initialized, just get the client
+            db = firestore.client()
+            # Set up collections
+            users_collection = db.collection('users')
+            session_keys_collection = db.collection('session_keys')
+            projects_cache_collection = db.collection('projects_cache')
+            user_preferences_collection = db.collection('user_preferences')
+            hidden_projects_log_collection = db.collection('hidden_projects_log')
+            hide_feedback_collection = db.collection('hide_feedback')
+            category_recommendations_collection = db.collection('category_recommendations')
+            user_profiles_collection = db.collection('user_profiles')
+            project_details_collection = db.collection('project_details')
+            topics_collection = db.collection('topics')
+            ai_analysis_cache_collection = db.collection('ai_analysis_cache')
+            user_notifications_collection = db.collection('user_notifications')
+            firestore_available = True
+            logger.info("Firestore connection established successfully (using existing Firebase Admin initialization)")
+        except Exception as client_error:
+            logger.error(
+                f"Failed to get Firestore client after Firebase Admin was already initialized: {client_error}",
+                exc_info=True
+            )
+            db = None
+            users_collection = None
+            session_keys_collection = None
+            projects_cache_collection = None
+            user_preferences_collection = None
+            hidden_projects_log_collection = None
+            hide_feedback_collection = None
+            category_recommendations_collection = None
+            user_profiles_collection = None
+            project_details_collection = None
+            topics_collection = None
+            ai_analysis_cache_collection = None
+            user_notifications_collection = None
+            firestore_available = False
+    else:
+        logger.error(
+            f"Firestore connection failed: {e}. "
+            "Please ensure Firebase is configured correctly: "
+            "1. Set PROJECT_ID or GCP_PROJECT environment variable (GCP_PROJECT is auto-set in Cloud Functions), "
+            "2. Set GOOGLE_APPLICATION_CREDENTIALS to path of service account JSON file, "
+            "3. Or ensure default credentials are available (for Cloud Functions/Cloud Run)"
+        )
+        db = None
+        users_collection = None
+        session_keys_collection = None
+        projects_cache_collection = None
+        user_preferences_collection = None
+        hidden_projects_log_collection = None
+        hide_feedback_collection = None
+        category_recommendations_collection = None
+        user_profiles_collection = None
+        project_details_collection = None
+        topics_collection = None
+        ai_analysis_cache_collection = None
+        user_notifications_collection = None
+        firestore_available = False
 except Exception as e:
-    print(f"Error: MongoDB connection failed: {e}")
-    print("Please ensure MongoDB is running and MONGODB_URI is correct in .env file")
-    if "Atlas" in str(e) or "atlas" in str(e).lower():
-        print("\nMongoDB Atlas specific issues:")
-        print("1. Ensure your IP address is whitelisted in Atlas Network Access")
-        print("2. Ensure your database user has 'readWrite' role on the database")
-        print("3. Check that your connection string includes the correct username and password")
-    client = None
+    logger.error(
+        f"Firestore connection failed: {e}. "
+        "Please ensure Firebase is configured correctly: "
+        "1. Set PROJECT_ID or GCP_PROJECT environment variable (GCP_PROJECT is auto-set in Cloud Functions), "
+        "2. Set GOOGLE_APPLICATION_CREDENTIALS to path of service account JSON file, "
+        "3. Or ensure default credentials are available (for Cloud Functions/Cloud Run)",
+        exc_info=True
+    )
     db = None
     users_collection = None
     session_keys_collection = None
@@ -131,5 +205,7 @@ except Exception as e:
     topics_collection = None
     ai_analysis_cache_collection = None
     user_notifications_collection = None
-    mongo_available = False
+    firestore_available = False
 
+# For backward compatibility, keep mongo_available as alias
+mongo_available = firestore_available

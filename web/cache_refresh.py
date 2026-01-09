@@ -7,7 +7,6 @@ import threading
 import time
 from datetime import datetime, timedelta
 from typing import Optional
-from pymongo.collection import Collection
 from .cache_manager import is_cache_fresh, refresh_project_cache
 from .ai_analyzer import analyze_projects_batch
 
@@ -29,14 +28,14 @@ def start_background_refresh(
     Start background thread to refresh caches
     
     Args:
-        db: MongoDB database object
+        db: Firestore database object (unused, kept for compatibility)
         check_interval_hours: How often to check for stale caches (default: 1 hour)
         cache_max_age_hours: Maximum age of cache before refresh (default: 24 hours)
     """
     def refresh_loop():
         while True:
             try:
-                refresh_stale_caches(db, cache_max_age_hours)
+                refresh_stale_caches(cache_max_age_hours)
             except Exception as e:
                 print(f"Error in background cache refresh: {e}")
             
@@ -48,26 +47,32 @@ def start_background_refresh(
     return thread
 
 
-def refresh_stale_caches(db, max_age_hours: int = 24):
+def refresh_stale_caches(max_age_hours: int = 24):
     """
     Refresh all stale caches by fetching projects from Respondent.io API
     
     Args:
-        db: MongoDB database object
         max_age_hours: Maximum age of cache before refresh
     """
     try:
-        projects_cache_collection = db['projects_cache']
-        session_keys_collection = db['session_keys']
+        # Import collections from db module
+        try:
+            from .db import projects_cache_collection, session_keys_collection
+        except ImportError:
+            from db import projects_cache_collection, session_keys_collection
+        
+        if projects_cache_collection is None or session_keys_collection is None:
+            return
         
         # Get all cached users
-        cached_users = projects_cache_collection.find({}, {'user_id': 1, 'cached_at': 1})
+        cached_users = projects_cache_collection.stream()
         
         refreshed_count = 0
         error_count = 0
         
         for cache_doc in cached_users:
-            user_id = cache_doc.get('user_id')
+            cache_data = cache_doc.to_dict()
+            user_id = cache_data.get('user_id')
             if not user_id:
                 continue
             
@@ -75,11 +80,13 @@ def refresh_stale_caches(db, max_age_hours: int = 24):
             if not is_cache_fresh(projects_cache_collection, str(user_id), max_age_hours):
                 try:
                     # Get user's session keys
-                    config_doc = session_keys_collection.find_one({'user_id': user_id})
-                    if not config_doc:
+                    query = session_keys_collection.where('user_id', '==', str(user_id)).limit(1).stream()
+                    docs = list(query)
+                    if not docs:
                         print(f"[Background Refresh] No session keys found for user {user_id}, skipping")
                         continue
                     
+                    config_doc = docs[0].to_dict()
                     cookies = config_doc.get('cookies', {})
                     profile_id = config_doc.get('profile_id')
                     

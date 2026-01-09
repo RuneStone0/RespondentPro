@@ -159,119 +159,20 @@
                 <p class="text-base-content/70 mb-6">Click the button below to configure your Respondent.io session keys.</p>
                 <button class="btn btn-primary" onclick="window.location.href='/account'">Configure Session Keys</button>
             </div>
-            {% elif projects and projects.results %}
-            <div class="project-list">
-                {% for project in projects.results %}
-                <div class="project-card" data-project-id="{{ project.id }}">
-                    <div class="project-header">
-                        <div>
-                            <div class="project-title">{{ project.name or 'Untitled Project' }}</div>
-                            <div class="project-id">ID: {{ project.id }}</div>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button class="btn btn-sm btn-outline whitespace-nowrap flex items-center gap-1.5" onclick="openHideModal('{{ project.id }}', '{{ project.name|replace("'", "\\'") }}')" title="Hide this project">
-                                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A20.932 20.932 0 0018.928 10c-1.137-4.5-4.663-7.857-8.928-9.5a19.04 19.04 0 00-2.348.637L3.707 2.293zM5.865 4.637A18.97 18.97 0 0010 3.5c2.209 0 4.154.89 5.635 2.363A18.97 18.97 0 0116.5 10c0 .695-.08 1.37-.23 2.02l-1.523-1.523A10.945 10.945 0 0015 10a8 8 0 00-8-8c-.695 0-1.37.08-2.02.23L2.293 2.293zm8.293 8.293l-1.586-1.586A4 4 0 0110 6a4 4 0 00-4 4c0 .695.08 1.37.23 2.02l1.523 1.523A10.945 10.945 0 005 10a8 8 0 018-8c.695 0 1.37.08 2.02.23l-1.523 1.523z" clip-rule="evenodd"/>
-                                    <path d="M13.586 13.586L2.293 2.293a1 1 0 011.414-1.414l11.293 11.293a1 1 0 01-1.414 1.414z"/>
-                                </svg>
-                                Hide
-                            </button>
-                            <a href="https://app.respondent.io/respondents/v2/projects/view/{{ project.id }}" 
-                               target="_blank" 
-                               class="project-link"
-                               onclick="handleApplyClick(event, '{{ project.id }}', '{{ project.name|replace("'", "\\'") }}')">
-                                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right: 6px; vertical-align: middle;">
-                                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/>
-                                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/>
-                                </svg>
-                                Apply
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <div class="project-meta">
-                        {% set remuneration = project.respondentRemuneration or 0 %}
-                        {% set time_minutes = project.timeMinutesRequired or 0 %}
-                        {% if time_minutes > 0 %}
-                            {% set hourly_rate = (remuneration / time_minutes) * 60 %}
-                        {% else %}
-                            {% set hourly_rate = 0 %}
-                        {% endif %}
-                        
-                        <div class="meta-item">
-                            <span class="meta-label">Hourly Rate</span>
-                            <span class="meta-value hourly-rate">${{ "%.2f"|format(hourly_rate) }}/hr</span>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">Incentive</span>
-                            <span class="meta-value">${{ remuneration }}</span>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">Time Required</span>
-                            <span class="meta-value">{{ time_minutes }} min</span>
-                        </div>
-                        {% set project_is_remote = project.isRemote %}
-                        {% if project_is_remote is none and project.project %}
-                            {% set project_is_remote = project.project.isRemote %}
-                        {% endif %}
-                        {% set kind_of_research_formatted = project.kindOfResearchFormatted %}
-                        {% if kind_of_research_formatted is none and project.project %}
-                            {% set kind_of_research_formatted = project.project.kindOfResearchFormatted %}
-                        {% endif %}
-                        {% if kind_of_research_formatted %}
-                        <div class="meta-item">
-                            <span class="meta-label">Research Type</span>
-                            <span class="meta-value">{{ kind_of_research_formatted }}</span>
-                        </div>
-                        {% elif project.kindOfResearch %}
-                        <div class="meta-item">
-                            <span class="meta-label">Research Type</span>
-                            <span class="meta-value">
-                                {% if project.kindOfResearch == 1 %}Remote
-                                {% elif project.kindOfResearch == 2 %}Focus Groups
-                                {% elif project.kindOfResearch == 8 %}In-Person
-                                {% else %}{{ project.kindOfResearch }}{% endif %}
-                            </span>
-                        </div>
-                        {% endif %}
-                        {% if project_is_remote is not none %}
-                        <div class="meta-item">
-                            <span class="meta-label">Remote</span>
-                            <span class="meta-value">{{ 'Yes' if project_is_remote else 'No' }}</span>
-                        </div>
-                        {% endif %}
-                        {% set screener_length = project.screenerQuestionsLength %}
-                        {% if screener_length %}
-                        <div class="meta-item">
-                            <span class="meta-label">Screener Questions</span>
-                            <span class="meta-value">{{ screener_length }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    
-                    {% set project_topics = project.topics %}
-                    {% if project_topics is none and project.project %}
-                        {% set project_topics = project.project.topics %}
-                    {% endif %}
-                    {% if project_topics and project_topics|length > 0 %}
-                    <div class="project-topics mt-3 pt-3 border-t border-base-300">
-                        <span class="text-sm text-base-content/70 font-medium">Topic:</span>
-                        {% for topic in project_topics %}
-                        <span class="badge badge-outline badge-sm ml-1">{{ topic.name }}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    
-                    {% if project.description %}
-                    <div class="project-description">
-                        {{ project.description[:300] }}{% if project.description|length > 300 %}...{% endif %}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
             {% else %}
-            <div class="flex flex-col items-center justify-center py-16 text-center">
+            <!-- Loading indicator -->
+            <div id="projectsLoading" class="flex flex-col items-center justify-center py-16 text-center">
+                <div class="progress-spinner mb-4"></div>
+                <p class="text-base-content/70">Loading projects...</p>
+            </div>
+            
+            <!-- Projects container (populated via AJAX) -->
+            <div id="projectsContainer" class="project-list" style="display: none;">
+                <!-- Projects will be rendered here dynamically -->
+            </div>
+            
+            <!-- Empty state (shown when no projects) -->
+            <div id="projectsEmpty" class="flex flex-col items-center justify-center py-16 text-center" style="display: none;">
                 <svg class="w-16 h-16 text-base-content/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
@@ -1146,22 +1047,11 @@
             
             const result = await response.json();
             
-            // Update cache refresh time display with new UTC timestamp
-            if (!userTimezone) {
-                await detectTimezone();
-            }
-            if (result.last_updated) {
-                updateCacheRefreshDisplay(result.last_updated);
-                startCountdownTimer(result.last_updated);
-            } else {
-                await updateCacheRefreshTime();
-            }
-            
             // Show success message
-            showToast('Cache refreshed successfully!', 'success');
+            showToast('Cache refresh started in background', 'info');
             
-            // Reload page to show updated projects
-            location.reload();
+            // Poll for completion and reload projects when done
+            pollCacheRefresh();
         } catch (error) {
             console.error('Error refreshing cache:', error);
             showToast('Error refreshing cache: ' + error.message, 'error');
@@ -1908,8 +1798,259 @@
         }
     }
     
+    // Render a single project card
+    function renderProjectCard(project) {
+        const remuneration = project.respondentRemuneration || 0;
+        const timeMinutes = project.timeMinutesRequired || 0;
+        const hourlyRate = timeMinutes > 0 ? (remuneration / timeMinutes) * 60 : 0;
+        const projectName = project.name || 'Untitled Project';
+        const escapedName = projectName.replace(/'/g, "\\'");
+        
+        const projectIsRemote = project.isRemote !== undefined ? project.isRemote : (project.project ? project.project.isRemote : null);
+        const kindOfResearchFormatted = project.kindOfResearchFormatted || (project.project ? project.project.kindOfResearchFormatted : null);
+        const projectTopics = project.topics || (project.project ? project.project.topics : null);
+        const screenerLength = project.screenerQuestionsLength;
+        
+        let researchTypeHtml = '';
+        if (kindOfResearchFormatted) {
+            researchTypeHtml = `<div class="meta-item">
+                <span class="meta-label">Research Type</span>
+                <span class="meta-value">${escapeHtml(kindOfResearchFormatted)}</span>
+            </div>`;
+        } else if (project.kindOfResearch) {
+            let researchType = '';
+            if (project.kindOfResearch == 1) researchType = 'Remote';
+            else if (project.kindOfResearch == 2) researchType = 'Focus Groups';
+            else if (project.kindOfResearch == 8) researchType = 'In-Person';
+            else researchType = project.kindOfResearch;
+            researchTypeHtml = `<div class="meta-item">
+                <span class="meta-label">Research Type</span>
+                <span class="meta-value">${escapeHtml(researchType)}</span>
+            </div>`;
+        }
+        
+        let remoteHtml = '';
+        if (projectIsRemote !== null && projectIsRemote !== undefined) {
+            remoteHtml = `<div class="meta-item">
+                <span class="meta-label">Remote</span>
+                <span class="meta-value">${projectIsRemote ? 'Yes' : 'No'}</span>
+            </div>`;
+        }
+        
+        let screenerHtml = '';
+        if (screenerLength) {
+            screenerHtml = `<div class="meta-item">
+                <span class="meta-label">Screener Questions</span>
+                <span class="meta-value">${screenerLength}</span>
+            </div>`;
+        }
+        
+        let topicsHtml = '';
+        if (projectTopics && projectTopics.length > 0) {
+            const topicsBadges = projectTopics.map(topic => 
+                `<span class="badge badge-outline badge-sm ml-1">${escapeHtml(topic.name)}</span>`
+            ).join('');
+            topicsHtml = `<div class="project-topics mt-3 pt-3 border-t border-base-300">
+                <span class="text-sm text-base-content/70 font-medium">Topic:</span>
+                ${topicsBadges}
+            </div>`;
+        }
+        
+        let descriptionHtml = '';
+        if (project.description) {
+            const desc = project.description.length > 300 ? project.description.substring(0, 300) + '...' : project.description;
+            descriptionHtml = `<div class="project-description">${escapeHtml(desc)}</div>`;
+        }
+        
+        return `
+            <div class="project-card" data-project-id="${project.id}">
+                <div class="project-header">
+                    <div>
+                        <div class="project-title">${escapeHtml(projectName)}</div>
+                        <div class="project-id">ID: ${project.id}</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn btn-sm btn-outline whitespace-nowrap flex items-center gap-1.5" onclick="openHideModal('${project.id}', '${escapedName}')" title="Hide this project">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A20.932 20.932 0 0018.928 10c-1.137-4.5-4.663-7.857-8.928-9.5a19.04 19.04 0 00-2.348.637L3.707 2.293zM5.865 4.637A18.97 18.97 0 0010 3.5c2.209 0 4.154.89 5.635 2.363A18.97 18.97 0 0116.5 10c0 .695-.08 1.37-.23 2.02l-1.523-1.523A10.945 10.945 0 0015 10a8 8 0 00-8-8c-.695 0-1.37.08-2.02.23L2.293 2.293zm8.293 8.293l-1.586-1.586A4 4 0 0110 6a4 4 0 00-4 4c0 .695.08 1.37.23 2.02l1.523 1.523A10.945 10.945 0 005 10a8 8 0 018-8c.695 0 1.37.08 2.02.23l-1.523 1.523z" clip-rule="evenodd"/>
+                                <path d="M13.586 13.586L2.293 2.293a1 1 0 011.414-1.414l11.293 11.293a1 1 0 01-1.414 1.414z"/>
+                            </svg>
+                            Hide
+                        </button>
+                        <a href="https://app.respondent.io/respondents/v2/projects/view/${project.id}" 
+                           target="_blank" 
+                           class="project-link"
+                           onclick="handleApplyClick(event, '${project.id}', '${escapedName}')">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="margin-right: 6px; vertical-align: middle;">
+                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/>
+                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/>
+                            </svg>
+                            Apply
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="project-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Hourly Rate</span>
+                        <span class="meta-value hourly-rate">$${hourlyRate.toFixed(2)}/hr</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Incentive</span>
+                        <span class="meta-value">$${remuneration}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Time Required</span>
+                        <span class="meta-value">${timeMinutes} min</span>
+                    </div>
+                    ${researchTypeHtml}
+                    ${remoteHtml}
+                    ${screenerHtml}
+                </div>
+                
+                ${topicsHtml}
+                ${descriptionHtml}
+            </div>
+        `;
+    }
+    
+    // Load projects via AJAX
+    async function loadProjects() {
+        const loadingEl = document.getElementById('projectsLoading');
+        const containerEl = document.getElementById('projectsContainer');
+        const emptyEl = document.getElementById('projectsEmpty');
+        
+        try {
+            // Show loading state
+            if (loadingEl) loadingEl.style.display = 'flex';
+            if (containerEl) containerEl.style.display = 'none';
+            if (emptyEl) emptyEl.style.display = 'none';
+            
+            const response = await fetch('/api/projects');
+            if (!response.ok) {
+                throw new Error('Failed to load projects');
+            }
+            
+            const data = await response.json();
+            
+            // Hide loading
+            if (loadingEl) loadingEl.style.display = 'none';
+            
+            if (data.projects && data.projects.results && data.projects.results.length > 0) {
+                // Render projects
+                if (containerEl) {
+                    containerEl.innerHTML = data.projects.results.map(project => renderProjectCard(project)).join('');
+                    containerEl.style.display = 'block';
+                }
+                if (emptyEl) emptyEl.style.display = 'none';
+                
+                // Update total count if available
+                if (data.total_count !== undefined) {
+                    const totalCountEl = document.getElementById('totalProjectsCount');
+                    const totalProjectsStat = document.querySelector('[title*="Total number of projects"]');
+                    if (totalCountEl) {
+                        totalCountEl.textContent = data.total_count || 0;
+                        if (totalProjectsStat) {
+                            totalProjectsStat.style.display = 'block';
+                        }
+                    }
+                }
+            } else {
+                // Show empty state
+                if (containerEl) containerEl.style.display = 'none';
+                if (emptyEl) emptyEl.style.display = 'flex';
+            }
+            
+            // Don't trigger automatic background refresh on page load
+            // Users can manually refresh using the refresh button if needed
+            
+            return data;
+        } catch (error) {
+            console.error('Error loading projects:', error);
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (containerEl) containerEl.style.display = 'none';
+            if (emptyEl) {
+                emptyEl.innerHTML = `
+                    <svg class="w-16 h-16 text-base-content/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h3 class="text-xl font-semibold text-base-content mb-2">Error loading projects</h3>
+                    <p class="text-base-content/70">${escapeHtml(error.message)}</p>
+                    <button class="btn btn-primary mt-4" onclick="loadProjects()">Retry</button>
+                `;
+                emptyEl.style.display = 'flex';
+            }
+        }
+    }
+    
+    // Trigger background cache refresh
+    async function triggerBackgroundRefresh() {
+        try {
+            const response = await fetch('/api/cache/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.ok) {
+                console.log('Background cache refresh triggered');
+                // Poll for completion and reload projects when done
+                pollCacheRefresh();
+            }
+        } catch (error) {
+            console.error('Error triggering background refresh:', error);
+        }
+    }
+    
+    // Poll cache refresh status and reload projects when complete
+    let refreshPollInterval = null;
+    function pollCacheRefresh() {
+        // Clear any existing interval
+        if (refreshPollInterval) {
+            clearInterval(refreshPollInterval);
+        }
+        
+        let pollCount = 0;
+        const maxPolls = 60; // Poll for up to 60 seconds (1 second intervals)
+        
+        refreshPollInterval = setInterval(async () => {
+            pollCount++;
+            
+            try {
+                const response = await fetch('/api/cache/stats');
+                if (response.ok) {
+                    const data = await response.json();
+                    // Check if cache was recently updated (within last 5 seconds)
+                    if (data.last_updated) {
+                        const lastUpdated = new Date(data.last_updated);
+                        const now = new Date();
+                        const diffSeconds = (now - lastUpdated) / 1000;
+                        
+                        if (diffSeconds < 5) {
+                            // Cache was just updated, reload projects
+                            clearInterval(refreshPollInterval);
+                            refreshPollInterval = null;
+                            await loadProjects();
+                            await updateCacheRefreshTime();
+                            showToast('Projects refreshed successfully!', 'success');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling cache status:', error);
+            }
+            
+            if (pollCount >= maxPolls) {
+                clearInterval(refreshPollInterval);
+                refreshPollInterval = null;
+            }
+        }, 1000);
+    }
+    
     // Load analytics on page load
     window.addEventListener('DOMContentLoaded', async () => {
+        // Load projects first
+        await loadProjects();
+        
         // Detect timezone first
         await detectTimezone();
         

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
 Module for learning user preferences from behavior
+Firestore implementation
 """
 
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from bson import ObjectId
-from pymongo.collection import Collection
 import uuid
 import hashlib
 import json
+from google.cloud.firestore_v1.base_query import FieldFilter
 try:
     from .hidden_projects_tracker import log_hidden_project, is_project_hidden
     from .ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
@@ -18,9 +18,33 @@ except ImportError:
     from ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
 
 
+def _get_or_create_user_prefs(collection, user_id: str) -> tuple:
+    """Get user preferences document or create if it doesn't exist. Returns (doc_ref, doc_data, is_new)"""
+    query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+    docs = list(query)
+    if docs:
+        return docs[0].reference, docs[0].to_dict(), False
+    else:
+        # Create new document
+        new_data = {
+            'user_id': str(user_id),
+            'hidden_projects': [],
+            'kept_projects': [],
+            'hidden_categories': [],
+            'learned_patterns': [],
+            'question_answers': [],
+            'learned_exclusions': [],
+            'hide_feedback': [],
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
+        doc_ref = collection.add(new_data)
+        return doc_ref[1], new_data, True
+
+
 def record_project_hidden(
-    hidden_projects_log_collection: Collection,
-    user_preferences_collection: Collection,
+    hidden_projects_log_collection,
+    user_preferences_collection,
     user_id: str,
     project_id: str,
     feedback_text: Optional[str] = None,
@@ -51,14 +75,14 @@ def record_project_hidden(
         )
         
         # Update user_preferences
-        user_preferences_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$addToSet': {'hidden_projects': project_id},
-                '$set': {'updated_at': datetime.utcnow()}
-            },
-            upsert=True
-        )
+        doc_ref, prefs_data, is_new = _get_or_create_user_prefs(user_preferences_collection, user_id)
+        hidden_projects = prefs_data.get('hidden_projects', [])
+        if project_id not in hidden_projects:
+            hidden_projects.append(project_id)
+        doc_ref.update({
+            'hidden_projects': hidden_projects,
+            'updated_at': datetime.utcnow()
+        })
         
         return True
     except Exception as e:
@@ -67,8 +91,8 @@ def record_project_hidden(
 
 
 def record_category_hidden(
-    hidden_projects_log_collection: Collection,
-    user_preferences_collection: Collection,
+    hidden_projects_log_collection,
+    user_preferences_collection,
     user_id: str,
     category_name: str,
     category_pattern: Dict[str, Any],
@@ -100,21 +124,31 @@ def record_category_hidden(
             )
         
         # Update user_preferences
-        user_preferences_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$addToSet': {
-                    'hidden_projects': {'$each': project_ids},
-                    'hidden_categories': {
-                        'name': category_name,
-                        'pattern': category_pattern,
-                        'hidden_at': datetime.utcnow()
-                    }
-                },
-                '$set': {'updated_at': datetime.utcnow()}
-            },
-            upsert=True
-        )
+        doc_ref, prefs_data, is_new = _get_or_create_user_prefs(user_preferences_collection, user_id)
+        hidden_projects = prefs_data.get('hidden_projects', [])
+        hidden_categories = prefs_data.get('hidden_categories', [])
+        
+        # Add project IDs
+        for pid in project_ids:
+            if pid not in hidden_projects:
+                hidden_projects.append(pid)
+        
+        # Add category if not already present
+        category_entry = {
+            'name': category_name,
+            'pattern': category_pattern,
+            'hidden_at': datetime.utcnow()
+        }
+        # Check if category already exists
+        category_exists = any(c.get('name') == category_name for c in hidden_categories)
+        if not category_exists:
+            hidden_categories.append(category_entry)
+        
+        doc_ref.update({
+            'hidden_projects': hidden_projects,
+            'hidden_categories': hidden_categories,
+            'updated_at': datetime.utcnow()
+        })
         
         return True
     except Exception as e:
@@ -123,7 +157,7 @@ def record_category_hidden(
 
 
 def record_project_kept(
-    user_preferences_collection: Collection,
+    user_preferences_collection,
     user_id: str,
     project_id: str
 ) -> bool:
@@ -139,14 +173,14 @@ def record_project_kept(
         True if successful
     """
     try:
-        user_preferences_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$addToSet': {'kept_projects': project_id},
-                '$set': {'updated_at': datetime.utcnow()}
-            },
-            upsert=True
-        )
+        doc_ref, prefs_data, is_new = _get_or_create_user_prefs(user_preferences_collection, user_id)
+        kept_projects = prefs_data.get('kept_projects', [])
+        if project_id not in kept_projects:
+            kept_projects.append(project_id)
+        doc_ref.update({
+            'kept_projects': kept_projects,
+            'updated_at': datetime.utcnow()
+        })
         return True
     except Exception as e:
         print(f"Error recording project kept: {e}")
@@ -154,12 +188,12 @@ def record_project_kept(
 
 
 def analyze_feedback_and_learn(
-    user_preferences_collection: Collection,
+    user_preferences_collection,
     user_id: str,
     project_id: str,
     feedback_text: str,
     project_data: Dict[str, Any],
-    ai_analysis_cache_collection: Optional[Collection] = None
+    ai_analysis_cache_collection: Optional = None
 ) -> Dict[str, Any]:
     """
     Store raw feedback text in user preferences for AI-based hiding decisions
@@ -170,7 +204,7 @@ def analyze_feedback_and_learn(
         project_id: Project ID
         feedback_text: User feedback
         project_data: Project data
-        ai_analysis_cache_collection: Optional MongoDB collection for AI analysis cache
+        ai_analysis_cache_collection: Optional Firestore collection for AI analysis cache
         
     Returns:
         Dictionary with feedback information
@@ -183,20 +217,21 @@ def analyze_feedback_and_learn(
             'project_id': project_id,
             'hidden_at': datetime.utcnow()
         }
-        user_preferences_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$push': {
-                    'hide_feedback': feedback_entry
-                },
-                '$set': {'updated_at': datetime.utcnow()}
-            },
-            upsert=True
-        )
+        
+        doc_ref, prefs_data, is_new = _get_or_create_user_prefs(user_preferences_collection, user_id)
+        hide_feedback = prefs_data.get('hide_feedback', [])
+        hide_feedback.append(feedback_entry)
+        
+        doc_ref.update({
+            'hide_feedback': hide_feedback,
+            'updated_at': datetime.utcnow()
+        })
         
         # Invalidate AI analysis cache for this user since feedback changed
         if ai_analysis_cache_collection is not None:
-            ai_analysis_cache_collection.delete_many({'user_id': user_id})
+            query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).stream()
+            for doc in query:
+                doc.reference.delete()
         
         return {'feedback_text': feedback_text, 'project_id': project_id}
     except Exception as e:
@@ -205,7 +240,7 @@ def analyze_feedback_and_learn(
 
 
 def update_user_preferences(
-    user_preferences_collection: Collection,
+    user_preferences_collection,
     user_id: str
 ) -> Dict[str, Any]:
     """
@@ -219,9 +254,12 @@ def update_user_preferences(
         Updated preferences dictionary
     """
     try:
-        prefs = user_preferences_collection.find_one({'user_id': user_id})
-        if not prefs:
+        query = user_preferences_collection.where('user_id', '==', str(user_id)).limit(1).stream()
+        docs = list(query)
+        if not docs:
             return {}
+        
+        prefs = docs[0].to_dict()
         
         # This is a placeholder - in a full implementation, we'd analyze
         # hidden vs kept projects to learn preferences
@@ -239,7 +277,7 @@ def update_user_preferences(
 
 
 def get_user_preferences(
-    user_preferences_collection: Collection,
+    user_preferences_collection,
     user_id: str
 ) -> Dict[str, Any]:
     """
@@ -253,8 +291,9 @@ def get_user_preferences(
         Preferences dictionary
     """
     try:
-        prefs = user_preferences_collection.find_one({'user_id': user_id})
-        if not prefs:
+        query = user_preferences_collection.where('user_id', '==', str(user_id)).limit(1).stream()
+        docs = list(query)
+        if not docs:
             return {
                 'hidden_projects': [],
                 'kept_projects': [],
@@ -265,6 +304,7 @@ def get_user_preferences(
                 'hide_feedback': []
             }
         
+        prefs = docs[0].to_dict()
         return {
             'hidden_projects': prefs.get('hidden_projects', []),
             'kept_projects': prefs.get('kept_projects', []),
@@ -288,7 +328,7 @@ def get_user_preferences(
 
 
 def should_hide_project(
-    user_preferences_collection: Collection,
+    user_preferences_collection,
     user_id: str,
     project: Dict[str, Any]
 ) -> bool:
@@ -357,10 +397,10 @@ def _compute_feedback_hash(feedback_list: List[Dict[str, Any]]) -> str:
 
 
 def should_hide_based_on_ai_preferences(
-    user_preferences_collection: Collection,
+    user_preferences_collection,
     user_id: str,
     project: Dict[str, Any],
-    ai_analysis_cache_collection: Optional[Collection] = None
+    ai_analysis_cache_collection: Optional = None
 ) -> bool:
     """
     Check if project should be hidden based on user's raw feedback using AI
@@ -373,7 +413,7 @@ def should_hide_based_on_ai_preferences(
         user_preferences_collection: Collection for user_preferences
         user_id: User ID
         project: Project data
-        ai_analysis_cache_collection: Optional MongoDB collection for AI analysis cache
+        ai_analysis_cache_collection: Optional Firestore collection for AI analysis cache
         
     Returns:
         True if project should be hidden based on AI analysis of user feedback
@@ -395,12 +435,10 @@ def should_hide_based_on_ai_preferences(
         
         # Check cache if available
         if ai_analysis_cache_collection is not None:
-            cache_entry = ai_analysis_cache_collection.find_one({
-                'user_id': user_id,
-                'project_id': str(project_id)
-            })
-            
-            if cache_entry:
+            query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+            docs = list(query)
+            if docs:
+                cache_entry = docs[0].to_dict()
                 cached_hash = cache_entry.get('hide_feedback_hash')
                 # If feedback hasn't changed, return cached result
                 if cached_hash == feedback_hash:
@@ -411,22 +449,20 @@ def should_hide_based_on_ai_preferences(
         
         # Store result in cache if available
         if ai_analysis_cache_collection is not None:
-            ai_analysis_cache_collection.update_one(
-                {
-                    'user_id': user_id,
-                    'project_id': str(project_id)
-                },
-                {
-                    '$set': {
-                        'user_id': user_id,
-                        'project_id': str(project_id),
-                        'hide_feedback_hash': feedback_hash,
-                        'should_hide': should_hide,
-                        'cached_at': datetime.utcnow()
-                    }
-                },
-                upsert=True
-            )
+            cache_data = {
+                'user_id': str(user_id),
+                'project_id': str(project_id),
+                'hide_feedback_hash': feedback_hash,
+                'should_hide': should_hide,
+                'cached_at': datetime.utcnow()
+            }
+            
+            query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+            docs = list(query)
+            if docs:
+                docs[0].reference.update(cache_data)
+            else:
+                ai_analysis_cache_collection.add(cache_data)
         
         return should_hide
     except Exception as e:
@@ -435,7 +471,7 @@ def should_hide_based_on_ai_preferences(
 
 
 def store_question_answer(
-    user_preferences_collection: Collection,
+    user_preferences_collection,
     user_id: str,
     question_id: str,
     question_text: str,
@@ -469,30 +505,33 @@ def store_question_answer(
             'answered_at': datetime.utcnow()
         }
         
-        user_preferences_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$addToSet': {'question_answers': question_answer},
-                '$set': {'updated_at': datetime.utcnow()}
-            },
-            upsert=True
-        )
+        doc_ref, prefs_data, is_new = _get_or_create_user_prefs(user_preferences_collection, user_id)
+        question_answers = prefs_data.get('question_answers', [])
+        # Check if question already answered
+        question_exists = any(q.get('question_id') == question_id for q in question_answers)
+        if not question_exists:
+            question_answers.append(question_answer)
+        
+        update_data = {
+            'question_answers': question_answers,
+            'updated_at': datetime.utcnow()
+        }
         
         # If answer is False (user doesn't match the requirement), add to learned exclusions
         if not answer:
+            learned_exclusions = prefs_data.get('learned_exclusions', [])
             learned_exclusion = {
                 'question_id': question_id,
                 'pattern': pattern,
                 'learned_at': datetime.utcnow()
             }
-            user_preferences_collection.update_one(
-                {'user_id': user_id},
-                {
-                    '$addToSet': {'learned_exclusions': learned_exclusion},
-                    '$set': {'updated_at': datetime.utcnow()}
-                },
-                upsert=True
-            )
+            # Check if exclusion already exists
+            exclusion_exists = any(e.get('question_id') == question_id for e in learned_exclusions)
+            if not exclusion_exists:
+                learned_exclusions.append(learned_exclusion)
+            update_data['learned_exclusions'] = learned_exclusions
+        
+        doc_ref.update(update_data)
         
         return True
     except Exception as e:
@@ -501,8 +540,8 @@ def store_question_answer(
 
 
 def find_and_auto_hide_similar(
-    hidden_projects_log_collection: Collection,
-    user_preferences_collection: Collection,
+    hidden_projects_log_collection,
+    user_preferences_collection,
     user_id: str,
     hidden_project_id: str,
     all_projects: List[Dict[str, Any]],
@@ -544,17 +583,17 @@ def find_and_auto_hide_similar(
         
         # Update user preferences
         if auto_hidden_ids:
-            user_preferences_collection.update_one(
-                {'user_id': user_id},
-                {
-                    '$addToSet': {'hidden_projects': {'$each': auto_hidden_ids}},
-                    '$set': {'updated_at': datetime.utcnow()}
-                },
-                upsert=True
-            )
+            doc_ref, prefs_data, is_new = _get_or_create_user_prefs(user_preferences_collection, user_id)
+            hidden_projects = prefs_data.get('hidden_projects', [])
+            for pid in auto_hidden_ids:
+                if pid not in hidden_projects:
+                    hidden_projects.append(pid)
+            doc_ref.update({
+                'hidden_projects': hidden_projects,
+                'updated_at': datetime.utcnow()
+            })
         
         return auto_hidden_ids
     except Exception as e:
         print(f"Error finding and auto-hiding similar projects: {e}")
         return []
-

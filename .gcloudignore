@@ -1,0 +1,92 @@
+# This file specifies files that are *not* uploaded to Google Cloud Functions
+# Since source is set to "." in firebase.json, this controls what gets uploaded
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+.env.yaml
+*.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Git
+.git/
+.gitignore
+
+# Node modules
+node_modules/
+
+# Documentation
+*.md
+README.md
+TODO.md
+DEPLOYMENT.md
+FIREBASE_SETUP.md
+LOCAL_TESTING.md
+MIGRATION_GUIDE.md
+MIGRATION_STATUS.md
+
+# Development files
+Dockerfile
+cloudbuild.yaml
+run.sh
+web.py
+functions.yaml
+# Note: main.py is NOT ignored - it's the Firebase Functions entry point
+
+# Config and secrets (should use environment variables instead)
+config.json
+config.json.example
+service-account-key.json
+migration_log.json
+
+# Certificates
+certs/
+
+# Scripts
+scripts/
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+firebase-debug.log
+firebase-debug.*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Static files (hosted separately)
+web/static/
+
+# Firebase config (not needed in function)
+firebase.json
+.firebaserc
+firestore.rules
+firestore.indexes.json

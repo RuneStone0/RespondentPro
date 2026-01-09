@@ -25,15 +25,19 @@ try:
         users_collection, session_keys_collection, projects_cache_collection,
         user_preferences_collection, hidden_projects_log_collection,
         hide_feedback_collection, category_recommendations_collection,
-        user_profiles_collection, mongo_available, client, db
+        user_profiles_collection, firestore_available, db
     )
+    # For backward compatibility
+    mongo_available = firestore_available
 except ImportError:
     from db import (
         users_collection, session_keys_collection, projects_cache_collection,
         user_preferences_collection, hidden_projects_log_collection,
         hide_feedback_collection, category_recommendations_collection,
-        user_profiles_collection, mongo_available, client, db
+        user_profiles_collection, firestore_available, db
     )
+    # For backward compatibility
+    mongo_available = firestore_available
 
 # Import user service
 try:
@@ -178,15 +182,16 @@ def health_check():
     db_error = None
     
     try:
-        if mongo_available and client is not None and db is not None:
+        from .db import firestore_available, db
+        if firestore_available and db is not None:
             start_time = time.time()
-            # Perform a lightweight ping operation
-            db.command('ping')
+            # Perform a lightweight operation to test connection
+            list(db.collection('users').limit(1).stream())
             db_response_time_ms = round((time.time() - start_time) * 1000, 2)
             db_available = True
         else:
             db_status = "unhealthy"
-            db_error = "MongoDB connection not available"
+            db_error = "Firestore connection not available"
             overall_status = "unhealthy"
             http_status = 503
     except Exception as e:
@@ -379,8 +384,8 @@ except ImportError:
     app.register_blueprint(page_bp)
     app.register_blueprint(api_bp)
 
-# Initialize notification scheduler if MongoDB is available
-if mongo_available and db is not None:
+# Initialize notification scheduler if Firestore is available
+if firestore_available and db is not None:
     try:
         from .notification_scheduler import start_notification_scheduler
         notification_thread = start_notification_scheduler(db, check_interval_hours=1, token_check_interval_hours=12)
@@ -395,8 +400,8 @@ if mongo_available and db is not None:
     except Exception as e:
         print(f"[Notifications] Failed to start notification scheduler: {e}")
 
-# Initialize background cache refresh if MongoDB is available
-if mongo_available and db is not None:
+# Initialize background cache refresh if Firestore is available
+if firestore_available and db is not None:
     try:
         from .cache_refresh import start_background_refresh
         cache_refresh_thread = start_background_refresh(db, check_interval_hours=1, cache_max_age_hours=24)

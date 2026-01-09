@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.env.yaml
+
+# Config and secrets
+service-account-key.json
+
+# Logs
+firebase-debug.log
+*.log

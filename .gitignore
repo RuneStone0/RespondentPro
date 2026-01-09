@@ -15,11 +15,13 @@ ENV/
 # Flask
 instance/
 .webassets-cache
+hosting.*.cache
 
 # Data and config files
 # Note: data/ folder is no longer used - all data is stored in MongoDB
 config_*.json
 config.json
+service-account-key.json
 *.db
 *.sqlite
 
@@ -42,6 +44,10 @@ certs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+firebase-debug.log
+*.log
 
 # Other
 TODO.md

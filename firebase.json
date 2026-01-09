@@ -1,0 +1,58 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "__pycache__",
+        "*.pyc",
+        "certs/**",
+        "scripts/**",
+        "tests/**",
+        "*.md",
+        "Dockerfile",
+        "cloudbuild.yaml",
+        "run.sh",
+        "web.py",
+        "config.json",
+        "migration_log.json",
+        "service-account-key.json",
+        "respondentpro/**",
+        "venv/**",
+        ".venv/**",
+        "functions/venv",
+        "functions/.venv"
+      ],
+      "predeploy": [],
+      "source": ".",
+      "runtime": "python313",
+      "entryPoint": "respondentpro",
+      "gen": 2
+    }
+  ],
+  "hosting": {
+    "public": "web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "**/*.py",
+      "**/__pycache__/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "respondentpro"
+      }
+    ]
+  }
+}

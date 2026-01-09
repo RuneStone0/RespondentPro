@@ -11,13 +11,13 @@ try:
     from ..services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, load_credentials_by_user_id, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
     from ..services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
     from ..services.project_service import fetch_all_respondent_projects, get_hidden_count
-    from ..cache_manager import get_cache_stats
+    from ..cache_manager import get_cache_stats, get_cached_projects, is_cache_fresh
     from ..db import projects_cache_collection, users_collection
 except ImportError:
     from services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, load_credentials_by_user_id, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
     from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
     from services.project_service import fetch_all_respondent_projects, get_hidden_count
-    from cache_manager import get_cache_stats
+    from cache_manager import get_cache_stats, get_cached_projects, is_cache_fresh
     from db import projects_cache_collection, users_collection
 
 bp = Blueprint('page', __name__)
@@ -202,26 +202,27 @@ def admin():
     error_message = None
     try:
         if users_collection is None:
-            error_message = "MongoDB connection not available"
+            error_message = "Firestore connection not available"
         else:
-            all_users = users_collection.find({}, {'username': 1, 'projects_processed_limit': 1, '_id': 1})
+            all_users = users_collection.stream()
             user_count = 0
             for user_doc in all_users:
                 user_count += 1
                 try:
-                    user_id_str = str(user_doc['_id'])
+                    user_data = user_doc.to_dict()
+                    user_id_str = user_doc.id
                     billing_info = get_user_billing_info(user_id_str)
                     users_data.append({
                         'user_id': user_id_str,
-                        'email': user_doc.get('username', 'Unknown'),
+                        'email': user_data.get('username', 'Unknown'),
                         'billing_info': billing_info
                     })
                 except Exception as e:
-                    print(f"Error getting billing info for user {user_doc.get('_id')}: {e}")
+                    print(f"Error getting billing info for user {user_id_str}: {e}")
                     # Still add user with default billing info
                     users_data.append({
-                        'user_id': str(user_doc['_id']),
-                        'email': user_doc.get('username', 'Unknown'),
+                        'user_id': user_id_str,
+                        'email': user_data.get('username', 'Unknown'),
                         'billing_info': {
                             'projects_processed_limit': 500,
                             'projects_processed_count': 0,
@@ -273,43 +274,22 @@ def projects():
     projects_data = None
     error = None
     hidden_count = 0
+    cache_is_fresh = False
+    cache_exists = False
     
-    # Only try to fetch projects if config exists
-    if has_config:
+    # Get hidden count (always available)
+    hidden_count = get_hidden_count(user_id)
+    
+    # Only try to get cached projects if config exists
+    if has_config and projects_cache_collection is not None:
         try:
-            # Get profile_id from config or try to verify authentication to get it
-            profile_id = config.get('profile_id')
+            # Check if cache exists and is fresh
+            cache_exists = get_cached_projects(projects_cache_collection, str(user_id)) is not None
+            cache_is_fresh = is_cache_fresh(projects_cache_collection, str(user_id))
             
-            if not profile_id:
-                # Try to get profile_id by verifying authentication
-                verification = verify_respondent_authentication(
-                    cookies=config.get('cookies', {})
-                )
-                if verification.get('success') and verification.get('profile_id'):
-                    profile_id = verification.get('profile_id')
-                    # Save the profile_id for future use
-                    save_user_config(user_id, config, profile_id=profile_id)
-                    config['profile_id'] = profile_id
-                else:
-                    # Credentials are invalid
-                    pass
-            
-            if profile_id:
-                # Create authenticated session
-                req_session = create_respondent_session(
-                    cookies=config.get('cookies', {})
-                )
-                
-                # Fetch all projects (will use cache if available, otherwise fetches all pages)
-                all_projects, total_count = fetch_all_respondent_projects(
-                    session=req_session,
-                    profile_id=profile_id,
-                    page_size=50,
-                    user_id=user_id,
-                    use_cache=True,
-                    cookies=config.get('cookies', {})
-                )
-                
+            # Get cached projects if available (even if stale)
+            cached = get_cached_projects(projects_cache_collection, str(user_id))
+            if cached and cached.get('projects'):
                 # Sort projects by hourly rate (highest first)
                 def calculate_hourly_rate(project):
                     remuneration = project.get('respondentRemuneration', 0) or 0
@@ -319,7 +299,7 @@ def projects():
                     return 0
                 
                 sorted_projects = sorted(
-                    all_projects,
+                    cached['projects'],
                     key=calculate_hourly_rate,
                     reverse=True
                 )
@@ -327,20 +307,17 @@ def projects():
                 # Convert to the format expected by the template
                 projects_data = {
                     'results': sorted_projects,
-                    'count': total_count,
+                    'count': cached.get('total_count', len(sorted_projects)),
                     'page': 1,
                     'pageSize': len(sorted_projects)
                 }
-                
-                # Get persistent hidden count from MongoDB
-                hidden_count = get_hidden_count(user_id)
-            else:
-                # Unable to determine profile ID
-                pass
+            
+            # Don't trigger automatic background refresh on page load
+            # Users can manually refresh using the refresh button if needed
         except Exception as e:
-            # If authentication fails or API error occurs
+            # If error occurs, just log it - don't block page load
             import traceback
-            print(f"Error fetching projects: {traceback.format_exc()}")
+            print(f"Error getting cached projects: {traceback.format_exc()}")
     
     # Get cache refresh time and total count
     cache_refreshed_utc = None
@@ -382,6 +359,8 @@ def projects():
         cache_refreshed_utc=cache_refreshed_utc,
         error=error,
         hidden_count=hidden_count,
-        total_projects_count=total_projects_count
+        total_projects_count=total_projects_count,
+        cache_is_fresh=cache_is_fresh,
+        cache_exists=cache_exists
     )
 

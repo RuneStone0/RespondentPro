@@ -317,10 +317,10 @@ def extract_demographic_params_from_mongodb(profile_data):
 
 def get_user_profile(mongo_user_id):
     """
-    Retrieve user profile data from MongoDB
+    Retrieve user profile data from Firestore
     
     Args:
-        mongo_user_id: Our internal MongoDB user_id (ObjectId as string)
+        mongo_user_id: Our internal user_id (string)
         
     Returns:
         Dictionary containing profile data if found, None otherwise
@@ -329,8 +329,10 @@ def get_user_profile(mongo_user_id):
         return None
     
     try:
-        profile_doc = user_profiles_collection.find_one({'user_id': mongo_user_id})
-        if profile_doc:
+        query = user_profiles_collection.where('user_id', '==', str(mongo_user_id)).limit(1).stream()
+        docs = list(query)
+        if docs:
+            profile_doc = docs[0].to_dict()
             return profile_doc.get('profile')
         return None
     except Exception as e:
@@ -340,10 +342,10 @@ def get_user_profile(mongo_user_id):
 
 def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
     """
-    Fetch user profile data from Respondent.io API and store it in MongoDB
+    Fetch user profile data from Respondent.io API and store it in Firestore
     
     Args:
-        mongo_user_id: Our internal MongoDB user_id (ObjectId as string)
+        mongo_user_id: Our internal user_id (string)
         respondent_user_id: Optional Respondent.io user_id. If not provided, will try to get from config
         
     Returns:
@@ -373,7 +375,7 @@ def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
                 respondent_user_id = verification_result.get('user_id')
         
         if not respondent_user_id:
-            print(f"[Profile] Could not determine Respondent.io user_id for MongoDB user {mongo_user_id}")
+            print(f"[Profile] Could not determine Respondent.io user_id for user {mongo_user_id}")
             return None
         
         # Fetch the profile
@@ -381,20 +383,23 @@ def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
         
         if profile_data:
             # Store profile in user_profiles collection
-            user_profiles_collection.update_one(
-                {'user_id': mongo_user_id},
-                {
-                    '$set': {
-                        'profile': profile_data,
-                        'respondent_user_id': respondent_user_id,
-                        'updated_at': datetime.utcnow()
-                    },
-                    '$setOnInsert': {
-                        'created_at': datetime.utcnow()
-                    }
-                },
-                upsert=True
-            )
+            query = user_profiles_collection.where('user_id', '==', str(mongo_user_id)).limit(1).stream()
+            docs = list(query)
+            
+            profile_data_to_store = {
+                'user_id': str(mongo_user_id),
+                'profile': profile_data,
+                'respondent_user_id': respondent_user_id,
+                'updated_at': datetime.utcnow()
+            }
+            
+            if docs:
+                # Update existing document
+                docs[0].reference.update(profile_data_to_store)
+            else:
+                # Create new document
+                profile_data_to_store['created_at'] = datetime.utcnow()
+                user_profiles_collection.add(profile_data_to_store)
             print(f"[Profile] Successfully fetched and stored profile for user {mongo_user_id}")
             return profile_data
         else:

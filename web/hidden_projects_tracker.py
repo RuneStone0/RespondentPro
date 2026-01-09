@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
 Module for tracking hidden projects with timestamps for analytics
+Firestore implementation
 """
 
 from datetime import datetime, timedelta
-from bson import ObjectId
 from typing import List, Dict, Any, Optional
-from pymongo.collection import Collection
+from collections import defaultdict
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 
 def log_hidden_project(
-    collection: Collection,
+    collection,
     user_id: str,
     project_id: str,
     hidden_method: str,
@@ -23,7 +24,7 @@ def log_hidden_project(
     If the project is already logged, updates the timestamp and method.
     
     Args:
-        collection: MongoDB collection for hidden_projects_log
+        collection: Firestore collection for hidden_projects_log
         user_id: User ID
         project_id: Project ID that was hidden
         hidden_method: Method used to hide ("manual", "auto_similar", "category", "feedback_based")
@@ -38,37 +39,31 @@ def log_hidden_project(
         
         # Build update document
         update_doc = {
-            '$set': {
-                'hidden_at': now,
-                'hidden_method': hidden_method,
-                'updated_at': now
-            }
+            'user_id': str(user_id),
+            'project_id': str(project_id),
+            'hidden_at': now,
+            'hidden_method': hidden_method,
+            'updated_at': now
         }
         
         # Add optional fields if provided
         if feedback_text:
-            update_doc['$set']['feedback_text'] = feedback_text
+            update_doc['feedback_text'] = feedback_text
         
         if category_name:
-            update_doc['$set']['category_name'] = category_name
+            update_doc['category_name'] = category_name
         
-        # Use upsert to insert if not exists, or update if exists
-        # This ensures no duplicates while updating the timestamp if already hidden
-        result = collection.update_one(
-            {
-                'user_id': user_id,
-                'project_id': project_id
-            },
-            update_doc,
-            upsert=True
-        )
+        # Find existing document
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+        docs = list(query)
         
-        # If this was an insert (not an update), set created_at
-        if result.upserted_id is not None:
-            collection.update_one(
-                {'_id': result.upserted_id},
-                {'$set': {'created_at': now}}
-            )
+        if docs:
+            # Update existing document
+            docs[0].reference.update(update_doc)
+        else:
+            # Create new document
+            update_doc['created_at'] = now
+            collection.add(update_doc)
         
         return True
     except Exception as e:
@@ -76,26 +71,28 @@ def log_hidden_project(
         return False
 
 
-def get_hidden_projects_count(collection: Collection, user_id: str) -> int:
+def get_hidden_projects_count(collection, user_id: str) -> int:
     """
     Get total count of hidden projects for a user
     
     Args:
-        collection: MongoDB collection for hidden_projects_log
+        collection: Firestore collection for hidden_projects_log
         user_id: User ID
         
     Returns:
         Total count of hidden projects
     """
     try:
-        return collection.count_documents({'user_id': user_id})
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).stream()
+        count = sum(1 for _ in query)
+        return count
     except Exception as e:
         print(f"Error getting hidden projects count: {e}")
         return 0
 
 
 def get_hidden_projects_timeline(
-    collection: Collection,
+    collection,
     user_id: str,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -105,7 +102,7 @@ def get_hidden_projects_timeline(
     Get hidden projects grouped by date for graphing
     
     Args:
-        collection: MongoDB collection for hidden_projects_log
+        collection: Firestore collection for hidden_projects_log
         user_id: User ID
         start_date: Optional start date filter
         end_date: Optional end date filter
@@ -115,41 +112,37 @@ def get_hidden_projects_timeline(
         List of dicts with date and count: [{'date': '2024-01-01', 'count': 5}, ...]
     """
     try:
-        query = {'user_id': user_id}
+        # Build query
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id)))
+        if start_date:
+            query = query.where(filter=FieldFilter('hidden_at', '>=', start_date))
+        if end_date:
+            query = query.where(filter=FieldFilter('hidden_at', '<=', end_date))
         
-        if start_date or end_date:
-            query['hidden_at'] = {}
-            if start_date:
-                query['hidden_at']['$gte'] = start_date
-            if end_date:
-                query['hidden_at']['$lte'] = end_date
+        # Fetch all matching documents
+        docs = list(query.stream())
         
-        # Aggregate by date
+        # Group by date client-side
         date_format = _get_date_format(group_by)
-        pipeline = [
-            {'$match': query},
-            {
-                '$group': {
-                    '_id': {
-                        '$dateToString': {
-                            'format': date_format,
-                            'date': '$hidden_at'
-                        }
-                    },
-                    'count': {'$sum': 1}
-                }
-            },
-            {'$sort': {'_id': 1}},
-            {
-                '$project': {
-                    '_id': 0,
-                    'date': '$_id',
-                    'count': 1
-                }
-            }
-        ]
+        grouped = defaultdict(int)
         
-        results = list(collection.aggregate(pipeline))
+        for doc in docs:
+            doc_data = doc.to_dict()
+            hidden_at = doc_data.get('hidden_at')
+            if hidden_at:
+                if isinstance(hidden_at, datetime):
+                    date_str = hidden_at.strftime(date_format)
+                else:
+                    # If it's already a string, try to parse it
+                    try:
+                        hidden_at = datetime.fromisoformat(str(hidden_at).replace('Z', '+00:00'))
+                        date_str = hidden_at.strftime(date_format)
+                    except:
+                        continue
+                grouped[date_str] += 1
+        
+        # Convert to list of dicts and sort
+        results = [{'date': date, 'count': count} for date, count in sorted(grouped.items())]
         return results
     except Exception as e:
         print(f"Error getting hidden projects timeline: {e}")
@@ -166,51 +159,49 @@ def _get_date_format(group_by: str) -> str:
     return formats.get(group_by, '%Y-%m-%d')
 
 
-def get_hidden_projects_stats(collection: Collection, user_id: str) -> Dict[str, Any]:
+def get_hidden_projects_stats(collection, user_id: str) -> Dict[str, Any]:
     """
     Get statistics about hidden projects
     
     Args:
-        collection: MongoDB collection for hidden_projects_log
+        collection: Firestore collection for hidden_projects_log
         user_id: User ID
         
     Returns:
         Dictionary with statistics
     """
     try:
-        total = collection.count_documents({'user_id': user_id})
+        # Get all hidden projects for this user
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).stream()
+        docs = list(query)
         
-        # Count by method
-        pipeline = [
-            {'$match': {'user_id': user_id}},
-            {
-                '$group': {
-                    '_id': '$hidden_method',
-                    'count': {'$sum': 1}
-                }
-            }
-        ]
+        total = len(docs)
         
-        method_counts = {}
-        for result in collection.aggregate(pipeline):
-            method_counts[result['_id']] = result['count']
+        # Count by method client-side
+        method_counts = defaultdict(int)
+        recent_projects = []
         
-        # Get recent hidden projects
-        recent = list(
-            collection.find(
-                {'user_id': user_id},
-                {'project_id': 1, 'hidden_at': 1, 'hidden_method': 1}
-            )
-            .sort('hidden_at', -1)
-            .limit(10)
-        )
+        for doc in docs:
+            doc_data = doc.to_dict()
+            method = doc_data.get('hidden_method', 'unknown')
+            method_counts[method] += 1
+            
+            # Collect recent projects
+            recent_projects.append({
+                'project_id': doc_data.get('project_id'),
+                'hidden_at': doc_data.get('hidden_at'),
+                'hidden_method': method
+            })
         
-        # Convert ObjectId to string for JSON serialization
+        # Sort by hidden_at descending and take top 10
+        recent_projects.sort(key=lambda x: x.get('hidden_at') or datetime.min, reverse=True)
+        recent = recent_projects[:10]
+        
+        # Convert datetime to ISO format for JSON serialization
         for item in recent:
-            if '_id' in item:
-                item['_id'] = str(item['_id'])
-            if 'hidden_at' in item:
-                item['hidden_at'] = item['hidden_at'].isoformat()
+            if 'hidden_at' in item and item['hidden_at']:
+                if isinstance(item['hidden_at'], datetime):
+                    item['hidden_at'] = item['hidden_at'].isoformat()
         
         return {
             'total': total,
@@ -231,12 +222,12 @@ def get_hidden_projects_stats(collection: Collection, user_id: str) -> Dict[str,
         }
 
 
-def is_project_hidden(collection: Collection, user_id: str, project_id: str) -> bool:
+def is_project_hidden(collection, user_id: str, project_id: str) -> bool:
     """
     Check if a specific project is hidden for a user
     
     Args:
-        collection: MongoDB collection for hidden_projects_log
+        collection: Firestore collection for hidden_projects_log
         user_id: User ID
         project_id: Project ID to check
         
@@ -244,18 +235,16 @@ def is_project_hidden(collection: Collection, user_id: str, project_id: str) -> 
         True if project is hidden, False otherwise
     """
     try:
-        count = collection.count_documents({
-            'user_id': user_id,
-            'project_id': project_id
-        })
-        return count > 0
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+        docs = list(query)
+        return len(docs) > 0
     except Exception as e:
         print(f"Error checking if project is hidden: {e}")
         return False
 
 
 def get_recently_hidden(
-    collection: Collection,
+    collection,
     user_id: str,
     limit: int = 10
 ) -> List[Dict[str, Any]]:
@@ -263,7 +252,7 @@ def get_recently_hidden(
     Get recently hidden projects
     
     Args:
-        collection: MongoDB collection for hidden_projects_log
+        collection: Firestore collection for hidden_projects_log
         user_id: User ID
         limit: Maximum number of results
         
@@ -271,21 +260,24 @@ def get_recently_hidden(
         List of recently hidden project documents
     """
     try:
-        results = list(
-            collection.find(
-                {'user_id': user_id},
-                {'project_id': 1, 'hidden_at': 1, 'hidden_method': 1, 'category_name': 1}
-            )
-            .sort('hidden_at', -1)
-            .limit(limit)
-        )
+        # Get all documents for user, sorted by hidden_at descending
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).order_by('hidden_at', direction='DESCENDING').limit(limit).stream()
+        results = []
         
-        # Convert ObjectId to string for JSON serialization
+        for doc in query:
+            doc_data = doc.to_dict()
+            results.append({
+                'project_id': doc_data.get('project_id'),
+                'hidden_at': doc_data.get('hidden_at'),
+                'hidden_method': doc_data.get('hidden_method'),
+                'category_name': doc_data.get('category_name')
+            })
+        
+        # Convert datetime to ISO format for JSON serialization
         for item in results:
-            if '_id' in item:
-                item['_id'] = str(item['_id'])
-            if 'hidden_at' in item:
-                item['hidden_at'] = item['hidden_at'].isoformat()
+            if 'hidden_at' in item and item['hidden_at']:
+                if isinstance(item['hidden_at'], datetime):
+                    item['hidden_at'] = item['hidden_at'].isoformat()
         
         return results
     except Exception as e:
@@ -294,7 +286,7 @@ def get_recently_hidden(
 
 
 def get_all_hidden_projects(
-    collection: Collection,
+    collection,
     user_id: str,
     page: int = 1,
     limit: int = 50
@@ -303,7 +295,7 @@ def get_all_hidden_projects(
     Get all hidden projects for a user with pagination support
     
     Args:
-        collection: MongoDB collection for hidden_projects_log
+        collection: Firestore collection for hidden_projects_log
         user_id: User ID
         page: Page number (1-indexed)
         limit: Number of results per page
@@ -317,29 +309,34 @@ def get_all_hidden_projects(
         - 'total_pages': Total number of pages
     """
     try:
-        # Calculate skip value
-        skip = (page - 1) * limit
-        
         # Get total count
-        total = collection.count_documents({'user_id': user_id})
+        total_query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).stream()
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).order_by('hidden_at', direction='DESCENDING').stream()
+        total = sum(1 for _ in total_query)
         
-        # Fetch paginated results, sorted by hidden_at descending (most recent first)
-        results = list(
-            collection.find(
-                {'user_id': user_id},
-                {'project_id': 1, 'hidden_at': 1, 'hidden_method': 1, 'category_name': 1, 'feedback_text': 1}
-            )
-            .sort('hidden_at', -1)
-            .skip(skip)
-            .limit(limit)
-        )
+        # Calculate skip value (Firestore doesn't support skip, so we'll fetch all and slice)
+        # For better performance with large datasets, consider using cursor-based pagination
         
-        # Convert ObjectId to string and datetime to ISO format for JSON serialization
+        all_results = []
+        for doc in query:
+            doc_data = doc.to_dict()
+            all_results.append({
+                'project_id': doc_data.get('project_id'),
+                'hidden_at': doc_data.get('hidden_at'),
+                'hidden_method': doc_data.get('hidden_method'),
+                'category_name': doc_data.get('category_name'),
+                'feedback_text': doc_data.get('feedback_text')
+            })
+        
+        # Apply pagination
+        skip = (page - 1) * limit
+        results = all_results[skip:skip + limit]
+        
+        # Convert datetime to ISO format for JSON serialization
         for item in results:
-            if '_id' in item:
-                item['_id'] = str(item['_id'])
             if 'hidden_at' in item and item['hidden_at']:
-                item['hidden_at'] = item['hidden_at'].isoformat()
+                if isinstance(item['hidden_at'], datetime):
+                    item['hidden_at'] = item['hidden_at'].isoformat()
         
         # Calculate total pages
         total_pages = (total + limit - 1) // limit if total > 0 else 0
@@ -360,4 +357,3 @@ def get_all_hidden_projects(
             'limit': limit,
             'total_pages': 0
         }
-

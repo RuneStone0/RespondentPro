@@ -784,7 +784,7 @@ input[type="text"][name="session_sid"] {
 
 .project-list {
     display: grid;
-    gap: 16px;
+    gap: 24px;
     margin-bottom: 32px;
 }
 
@@ -793,6 +793,7 @@ input[type="text"][name="session_sid"] {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 20px;
+    margin-bottom: 16px;
     transition: all 0.3s ease;
 }
 

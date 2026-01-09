@@ -57,11 +57,14 @@ def load_notification_preferences(user_id: str, auto_create: bool = True) -> Dic
         return get_default_notification_preferences()
     
     try:
-        prefs_doc = user_notifications_collection.find_one({'user_id': user_id})
-        if prefs_doc and 'notifications' in prefs_doc:
-            # Merge with defaults to ensure all fields exist
-            default_prefs = get_default_notification_preferences()
-            notifications = prefs_doc['notifications']
+        query = user_notifications_collection.where('user_id', '==', str(user_id)).limit(1).stream()
+        docs = list(query)
+        if docs:
+            prefs_doc = docs[0].to_dict()
+            if 'notifications' in prefs_doc:
+                # Merge with defaults to ensure all fields exist
+                default_prefs = get_default_notification_preferences()
+                notifications = prefs_doc['notifications']
             
             # Merge weekly_project_summary
             weekly = default_prefs['weekly_project_summary'].copy()
@@ -105,7 +108,7 @@ def save_notification_preferences(user_id: str, preferences: Dict[str, Any]) -> 
         True if successful, False otherwise
     """
     if user_notifications_collection is None:
-        raise Exception("MongoDB connection not available. Please ensure MongoDB is running.")
+        raise Exception("Firestore connection not available. Please ensure Firestore is configured.")
     
     try:
         # Ensure we have the proper structure
@@ -114,21 +117,24 @@ def save_notification_preferences(user_id: str, preferences: Dict[str, Any]) -> 
             'session_token_expired': preferences.get('session_token_expired', {})
         }
         
-        # Update document
-        user_notifications_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$set': {
-                    'user_id': user_id,
-                    'notifications': notifications,
-                    'updated_at': datetime.utcnow()
-                },
-                '$setOnInsert': {
-                    'created_at': datetime.utcnow()
-                }
-            },
-            upsert=True
-        )
+        # Find existing document or create new one
+        query = user_notifications_collection.where('user_id', '==', str(user_id)).limit(1).stream()
+        docs = list(query)
+        
+        update_data = {
+            'user_id': str(user_id),
+            'notifications': notifications,
+            'updated_at': datetime.utcnow()
+        }
+        
+        if docs:
+            # Update existing document
+            docs[0].reference.update(update_data)
+        else:
+            # Create new document
+            update_data['created_at'] = datetime.utcnow()
+            user_notifications_collection.add(update_data)
+        
         return True
     except Exception as e:
         raise Exception(f"Failed to save notification preferences: {e}")

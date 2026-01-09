@@ -34,38 +34,85 @@ cp .env.example .env
 
 # Edit .env and set your configuration:
 # - SECRET_KEY: Generate a secure key with: python -c "import secrets; print(secrets.token_hex(32))"
-# - MONGODB_URI: Your MongoDB connection string (default: mongodb://localhost:27017/)
-# - MONGODB_DB: Your MongoDB database name (default: respondent_manager)
+# - FIREBASE_PROJECT_ID: Your Firebase project ID
+# - GOOGLE_APPLICATION_CREDENTIALS: Path to Firebase service account JSON file
 ```
 
-### MongoDB Atlas Setup (if using cloud MongoDB)
+### Firebase Setup
 
-If you're using MongoDB Atlas, ensure:
+1. **Create Firebase Project**:
+   - Go to [Firebase Console](https://console.firebase.google.com/)
+   - Create a new project or select existing one
+   - Note your Project ID
 
-1. **Database User Permissions**: Your database user must have the `readWrite` role on the database
-   - Go to Atlas → Database Access → Edit your user
-   - Under "Database User Privileges", add Built-in Role: `readWrite`
-   - Select your database name
+2. **Enable Firestore**:
+   - Go to Firestore Database in Firebase Console
+   - Create database in Native mode
+   - Deploy indexes: `firebase deploy --only firestore:indexes`
+   - Deploy security rules: `firebase deploy --only firestore:rules`
 
-2. **Network Access**: Whitelist your IP address
-   - Go to Atlas → Network Access → Add IP Address
-   - Add your current IP or use `0.0.0.0/0` for development (not recommended for production)
+3. **Enable Firebase Authentication**:
+   - Go to Authentication in Firebase Console
+   - Enable Email/Password provider
+   - Enable Passkey/WebAuthn (if available)
+   - Add authorized domains
 
-3. **Connection String**: Use the format:
+4. **Service Account**:
+   - Go to Project Settings → Service Accounts
+   - Generate new private key
+   - Save the JSON file
+   - Set `GOOGLE_APPLICATION_CREDENTIALS` in `.env` to the path of this file
+
+5. **Deploy Firestore Indexes and Rules**:
+   ```bash
+   firebase deploy --only firestore
    ```
-   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
-   ```
-   Replace `username`, `password`, and `cluster` with your Atlas credentials.
 
 ## Web UI Usage
 
-### Starting the Web Server
+### Starting the Web Server (Local Development)
 
 ```bash
 python web.py
 ```
 
 The web interface will be available at `http://localhost:5000`
+
+### Deploying to Firebase
+
+1. **Install Firebase CLI**:
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   ```
+
+2. **Initialize Firebase** (if not already done):
+   ```bash
+   firebase init
+   # Select: Firestore, Functions, Hosting
+   ```
+
+3. **Deploy**:
+   ```bash
+   firebase deploy
+   ```
+
+   Or deploy specific services:
+   ```bash
+   firebase deploy --only functions
+   firebase deploy --only hosting
+   firebase deploy --only firestore
+   ```
+
+### Migrating Data from MongoDB
+
+If you have existing MongoDB data, use the migration script:
+
+```bash
+python scripts/migrate_mongodb_to_firestore.py
+```
+
+This will migrate all collections from MongoDB to Firestore.
 
 ### First Time Setup
 

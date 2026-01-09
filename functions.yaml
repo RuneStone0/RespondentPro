@@ -1,0 +1,7 @@
+specVersion: v1alpha1
+params: []
+requiredAPIs: []
+endpoints:
+  respondentpro:
+    entryPoint: respondentpro
+    httpsTrigger: {}

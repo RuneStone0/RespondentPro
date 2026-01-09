@@ -273,12 +273,13 @@ def register_complete():
                 from db import users_collection
             
             try:
-                from bson import ObjectId
-                user_doc = users_collection.find_one({'_id': ObjectId(user_id)}) if users_collection else None
-                if user_doc:
-                    token = user_doc.get('verification_token')
-                    if token:
-                        send_verification_email(email, token)
+                if users_collection:
+                    user_doc = users_collection.document(str(user_id)).get()
+                    if user_doc.exists:
+                        user_data = user_doc.to_dict()
+                        token = user_data.get('verification_token')
+                        if token:
+                            send_verification_email(email, token)
             except Exception as e:
                 print(f"Warning: Failed to send verification email: {e}")
             
@@ -608,20 +609,22 @@ def verify_email_token(token):
     if 'user_id' not in session:
         # Try to find user by token
         try:
-            from bson import ObjectId
             try:
                 from ..db import users_collection
             except ImportError:
                 from db import users_collection
             
             if users_collection:
-                user_doc = users_collection.find_one({'verification_token': token})
-                if user_doc:
-                    user_id = str(user_doc['_id'])
+                query = users_collection.where('verification_token', '==', token).limit(1).stream()
+                docs = list(query)
+                if docs:
+                    user_doc = docs[0]
+                    user_data = user_doc.to_dict()
+                    user_id = user_doc.id
                     if verify_user_email(user_id, token):
                         # Set session and redirect
                         session['user_id'] = user_id
-                        session['email'] = user_doc.get('username', '')
+                        session['email'] = user_data.get('username', '')
                         session.permanent = True
                         return redirect(url_for('page.dashboard'))
         except Exception:
@@ -932,17 +935,18 @@ def verify_login_email_token(token):
         except ImportError:
             from db import users_collection
         
-        from bson import ObjectId
-        
         if users_collection is None:
             return redirect(url_for('auth.login'))
         
-        user_doc = users_collection.find_one({'login_token': token})
-        if not user_doc:
+        query = users_collection.where('login_token', '==', token).limit(1).stream()
+        docs = list(query)
+        if not docs:
             return render_template('login.html', error='Invalid or expired login link')
         
-        user_id = str(user_doc['_id'])
-        email = user_doc.get('username', '')
+        user_doc = docs[0]
+        user_data = user_doc.to_dict()
+        user_id = user_doc.id
+        email = user_data.get('username', '')
         
         # Verify token
         if not verify_login_token(user_id, token):

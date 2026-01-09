@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-Module for managing project cache in MongoDB
+Module for managing project cache in Firestore
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
-from bson import ObjectId
-from pymongo.collection import Collection
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 
 def is_cache_fresh(
-    collection: Collection,
+    collection,
     user_id: str,
     max_age_hours: int = 24
 ) -> bool:
@@ -18,7 +17,7 @@ def is_cache_fresh(
     Check if cache needs refresh
     
     Args:
-        collection: MongoDB collection for projects_cache
+        collection: Firestore collection for projects_cache
         user_id: User ID
         max_age_hours: Maximum age of cache in hours before refresh needed
         
@@ -26,45 +25,60 @@ def is_cache_fresh(
         True if cache is fresh, False if refresh needed
     """
     try:
-        cache_doc = collection.find_one(
-            {'user_id': user_id},
-            {'cached_at': 1}
-        )
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
         
-        if not cache_doc:
+        if not docs:
             return False
         
+        cache_doc = docs[0].to_dict()
         cached_at = cache_doc.get('cached_at')
         if not cached_at:
             return False
         
+        # Ensure both datetimes are timezone-aware for comparison
+        now = datetime.now(timezone.utc)
+        
+        # Convert cached_at to timezone-aware if it's naive
+        if isinstance(cached_at, datetime):
+            if cached_at.tzinfo is None:
+                # Naive datetime - assume UTC
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            # If already timezone-aware, use as-is
+        else:
+            # Not a datetime object, can't compare
+            return False
+        
         # Check if cache is older than max_age_hours
-        age = datetime.utcnow() - cached_at
+        age = now - cached_at
         return age < timedelta(hours=max_age_hours)
     except Exception as e:
         print(f"Error checking cache freshness: {e}")
         return False
 
 
-def get_cached_projects(collection: Collection, user_id: str) -> Optional[Dict[str, Any]]:
+def get_cached_projects(collection, user_id: str) -> Optional[Dict[str, Any]]:
     """
     Retrieve cached projects
     
     Args:
-        collection: MongoDB collection for projects_cache
+        collection: Firestore collection for projects_cache
         user_id: User ID
         
     Returns:
         Dictionary with cached projects data, or None if not found
     """
     try:
-        cache_doc = collection.find_one({'user_id': user_id})
-        if cache_doc and 'projects' in cache_doc:
-            return {
-                'projects': cache_doc['projects'],
-                'cached_at': cache_doc.get('cached_at'),
-                'total_count': cache_doc.get('total_count', 0)
-            }
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
+        if docs:
+            cache_doc = docs[0].to_dict()
+            if 'projects' in cache_doc:
+                return {
+                    'projects': cache_doc['projects'],
+                    'cached_at': cache_doc.get('cached_at'),
+                    'total_count': cache_doc.get('total_count', 0)
+                }
         return None
     except Exception as e:
         print(f"Error getting cached projects: {e}")
@@ -72,7 +86,7 @@ def get_cached_projects(collection: Collection, user_id: str) -> Optional[Dict[s
 
 
 def refresh_project_cache(
-    collection: Collection,
+    collection,
     user_id: str,
     projects: List[Dict[str, Any]],
     total_count: int
@@ -81,7 +95,7 @@ def refresh_project_cache(
     Store projects in cache
     
     Args:
-        collection: MongoDB collection for projects_cache
+        collection: Firestore collection for projects_cache
         user_id: User ID
         projects: List of project dictionaries
         total_count: Total number of projects
@@ -91,42 +105,44 @@ def refresh_project_cache(
     """
     try:
         cache_doc = {
-            'user_id': user_id,
+            'user_id': str(user_id),
             'projects': projects,
             'total_count': total_count,
-            'cached_at': datetime.utcnow(),
-            'last_updated': datetime.utcnow()
+            'cached_at': datetime.now(timezone.utc),
+            'last_updated': datetime.now(timezone.utc)
         }
         
-        collection.update_one(
-            {'user_id': user_id},
-            {'$set': cache_doc},
-            upsert=True
-        )
+        # Find existing document or create new one
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
+        
+        if docs:
+            docs[0].reference.update(cache_doc)
+        else:
+            collection.add(cache_doc)
+        
         return True
     except Exception as e:
         print(f"Error refreshing project cache: {e}")
         return False
 
 
-def get_cache_stats(collection: Collection, user_id: str) -> Dict[str, Any]:
+def get_cache_stats(collection, user_id: str) -> Dict[str, Any]:
     """
     Return cache statistics
     
     Args:
-        collection: MongoDB collection for projects_cache
+        collection: Firestore collection for projects_cache
         user_id: User ID
         
     Returns:
         Dictionary with cache statistics
     """
     try:
-        cache_doc = collection.find_one(
-            {'user_id': user_id},
-            {'cached_at': 1, 'last_updated': 1, 'total_count': 1}
-        )
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
         
-        if not cache_doc:
+        if not docs:
             return {
                 'exists': False,
                 'cached_at': None,
@@ -134,6 +150,7 @@ def get_cache_stats(collection: Collection, user_id: str) -> Dict[str, Any]:
                 'total_count': 0
             }
         
+        cache_doc = docs[0].to_dict()
         return {
             'exists': True,
             'cached_at': cache_doc.get('cached_at'),
@@ -151,7 +168,7 @@ def get_cache_stats(collection: Collection, user_id: str) -> Dict[str, Any]:
 
 
 def mark_projects_hidden_in_cache(
-    collection: Collection,
+    collection,
     user_id: str,
     project_ids: List[str]
 ) -> bool:
@@ -159,7 +176,7 @@ def mark_projects_hidden_in_cache(
     Mark projects as hidden in the cache by removing them from the cached projects list
     
     Args:
-        collection: MongoDB collection for projects_cache
+        collection: Firestore collection for projects_cache
         user_id: User ID
         project_ids: List of project IDs to mark as hidden
         
@@ -171,8 +188,13 @@ def mark_projects_hidden_in_cache(
             return True
         
         # Get current cache
-        cache_doc = collection.find_one({'user_id': user_id})
-        if not cache_doc or 'projects' not in cache_doc:
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
+        if not docs:
+            return False
+        
+        cache_doc = docs[0].to_dict()
+        if 'projects' not in cache_doc:
             return False
         
         projects = cache_doc.get('projects', [])
@@ -185,16 +207,11 @@ def mark_projects_hidden_in_cache(
         ]
         
         # Update cache with filtered projects
-        collection.update_one(
-            {'user_id': user_id},
-            {
-                '$set': {
-                    'projects': filtered_projects,
-                    'total_count': len(filtered_projects),
-                    'last_updated': datetime.utcnow()
-                }
-            }
-        )
+        docs[0].reference.update({
+            'projects': filtered_projects,
+            'total_count': len(filtered_projects),
+            'last_updated': datetime.now(timezone.utc)
+        })
         
         print(f"[Cache] Marked {len(project_ids)} project(s) as hidden in cache for user {user_id}")
         return True
@@ -203,12 +220,12 @@ def mark_projects_hidden_in_cache(
         return False
 
 
-def get_cached_project_details(collection: Collection, project_id: str) -> Optional[Dict[str, Any]]:
+def get_cached_project_details(collection, project_id: str) -> Optional[Dict[str, Any]]:
     """
     Retrieve cached project details by project_id
     
     Args:
-        collection: MongoDB collection for project_details
+        collection: Firestore collection for project_details
         project_id: Project ID to look up
         
     Returns:
@@ -217,21 +234,24 @@ def get_cached_project_details(collection: Collection, project_id: str) -> Optio
     try:
         if collection is None:
             return None
-        cache_doc = collection.find_one({'project_id': project_id})
-        if cache_doc and 'details' in cache_doc:
-            return cache_doc['details']
+        query = collection.where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+        docs = list(query)
+        if docs:
+            cache_doc = docs[0].to_dict()
+            if 'details' in cache_doc:
+                return cache_doc['details']
         return None
     except Exception as e:
         print(f"Error getting cached project details: {e}")
         return None
 
 
-def cache_project_details(collection: Collection, project_id: str, details: Dict[str, Any]) -> bool:
+def cache_project_details(collection, project_id: str, details: Dict[str, Any]) -> bool:
     """
     Store project details in cache
     
     Args:
-        collection: MongoDB collection for project_details
+        collection: Firestore collection for project_details
         project_id: Project ID
         details: Full project details dictionary from API
         
@@ -242,19 +262,22 @@ def cache_project_details(collection: Collection, project_id: str, details: Dict
         if collection is None:
             return False
         cache_doc = {
-            'project_id': project_id,
+            'project_id': str(project_id),
             'details': details,
-            'cached_at': datetime.utcnow(),
-            'last_updated': datetime.utcnow()
+            'cached_at': datetime.now(timezone.utc),
+            'last_updated': datetime.now(timezone.utc)
         }
         
-        collection.update_one(
-            {'project_id': project_id},
-            {'$set': cache_doc},
-            upsert=True
-        )
+        # Find existing document or create new one
+        query = collection.where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+        docs = list(query)
+        
+        if docs:
+            docs[0].reference.update(cache_doc)
+        else:
+            collection.add(cache_doc)
+        
         return True
     except Exception as e:
         print(f"Error caching project details: {e}")
         return False
-

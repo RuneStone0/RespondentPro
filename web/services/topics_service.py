@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Topics extraction and management service for Respondent.io Manager
+Firestore implementation
 """
 
 from typing import List, Dict, Any, Optional
-from pymongo.collection import Collection
+from datetime import datetime
 
 
 def extract_topics_from_project(project: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -37,12 +38,12 @@ def extract_topics_from_project(project: Dict[str, Any]) -> List[Dict[str, Any]]
     return topics
 
 
-def store_unique_topics(collection: Collection, topics: List[Dict[str, Any]]) -> bool:
+def store_unique_topics(collection, topics: List[Dict[str, Any]]) -> bool:
     """
     Store unique topics in the topics collection
     
     Args:
-        collection: MongoDB collection for topics
+        collection: Firestore collection for topics
         topics: List of topic dictionaries with 'id' and 'name'
         
     Returns:
@@ -59,18 +60,23 @@ def store_unique_topics(collection: Collection, topics: List[Dict[str, Any]]) ->
             if not topic_id or not topic_name:
                 continue
             
-            # Upsert topic
-            collection.update_one(
-                {'topic_id': topic_id},
-                {
-                    '$set': {
-                        'topic_id': topic_id,
-                        'name': topic_name,
-                        'last_seen': topic  # Store the full topic object for reference
-                    }
-                },
-                upsert=True
-            )
+            # Find existing topic by topic_id
+            query = collection.where('topic_id', '==', str(topic_id)).limit(1).stream()
+            docs = list(query)
+            
+            topic_data = {
+                'topic_id': str(topic_id),
+                'name': topic_name,
+                'last_seen': topic,  # Store the full topic object for reference
+                'updated_at': datetime.utcnow()
+            }
+            
+            if docs:
+                # Update existing topic
+                docs[0].reference.update(topic_data)
+            else:
+                # Create new topic
+                collection.add(topic_data)
         
         return True
     except Exception as e:
@@ -78,12 +84,12 @@ def store_unique_topics(collection: Collection, topics: List[Dict[str, Any]]) ->
         return False
 
 
-def get_all_topics(collection: Collection) -> List[Dict[str, Any]]:
+def get_all_topics(collection) -> List[Dict[str, Any]]:
     """
     Get all unique topics from the collection
     
     Args:
-        collection: MongoDB collection for topics
+        collection: Firestore collection for topics
         
     Returns:
         List of topic dictionaries with 'topic_id' and 'name'
@@ -93,14 +99,14 @@ def get_all_topics(collection: Collection) -> List[Dict[str, Any]]:
     
     try:
         topics = []
-        for doc in collection.find({}):
+        for doc in collection.stream():
+            doc_data = doc.to_dict()
             topics.append({
-                'id': doc.get('topic_id'),
-                'name': doc.get('name')
+                'id': doc_data.get('topic_id'),
+                'name': doc_data.get('name')
             })
         return topics
     except Exception as e:
         print(f"Error getting all topics: {e}")
         return []
-
 

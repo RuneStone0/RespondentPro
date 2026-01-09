@@ -31,7 +31,7 @@ def start_notification_scheduler(db, check_interval_hours: int = 1, token_check_
     Start background thread to send notifications
     
     Args:
-        db: MongoDB database object
+        db: Firestore database object (unused, kept for compatibility)
         check_interval_hours: How often to check for weekly notifications (default: 1 hour)
         token_check_interval_hours: How often to check for token expiration (default: 12 hours)
     """
@@ -42,12 +42,12 @@ def start_notification_scheduler(db, check_interval_hours: int = 1, token_check_
         while True:
             try:
                 # Always check weekly notifications
-                check_and_send_weekly_notifications(db)
+                check_and_send_weekly_notifications()
                 
                 # Check token expiration only if enough time has passed
                 time_since_last_token_check = (datetime.utcnow() - last_token_check).total_seconds() / 3600
                 if time_since_last_token_check >= token_check_interval_hours:
-                    check_and_send_token_expiration_notifications(db)
+                    check_and_send_token_expiration_notifications()
                     last_token_check = datetime.utcnow()
             except Exception as e:
                 print(f"Error in notification scheduler: {e}")
@@ -62,22 +62,26 @@ def start_notification_scheduler(db, check_interval_hours: int = 1, token_check_
     return thread
 
 
-def check_and_send_weekly_notifications(db):
+def check_and_send_weekly_notifications():
     """
     Check and send weekly project summary notifications
-    
-    Args:
-        db: MongoDB database object
     """
     try:
-        users_collection = db['users']
+        # Import collections from db module
+        try:
+            from .db import users_collection
+        except ImportError:
+            from db import users_collection
+        
+        if users_collection is None:
+            return
         
         # Get all users (not just those with notification preferences)
         # This ensures new users get default preferences created
-        users = users_collection.find({}, {'_id': 1})
+        users = users_collection.stream()
         
         for user_doc in users:
-            user_id = str(user_doc.get('_id'))
+            user_id = user_doc.id
             if not user_id:
                 continue
             
@@ -118,22 +122,26 @@ def check_and_send_weekly_notifications(db):
         print(traceback.format_exc())
 
 
-def check_and_send_token_expiration_notifications(db):
+def check_and_send_token_expiration_notifications():
     """
     Check and send session token expiration notifications
-    
-    Args:
-        db: MongoDB database object
     """
     try:
-        users_collection = db['users']
+        # Import collections from db module
+        try:
+            from .db import users_collection
+        except ImportError:
+            from db import users_collection
+        
+        if users_collection is None:
+            return
         
         # Get all users (not just those with notification preferences)
         # This ensures new users get default preferences created
-        users = users_collection.find({}, {'_id': 1})
+        users = users_collection.stream()
         
         for user_doc in users:
-            user_id = str(user_doc.get('_id'))
+            user_id = user_doc.id
             if not user_id:
                 continue
             

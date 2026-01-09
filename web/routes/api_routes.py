@@ -9,6 +9,7 @@ import threading
 import time
 from flask import Blueprint, request, jsonify, session
 from datetime import datetime
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 # Import services
 try:
@@ -18,7 +19,7 @@ try:
         fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
         get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
     )
-    from ..cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details
+    from ..cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
     from ..hidden_projects_tracker import (
         get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
         get_all_hidden_projects
@@ -44,7 +45,7 @@ except ImportError:
         fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
         get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
     )
-    from cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details
+    from cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
     from hidden_projects_tracker import (
         get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
         get_all_hidden_projects
@@ -882,10 +883,12 @@ def get_hide_feedback():
         if user_preferences_collection is None:
             return jsonify({'success': True, 'feedback': []})
         
-        prefs = user_preferences_collection.find_one({'user_id': user_id})
-        if not prefs:
+        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
+        if not docs:
             return jsonify({'success': True, 'feedback': []})
         
+        prefs = docs[0].to_dict()
         feedback_list = prefs.get('hide_feedback', [])
         
         # Add IDs to old entries that don't have them and prepare response data
@@ -913,15 +916,10 @@ def get_hide_feedback():
         
         # Update the document if we added IDs to old entries
         if needs_update:
-            user_preferences_collection.update_one(
-                {'user_id': user_id},
-                {
-                    '$set': {
-                        'hide_feedback': feedback_list,
-                        'updated_at': datetime.utcnow()
-                    }
-                }
-            )
+            docs[0].reference.update({
+                'hide_feedback': feedback_list,
+                'updated_at': datetime.utcnow()
+            })
         
         return jsonify({
             'success': True,
@@ -952,10 +950,12 @@ def update_hide_feedback(feedback_id):
             return jsonify({'error': 'Database not available'}), 500
         
         # Find the feedback entry and update it
-        prefs = user_preferences_collection.find_one({'user_id': user_id})
-        if not prefs:
+        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
+        if not docs:
             return jsonify({'error': 'User preferences not found'}), 404
         
+        prefs = docs[0].to_dict()
         feedback_list = prefs.get('hide_feedback', [])
         feedback_found = False
         
@@ -970,19 +970,16 @@ def update_hide_feedback(feedback_id):
             return jsonify({'error': 'Feedback entry not found'}), 404
         
         # Update the document
-        user_preferences_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$set': {
-                    'hide_feedback': feedback_list,
-                    'updated_at': datetime.utcnow()
-                }
-            }
-        )
+        docs[0].reference.update({
+            'hide_feedback': feedback_list,
+            'updated_at': datetime.utcnow()
+        })
         
         # Invalidate AI analysis cache for this user since feedback changed
         if ai_analysis_cache_collection is not None:
-            ai_analysis_cache_collection.delete_many({'user_id': user_id})
+            cache_query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).stream()
+            for doc in cache_query:
+                doc.reference.delete()
         
         return jsonify({
             'success': True,
@@ -1007,10 +1004,12 @@ def delete_hide_feedback(feedback_id):
             return jsonify({'error': 'Database not available'}), 500
         
         # Find the feedback entry and remove it
-        prefs = user_preferences_collection.find_one({'user_id': user_id})
-        if not prefs:
+        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
+        if not docs:
             return jsonify({'error': 'User preferences not found'}), 404
         
+        prefs = docs[0].to_dict()
         feedback_list = prefs.get('hide_feedback', [])
         original_length = len(feedback_list)
         
@@ -1021,15 +1020,10 @@ def delete_hide_feedback(feedback_id):
             return jsonify({'error': 'Feedback entry not found'}), 404
         
         # Update the document
-        user_preferences_collection.update_one(
-            {'user_id': user_id},
-            {
-                '$set': {
-                    'hide_feedback': feedback_list,
-                    'updated_at': datetime.utcnow()
-                }
-            }
-        )
+        docs[0].reference.update({
+            'hide_feedback': feedback_list,
+            'updated_at': datetime.utcnow()
+        })
         
         # Invalidate AI analysis cache for this user since feedback changed
         if ai_analysis_cache_collection is not None:
@@ -1115,6 +1109,80 @@ def get_hidden_stats():
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
+@bp.route('/projects', methods=['GET'])
+def get_projects():
+    """Get cached projects as JSON for AJAX loading"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        user_id = str(session['user_id'])
+        
+        # Get cached projects if available
+        projects_data = None
+        cache_is_fresh = False
+        cache_exists = False
+        
+        if projects_cache_collection is not None:
+            cache_exists = get_cached_projects(projects_cache_collection, user_id) is not None
+            cache_is_fresh = is_cache_fresh(projects_cache_collection, user_id)
+            
+            cached = get_cached_projects(projects_cache_collection, user_id)
+            if cached and cached.get('projects'):
+                # Sort projects by hourly rate (highest first)
+                def calculate_hourly_rate(project):
+                    remuneration = project.get('respondentRemuneration', 0) or 0
+                    time_minutes = project.get('timeMinutesRequired', 0) or 0
+                    if time_minutes > 0:
+                        return (remuneration / time_minutes) * 60
+                    return 0
+                
+                sorted_projects = sorted(
+                    cached['projects'],
+                    key=calculate_hourly_rate,
+                    reverse=True
+                )
+                
+                projects_data = {
+                    'results': sorted_projects,
+                    'count': cached.get('total_count', len(sorted_projects)),
+                    'page': 1,
+                    'pageSize': len(sorted_projects)
+                }
+        
+        # Get cache stats for timestamp
+        cache_refreshed_utc = None
+        if projects_cache_collection is not None:
+            stats = get_cache_stats(projects_cache_collection, user_id)
+            last_updated = stats.get('last_updated')
+            if last_updated:
+                if isinstance(last_updated, datetime):
+                    cache_refreshed_utc = last_updated.isoformat() + 'Z'
+                elif isinstance(last_updated, str):
+                    if not last_updated.endswith('Z') and '+' not in last_updated:
+                        cache_refreshed_utc = last_updated + 'Z'
+                    else:
+                        cache_refreshed_utc = last_updated
+                else:
+                    if hasattr(last_updated, 'isoformat'):
+                        cache_refreshed_utc = last_updated.isoformat() + 'Z'
+                    elif hasattr(last_updated, 'strftime'):
+                        cache_refreshed_utc = datetime.fromtimestamp(last_updated.timestamp()).isoformat() + 'Z'
+                    else:
+                        cache_refreshed_utc = str(last_updated)
+        
+        return jsonify({
+            'projects': projects_data,
+            'cache_exists': cache_exists,
+            'cache_is_fresh': cache_is_fresh,
+            'cache_refreshed_utc': cache_refreshed_utc,
+            'total_count': projects_data.get('count', 0) if projects_data else 0
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
+
+
 @bp.route('/cache/stats', methods=['GET'])
 def get_cache_stats_api():
     """Get cache statistics including refresh time"""
@@ -1163,7 +1231,7 @@ def get_cache_stats_api():
 
 @bp.route('/cache/refresh', methods=['POST'])
 def refresh_cache():
-    """Manually refresh the project cache"""
+    """Manually refresh the project cache (runs in background)"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
@@ -1178,129 +1246,116 @@ def refresh_cache():
         if not profile_id:
             return jsonify({'error': 'Profile ID not found'}), 400
         
-        req_session = create_respondent_session(
-            cookies=config.get('cookies', {})
-        )
-        
-        all_projects, total_count = fetch_all_respondent_projects(
-            session=req_session,
-            profile_id=profile_id,
-            page_size=50,
-            user_id=user_id,
-            use_cache=False,
-            cookies=config.get('cookies', {})
-        )
-        
-        # Check if AI-based hiding is enabled and hide matching projects
-        filters = load_user_filters(user_id)
-        hide_using_ai = filters.get('hide_using_ai', False)
-        hidden_count = 0
-        hidden_project_ids = []
-        errors = []
-        
-        if hide_using_ai:
-            print(f"[Cache Refresh] AI-based hiding is enabled, checking {len(all_projects)} projects")
-            
-            # Find projects that should be hidden based on AI preferences
-            projects_to_hide = []
-            for project in all_projects:
-                if should_hide_project(
-                    project,
-                    filters,
-                    project_details_collection=project_details_collection,
+        # Define background refresh function
+        def refresh_cache_background():
+            try:
+                print(f"[Cache Refresh] Starting background refresh for user {user_id}")
+                req_session = create_respondent_session(
+                    cookies=config.get('cookies', {})
+                )
+                
+                all_projects, total_count = fetch_all_respondent_projects(
+                    session=req_session,
+                    profile_id=profile_id,
+                    page_size=50,
                     user_id=user_id,
-                    user_preferences_collection=user_preferences_collection,
-                    ai_analysis_cache_collection=ai_analysis_cache_collection
-                ):
-                    projects_to_hide.append(project)
-            
-            print(f"[Cache Refresh] Found {len(projects_to_hide)} projects to hide based on AI preferences")
-            
-            # Hide each project via API
-            for project in projects_to_hide:
-                project_id = project.get('id')
-                if project_id:
-                    try:
-                        success = hide_project_via_api(req_session, project_id)
-                        if success:
-                            hidden_count += 1
-                            hidden_project_ids.append(project_id)
-                            
-                            # Log the hidden project
-                            if hidden_projects_log_collection is not None and user_preferences_collection is not None:
-                                record_project_hidden(
-                                    hidden_projects_log_collection,
-                                    user_preferences_collection,
-                                    user_id,
-                                    project_id,
-                                    feedback_text=None,
-                                    hidden_method='ai_auto'
-                                )
-                        else:
-                            errors.append(project_id)
-                            print(f"[Cache Refresh] Failed to hide project {project_id}")
-                    except Exception as e:
-                        errors.append(project_id)
-                        print(f"[Cache Refresh] Error hiding project {project_id}: {e}")
+                    use_cache=False,
+                    cookies=config.get('cookies', {})
+                )
+                
+                # Check if AI-based hiding is enabled and hide matching projects
+                filters = load_user_filters(user_id)
+                hide_using_ai = filters.get('hide_using_ai', False)
+                hidden_count = 0
+                hidden_project_ids = []
+                errors = []
+                
+                if hide_using_ai:
+                    print(f"[Cache Refresh] AI-based hiding is enabled, checking {len(all_projects)} projects")
                     
-                    # Small delay to avoid rate limiting
-                    time.sleep(0.1)
-            
-            # Update cache to mark projects as hidden
-            if projects_cache_collection is not None and hidden_project_ids:
-                mark_projects_hidden_in_cache(projects_cache_collection, user_id, hidden_project_ids)
-                print(f"[Cache Refresh] Marked {len(hidden_project_ids)} projects as hidden in cache")
-            
-            # Refresh cache from API to get updated project list after hiding
-            if projects_cache_collection is not None and hidden_project_ids:
-                try:
-                    print(f"[Cache Refresh] Refreshing cache after hiding {len(hidden_project_ids)} projects")
-                    all_projects, total_count = fetch_all_respondent_projects(
-                        session=req_session,
-                        profile_id=profile_id,
-                        page_size=50,
-                        user_id=user_id,
-                        use_cache=False,
-                        cookies=config.get('cookies', {})
-                    )
-                    print(f"[Cache Refresh] Cache refreshed: {len(all_projects)} projects now in cache")
-                except Exception as e:
-                    print(f"[Cache Refresh] Error refreshing cache after hiding: {e}")
-                    # Don't fail the whole operation if cache refresh fails
+                    # Find projects that should be hidden based on AI preferences
+                    projects_to_hide = []
+                    for project in all_projects:
+                        if should_hide_project(
+                            project,
+                            filters,
+                            project_details_collection=project_details_collection,
+                            user_id=user_id,
+                            user_preferences_collection=user_preferences_collection,
+                            ai_analysis_cache_collection=ai_analysis_cache_collection
+                        ):
+                            projects_to_hide.append(project)
+                    
+                    print(f"[Cache Refresh] Found {len(projects_to_hide)} projects to hide based on AI preferences")
+                    
+                    # Hide each project via API
+                    for project in projects_to_hide:
+                        project_id = project.get('id')
+                        if project_id:
+                            try:
+                                success = hide_project_via_api(req_session, project_id)
+                                if success:
+                                    hidden_count += 1
+                                    hidden_project_ids.append(project_id)
+                                    
+                                    # Log the hidden project
+                                    if hidden_projects_log_collection is not None and user_preferences_collection is not None:
+                                        record_project_hidden(
+                                            hidden_projects_log_collection,
+                                            user_preferences_collection,
+                                            user_id,
+                                            project_id,
+                                            feedback_text=None,
+                                            hidden_method='ai_auto'
+                                        )
+                                else:
+                                    errors.append(project_id)
+                                    print(f"[Cache Refresh] Failed to hide project {project_id}")
+                            except Exception as e:
+                                errors.append(project_id)
+                                print(f"[Cache Refresh] Error hiding project {project_id}: {e}")
+                            
+                            # Small delay to avoid rate limiting
+                            time.sleep(0.1)
+                    
+                    # Update cache to mark projects as hidden
+                    if projects_cache_collection is not None and hidden_project_ids:
+                        mark_projects_hidden_in_cache(projects_cache_collection, user_id, hidden_project_ids)
+                        print(f"[Cache Refresh] Marked {len(hidden_project_ids)} projects as hidden in cache")
+                    
+                    # Refresh cache from API to get updated project list after hiding
+                    if projects_cache_collection is not None and hidden_project_ids:
+                        try:
+                            print(f"[Cache Refresh] Refreshing cache after hiding {len(hidden_project_ids)} projects")
+                            all_projects, total_count = fetch_all_respondent_projects(
+                                session=req_session,
+                                profile_id=profile_id,
+                                page_size=50,
+                                user_id=user_id,
+                                use_cache=False,
+                                cookies=config.get('cookies', {})
+                            )
+                            print(f"[Cache Refresh] Cache refreshed: {len(all_projects)} projects now in cache")
+                        except Exception as e:
+                            print(f"[Cache Refresh] Error refreshing cache after hiding: {e}")
+                            # Don't fail the whole operation if cache refresh fails
+                
+                print(f"[Cache Refresh] Background refresh completed for user {user_id}")
+            except Exception as e:
+                import traceback
+                print(f"[Cache Refresh] Error in background refresh: {e}\n{traceback.format_exc()}")
         
-        last_updated_iso = None
-        if projects_cache_collection is not None:
-            cache_stats = get_cache_stats(projects_cache_collection, user_id)
-            last_updated = cache_stats.get('last_updated')
-            if last_updated:
-                if isinstance(last_updated, datetime):
-                    last_updated_iso = last_updated.isoformat() + 'Z'
-                elif isinstance(last_updated, str):
-                    if not last_updated.endswith('Z') and '+' not in last_updated:
-                        last_updated_iso = last_updated + 'Z'
-                    else:
-                        last_updated_iso = last_updated
-                else:
-                    if hasattr(last_updated, 'isoformat'):
-                        last_updated_iso = last_updated.isoformat() + 'Z'
-                    elif hasattr(last_updated, 'strftime'):
-                        last_updated_iso = datetime.fromtimestamp(last_updated.timestamp()).isoformat() + 'Z'
+        # Start background thread
+        thread = threading.Thread(target=refresh_cache_background)
+        thread.daemon = True
+        thread.start()
         
-        response_data = {
+        # Return immediately
+        return jsonify({
             'success': True,
-            'message': 'Cache refreshed successfully',
-            'last_updated': last_updated_iso,
-            'total_count': total_count
-        }
-        
-        # Include hiding results if AI-based hiding was enabled
-        if hide_using_ai:
-            response_data['ai_hidden_count'] = hidden_count
-            response_data['ai_hidden_ids'] = hidden_project_ids
-            if errors:
-                response_data['ai_hide_errors'] = errors
-        
-        return jsonify(response_data)
+            'message': 'Cache refresh started in background',
+            'status': 'refreshing'
+        })
         
     except Exception as e:
         import traceback
