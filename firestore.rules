@@ -7,8 +7,17 @@ service cloud.firestore {
     }
     
     // Helper function to check if user owns the resource
+    // Supports both old user_id format and new firebase_uid format
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Helper function to check if user owns resource by firebase_uid or user_id
+    function isResourceOwner(resourceData) {
+      return isAuthenticated() && (
+        resourceData.firebase_uid == request.auth.uid ||
+        resourceData.user_id == request.auth.uid
+      );
     }
     
     // Users collection - users can read/write their own data
@@ -20,58 +29,65 @@ service cloud.firestore {
     
     // Session keys - users can only access their own session keys
     match /session_keys/{sessionKeyId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // Projects cache - users can only access their own cached projects
     match /projects_cache/{cacheId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // User preferences - users can only access their own preferences
     match /user_preferences/{prefId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // Hidden projects log - users can only access their own hidden projects
     match /hidden_projects_log/{logId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // Hide feedback - users can only access their own feedback
     match /hide_feedback/{feedbackId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // Category recommendations - users can only access their own recommendations
     match /category_recommendations/{recId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // User profiles - users can only access their own profile
     match /user_profiles/{profileId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // Project details - read-only for authenticated users, write for owners
@@ -79,6 +95,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && 
         (!request.resource.exists || 
+         request.resource.data.firebase_uid == request.auth.uid ||
          request.resource.data.user_id == request.auth.uid);
     }
     
@@ -87,23 +104,26 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && 
         (!request.resource.exists || 
+         request.resource.data.firebase_uid == request.auth.uid ||
          request.resource.data.user_id == request.auth.uid);
     }
     
     // AI analysis cache - users can only access their own cache
     match /ai_analysis_cache/{cacheId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
     
     // User notifications - users can only access their own notifications
     match /user_notifications/{notifId} {
-      allow read, write: if isAuthenticated() && 
-        resource.data.user_id == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.user_id == request.auth.uid;
+      allow read, write: if isAuthenticated() && isResourceOwner(resource.data);
+      allow create: if isAuthenticated() && (
+        request.resource.data.firebase_uid == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
     }
   }
 }

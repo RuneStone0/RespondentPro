@@ -3,51 +3,33 @@
 Page routes for Respondent.io Manager
 """
 
-from flask import Blueprint, render_template, session, redirect, url_for
+from flask import Blueprint, render_template, session, redirect, url_for, request
 from datetime import datetime
 
 # Import services
 try:
-    from ..services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, load_credentials_by_user_id, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
+    from ..services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
     from ..services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
     from ..services.project_service import fetch_all_respondent_projects, get_hidden_count
     from ..cache_manager import get_cache_stats, get_cached_projects, is_cache_fresh
     from ..db import projects_cache_collection, users_collection
+    from ..auth.firebase_auth import require_verified, get_id_token_from_request, verify_firebase_token
 except ImportError:
-    from services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, load_credentials_by_user_id, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
+    from services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
     from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
     from services.project_service import fetch_all_respondent_projects, get_hidden_count
     from cache_manager import get_cache_stats, get_cached_projects, is_cache_fresh
     from db import projects_cache_collection, users_collection
+    from auth.firebase_auth import require_verified, get_id_token_from_request, verify_firebase_token
 
 bp = Blueprint('page', __name__)
-
-
-def require_verified(f):
-    """Decorator to require email verification"""
-    from functools import wraps
-    
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('auth.login'))
-        
-        user_id = session['user_id']
-        try:
-            if not is_user_verified(user_id):
-                return redirect(url_for('auth.verify_pending'))
-        except Exception:
-            return redirect(url_for('auth.verify_pending'))
-        
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 @bp.route('/dashboard')
 @require_verified
 def dashboard():
     """Dashboard - redirect to projects page if credentials valid, otherwise onboarding"""
-    user_id = session['user_id']
+    user_id = request.auth['uid']
     config = load_user_config(user_id)
     
     # Check if user has configured session keys
@@ -71,9 +53,9 @@ def dashboard():
 @bp.route('/account')
 @require_verified
 def account():
-    """Account page - manage passkeys and respondent.io credentials"""
-    user_id = session['user_id']
-    email = session.get('email', 'User')
+    """Account page - manage respondent.io credentials and billing"""
+    user_id = request.auth['uid']
+    email = request.auth.get('email', 'User')
     config = load_user_config(user_id)
     
     # Check if credentials are valid
@@ -92,35 +74,6 @@ def account():
     if config and config.get('cookies', {}).get('respondent.session.sid'):
         session_sid = config['cookies']['respondent.session.sid']
     
-    # Load all credentials
-    try:
-        credentials = load_credentials_by_user_id(user_id, rp_id=None)
-        if not credentials:
-            credentials = []
-        elif not isinstance(credentials, list):
-            credentials = [credentials]
-        
-        # Format credentials for display
-        passkeys = []
-        for cred in credentials:
-            cred_id_str = None
-            if cred.get('credential_id'):
-                if isinstance(cred['credential_id'], bytes):
-                    import base64
-                    cred_id_str = base64.urlsafe_b64encode(cred['credential_id']).decode('utf-8').rstrip('=')
-                else:
-                    cred_id_str = str(cred['credential_id'])
-            
-            passkeys.append({
-                'credential_id': cred_id_str,
-                'rp_id': cred.get('rp_id', 'localhost'),
-                'created_at': cred.get('created_at'),
-                'name': cred.get('name', '')
-            })
-    except Exception as e:
-        passkeys = []
-        print(f"Error loading credentials: {e}")
-    
     # Get billing info
     try:
         billing_info = get_user_billing_info(user_id)
@@ -135,7 +88,6 @@ def account():
     return render_template(
         'account.html',
         email=email,
-        passkeys=passkeys,
         billing_info=billing_info,
         has_valid_credentials=has_valid_credentials,
         session_sid=session_sid,
@@ -147,8 +99,8 @@ def account():
 @require_verified
 def notifications():
     """Notifications page - configure email notification preferences"""
-    user_id = session['user_id']
-    email = session.get('email', 'User')
+    user_id = request.auth['uid']
+    email = request.auth.get('email', 'User')
     
     return render_template('notifications.html', email=email)
 
@@ -157,25 +109,45 @@ def notifications():
 @require_verified
 def history():
     """History page - view hidden projects log"""
-    user_id = session['user_id']
-    email = session.get('email', 'User')
+    user_id = request.auth['uid']
+    email = request.auth.get('email', 'User')
     
     return render_template('history.html', email=email)
 
 
 @bp.route('/about')
 def about():
-    """About page - information about Respondent Pro"""
-    email = session.get('email') if 'user_id' in session else None
-    return render_template('about.html', email=email)
+    """About page - information about Respondent Pro, handles Firebase Auth email link sign-in"""
+    # Check for Firebase Auth token
+    email = None
+    login_error = None
+    login_success = None
+    
+    # Check if user is authenticated via Firebase Auth
+    id_token = get_id_token_from_request()
+    if id_token:
+        decoded_token = verify_firebase_token(id_token)
+        if decoded_token:
+            email = decoded_token.get('email')
+    
+    # Check for Firebase Auth email link parameters (oobCode, mode, etc.)
+    # These are handled by the frontend JavaScript
+    oob_code = request.args.get('oobCode')
+    mode = request.args.get('mode')
+    
+    if oob_code and mode == 'signIn':
+        # Firebase Auth email link detected - frontend will handle it
+        login_success = "Processing login link. Please wait..."
+    
+    return render_template('about.html', email=email, login_error=login_error, login_success=login_success)
 
 
 @bp.route('/support')
 @require_verified
 def support():
     """Support page - contact form for authenticated users"""
-    user_id = session['user_id']
-    email = session.get('email', 'User')
+    user_id = request.auth['uid']
+    email = request.auth.get('email', 'User')
     return render_template('support.html', email=email)
 
 
@@ -183,8 +155,8 @@ def support():
 @require_verified
 def admin():
     """Admin page - manage user billing limits"""
-    user_id = session['user_id']
-    email = session.get('email', 'User')
+    user_id = request.auth['uid']
+    email = request.auth.get('email', 'User')
     
     # Check if user is admin
     if not is_admin(user_id):
@@ -238,8 +210,8 @@ def admin():
 @require_verified
 def projects():
     """Projects page - list all available projects"""
-    user_id = session['user_id']
-    email = session.get('email', 'User')
+    user_id = request.auth['uid']
+    email = request.auth.get('email', 'User')
     config = load_user_config(user_id)
     filters = load_user_filters(user_id)
     

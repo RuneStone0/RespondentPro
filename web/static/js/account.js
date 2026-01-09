@@ -137,7 +137,7 @@ async function deletePasskey(credentialId) {
     
     // Find the delete button for this passkey
     const passkeyElement = document.querySelector(`[data-credential-id="${credentialId}"]`);
-    const deleteButton = passkeyElement ? passkeyElement.querySelector('button.btn-error') : null;
+    const deleteButton = passkeyElement ? passkeyElement.querySelector('button.delete-btn') : null;
     
     let originalText = 'Delete';
     if (deleteButton) {

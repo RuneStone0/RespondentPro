@@ -139,7 +139,7 @@ If you didn't create an account, you can safely ignore this email.
 def send_login_email(email, token):
     """Send login link email"""
     config = get_smtp_config()
-    login_url = f"{config['app_url']}/api/login/email/{token}"
+    login_url = f"{config['app_url']}/about?token={token}"
     
     # Create login email template
     html_template = """

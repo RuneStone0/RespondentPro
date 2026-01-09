@@ -369,10 +369,11 @@ def delete_credential_from_user(user_id, credential_id):
 
 
 def load_user_config(user_id):
-    """Load user's Respondent.io config from Firestore by user_id"""
+    """Load user's Respondent.io config from Firestore by user_id or firebase_uid"""
     if session_keys_collection is None:
         return None
     try:
+        # First try direct lookup by user_id
         query = session_keys_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
         docs = list(query)
         if docs:
@@ -382,6 +383,31 @@ def load_user_config(user_id):
                 'profile_id': config_doc.get('profile_id'),
                 'last_synced': config_doc.get('last_synced')
             }
+        
+        # If not found, try to find user by firebase_uid in users collection
+        # and then look up config by that user_id
+        if users_collection:
+            # Check if user_id is actually a firebase_uid
+            user_doc = users_collection.document(str(user_id)).get()
+            if user_doc.exists:
+                # This is a firebase_uid document, user_id matches
+                pass
+            else:
+                # Try to find user by firebase_uid field
+                firebase_uid_query = users_collection.where(filter=FieldFilter('firebase_uid', '==', str(user_id))).limit(1).stream()
+                firebase_uid_docs = list(firebase_uid_query)
+                if firebase_uid_docs:
+                    # Found user with this firebase_uid, use the document ID
+                    actual_user_id = firebase_uid_docs[0].id
+                    query = session_keys_collection.where(filter=FieldFilter('user_id', '==', str(actual_user_id))).limit(1).stream()
+                    docs = list(query)
+                    if docs:
+                        config_doc = docs[0].to_dict()
+                        return {
+                            'cookies': config_doc.get('cookies', {}),
+                            'profile_id': config_doc.get('profile_id'),
+                            'last_synced': config_doc.get('last_synced')
+                        }
     except Exception as e:
         print(f"Error loading user config: {e}")
     return None
@@ -403,12 +429,24 @@ def update_last_synced(user_id):
 
 
 def save_user_config(user_id, config, profile_id=None):
-    """Save user's Respondent.io config to Firestore by user_id"""
+    """Save user's Respondent.io config to Firestore by user_id or firebase_uid"""
     if session_keys_collection is None:
         raise Exception("Firestore connection not available. Please ensure Firestore is configured.")
     try:
+        # Resolve user_id - if it's a firebase_uid, find the actual user_id
+        actual_user_id = str(user_id)
+        if users_collection:
+            # Check if user_id is a firebase_uid by looking for document with that ID
+            user_doc = users_collection.document(str(user_id)).get()
+            if not user_doc.exists:
+                # Try to find user by firebase_uid field
+                firebase_uid_query = users_collection.where(filter=FieldFilter('firebase_uid', '==', str(user_id))).limit(1).stream()
+                firebase_uid_docs = list(firebase_uid_query)
+                if firebase_uid_docs:
+                    actual_user_id = firebase_uid_docs[0].id
+        
         update_data = {
-            'user_id': str(user_id),
+            'user_id': actual_user_id,
             'cookies': config.get('cookies', {}),
             'updated_at': datetime.utcnow()
         }
@@ -416,7 +454,7 @@ def save_user_config(user_id, config, profile_id=None):
             update_data['profile_id'] = profile_id
         
         # Find existing document or create new one
-        query = session_keys_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        query = session_keys_collection.where(filter=FieldFilter('user_id', '==', actual_user_id)).limit(1).stream()
         docs = list(query)
         if docs:
             docs[0].reference.update(update_data)
@@ -427,7 +465,7 @@ def save_user_config(user_id, config, profile_id=None):
 
 
 def load_user_filters(user_id):
-    """Load user's project filter preferences from Firestore"""
+    """Load user's project filter preferences from Firestore, handling migration from old user_id to Firebase Auth UID"""
     if user_preferences_collection is None:
         return {
             'min_incentive': None,
@@ -438,8 +476,31 @@ def load_user_filters(user_id):
             'hide_using_ai': False
         }
     try:
-        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        # Import resolve helper
+        try:
+            from ..cache_manager import resolve_user_id_for_query
+        except ImportError:
+            try:
+                from web.cache_manager import resolve_user_id_for_query
+            except ImportError:
+                def resolve_user_id_for_query(user_id: str):
+                    return str(user_id), None
+        
+        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        
+        # Try with current user_id first
+        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', current_user_id)).limit(1).stream()
         docs = list(query)
+        
+        # If not found and we have old_user_id, try that
+        if not docs and old_user_id:
+            query_old = user_preferences_collection.where(filter=FieldFilter('user_id', '==', old_user_id)).limit(1).stream()
+            docs = list(query_old)
+            # If found, migrate it
+            if docs:
+                docs[0].reference.update({'user_id': current_user_id})
+                print(f"[Migration] Migrated user preferences from old user_id {old_user_id} to {current_user_id}")
+        
         if docs:
             prefs_doc = docs[0].to_dict()
             if 'filters' in prefs_doc:
@@ -556,12 +617,38 @@ def save_user_filters(user_id, filters):
             'updated_at': datetime.utcnow()
         }
         
-        # Find existing document or create new one
-        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        # Resolve user_id to ensure we use the correct format
+        try:
+            from ..cache_manager import resolve_user_id_for_query
+        except ImportError:
+            try:
+                from web.cache_manager import resolve_user_id_for_query
+            except ImportError:
+                def resolve_user_id_for_query(user_id: str):
+                    return str(user_id), None
+        
+        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        
+        # Update user_id in update_data to use current format
+        update_data['user_id'] = current_user_id
+        
+        # Try to find existing document with current user_id
+        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', current_user_id)).limit(1).stream()
         docs = list(query)
+        
+        # If not found and we have old_user_id, try that and migrate
+        if not docs and old_user_id:
+            query_old = user_preferences_collection.where(filter=FieldFilter('user_id', '==', old_user_id)).limit(1).stream()
+            docs = list(query_old)
+            if docs:
+                # Migrate to new user_id
+                docs[0].reference.update({'user_id': current_user_id})
+                print(f"[Migration] Migrated user preferences from old user_id {old_user_id} to {current_user_id}")
+        
         if docs:
             docs[0].reference.update(update_data)
         else:
+            update_data['created_at'] = datetime.utcnow()
             user_preferences_collection.add(update_data)
     except Exception as e:
         raise Exception(f"Failed to save filters to Firestore: {e}")
@@ -683,13 +770,13 @@ def is_admin(user_id):
 
 
 def get_projects_processed_count(user_id):
-    """Calculate total projects processed for user.
+    """Calculate total projects processed for user, handling migration from old user_id to Firebase Auth UID.
     
     Counts projects from hidden_projects_log_collection for the user.
     This represents all projects that have been processed (hidden) by the user.
     
     Args:
-        user_id: User ID
+        user_id: User ID (Firebase Auth UID for new users)
         
     Returns:
         Total count of projects processed
@@ -697,9 +784,56 @@ def get_projects_processed_count(user_id):
     if hidden_projects_log_collection is None:
         return 0
     try:
-        # Count all projects in hidden_projects_log for this user
-        query = hidden_projects_log_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).stream()
+        # Import resolve helper
+        try:
+            from ..cache_manager import resolve_user_id_for_query
+        except ImportError:
+            try:
+                from web.cache_manager import resolve_user_id_for_query
+            except ImportError:
+                def resolve_user_id_for_query(user_id: str):
+                    return str(user_id), None
+        
+        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        
+        # Count with current user_id first
+        query = hidden_projects_log_collection.where(filter=FieldFilter('user_id', '==', current_user_id)).stream()
         count = sum(1 for _ in query)
+        
+        # If no results and we have old_user_id, count with that and migrate
+        if count == 0 and old_user_id:
+            query_old = hidden_projects_log_collection.where(filter=FieldFilter('user_id', '==', old_user_id)).stream()
+            docs = list(query_old)
+            if docs:
+                # Migrate all documents to use new user_id
+                # Get the database client from the collection
+                try:
+                    from ..db import db
+                except ImportError:
+                    try:
+                        from web.db import db
+                    except ImportError:
+                        db = None
+                
+                if db:
+                    batch = db.batch()
+                    migrated_count = 0
+                    for doc in docs:
+                        batch.update(doc.reference, {'user_id': current_user_id})
+                        migrated_count += 1
+                    if migrated_count > 0:
+                        batch.commit()
+                        print(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                    count = migrated_count
+                else:
+                    # Fallback: update documents one by one
+                    migrated_count = 0
+                    for doc in docs:
+                        doc.reference.update({'user_id': current_user_id})
+                        migrated_count += 1
+                    print(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                    count = migrated_count
+        
         return count
     except Exception as e:
         print(f"Error getting projects processed count: {e}")

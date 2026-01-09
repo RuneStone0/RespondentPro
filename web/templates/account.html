@@ -136,46 +136,6 @@
             </form>
         </dialog>
         
-        <div class="mb-8">
-            <div class="mb-4">
-                <h2 class="text-lg font-semibold text-base-content">Passkeys</h2>
-            </div>
-            
-            <div id="passkeysList" class="flex flex-col gap-3">
-                {% if passkeys %}
-                    {% for passkey in passkeys %}
-                    <div class="bg-base-200 border-2 border-base-300 rounded-lg p-4 flex justify-between items-center" data-credential-id="{{ passkey.credential_id }}">
-                        <div class="flex-1">
-                            <div class="font-semibold text-base-content mb-1">{{ passkey.name or 'Unnamed Passkey' }}</div>
-                            <div class="text-sm text-base-content/70">
-                                Domain: {{ passkey.rp_id }}
-                                {% if passkey.created_at %}
-                                • Created: {{ passkey.created_at.strftime('%Y-%m-%d') if passkey.created_at else 'Unknown' }}
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="btn btn-error btn-sm" onclick="deletePasskey('{{ passkey.credential_id }}')" {% if passkeys|length <= 1 %}disabled title="Cannot delete last passkey"{% endif %}>
-                                <span class="btn-text">Delete</span>
-                            </button>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="text-center py-10 text-base-content/70">
-                        <p>No passkeys registered yet.</p>
-                        <p class="mt-2 text-sm">Click "Add Passkey" to register a new passkey for this domain.</p>
-                    </div>
-                {% endif %}
-            </div>
-            
-            <div class="flex justify-end mt-4">
-                <button id="addPasskeyBtn" class="btn btn-ghost btn-sm" onclick="addPasskey()">
-                    <span class="btn-text">Add Passkey</span>
-                </button>
-            </div>
-        </div>
-        
         <!-- Billing Section -->
         <div class="mb-8">
             <h2 class="text-lg font-semibold text-base-content mb-4">Billing</h2>
@@ -267,7 +227,6 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/account.js') }}"></script>
 <script>
     /**
      * Extract respondent.session.sid from a cookie blob string

@@ -4,17 +4,65 @@
         <form method="dialog">
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" onclick="closeLoginModal()">✕</button>
         </form>
-        <h3 class="font-bold text-lg mb-4">Login</h3>
+        <h3 class="font-bold text-lg mb-4" id="modalTitle">Login</h3>
         <div class="error hidden" id="error"></div>
         <div class="success hidden" id="success"></div>
         
-        <div class="w-full mb-5">
-            <input type="email" id="authEmail" placeholder="Enter your email" autocomplete="email" class="input input-bordered w-full">
+        <!-- Login Form -->
+        <div id="loginForm">
+            <div class="w-full mb-3">
+                <input type="email" id="loginEmail" placeholder="Enter your email" autocomplete="email" class="input input-bordered w-full">
+            </div>
+            <div class="w-full mb-3">
+                <input type="password" id="loginPassword" placeholder="Enter your password" autocomplete="current-password" class="input input-bordered w-full">
+            </div>
+            <div class="flex gap-2.5 mt-4 w-full">
+                <button class="btn btn-primary flex-1" id="loginBtn">
+                    <span class="btn-text">Login</span>
+                </button>
+            </div>
+            <div class="text-center mt-3">
+                <button type="button" class="link link-primary text-sm" onclick="switchToEmailLink()">Use email link instead</button>
+            </div>
+            <div class="text-center mt-2">
+                <button type="button" class="link link-primary text-sm" onclick="switchToRegister()">Don't have an account? Sign up</button>
+            </div>
         </div>
-        <div class="flex gap-2.5 mt-4 w-full">
-            <button class="btn btn-primary flex-1" id="continueBtn">
-                <span class="btn-text">Continue</span>
-            </button>
+        
+        <!-- Email Link Form -->
+        <div id="emailLinkForm" class="hidden">
+            <div class="w-full mb-5">
+                <input type="email" id="emailLinkEmail" placeholder="Enter your email" autocomplete="email" class="input input-bordered w-full">
+            </div>
+            <div class="flex gap-2.5 mt-4 w-full">
+                <button class="btn btn-primary flex-1" id="emailLinkBtn">
+                    <span class="btn-text">Send Login Link</span>
+                </button>
+            </div>
+            <div class="text-center mt-3">
+                <button type="button" class="link link-primary text-sm" onclick="switchToLogin()">Back to password login</button>
+            </div>
+        </div>
+        
+        <!-- Register Form -->
+        <div id="registerForm" class="hidden">
+            <div class="w-full mb-3">
+                <input type="email" id="registerEmail" placeholder="Enter your email" autocomplete="email" class="input input-bordered w-full">
+            </div>
+            <div class="w-full mb-3">
+                <input type="password" id="registerPassword" placeholder="Create a password" autocomplete="new-password" class="input input-bordered w-full">
+            </div>
+            <div class="w-full mb-3">
+                <input type="password" id="registerPasswordConfirm" placeholder="Confirm password" autocomplete="new-password" class="input input-bordered w-full">
+            </div>
+            <div class="flex gap-2.5 mt-4 w-full">
+                <button class="btn btn-primary flex-1" id="registerBtn">
+                    <span class="btn-text">Sign Up</span>
+                </button>
+            </div>
+            <div class="text-center mt-3">
+                <button type="button" class="link link-primary text-sm" onclick="switchToLogin()">Already have an account? Login</button>
+            </div>
         </div>
     </div>
     <form method="dialog" class="modal-backdrop">
@@ -24,17 +72,16 @@
 
 <script>
 (function() {
-    // Login modal state
-    let emailLoginMode = false;
+    let currentMode = 'login'; // 'login', 'emailLink', 'register'
     
     // Open login modal
     window.openLoginModal = function() {
         const modal = document.getElementById('loginModal');
         if (modal) {
             modal.showModal();
-            // Focus on email input
+            switchToLogin();
             setTimeout(() => {
-                const emailInput = document.getElementById('authEmail');
+                const emailInput = document.getElementById('loginEmail');
                 if (emailInput) {
                     emailInput.focus();
                 }
@@ -47,22 +94,52 @@
         const modal = document.getElementById('loginModal');
         if (modal) {
             modal.close();
-            // Reset form
-            const emailInput = document.getElementById('authEmail');
-            if (emailInput) {
-                emailInput.value = '';
-            }
+            resetForms();
             hideMessage();
-            emailLoginMode = false;
-            const continueBtn = document.getElementById('continueBtn');
-            if (continueBtn) {
-                const btnText = continueBtn.querySelector('.btn-text');
-                if (btnText) {
-                    btnText.textContent = 'Continue';
-                }
-            }
         }
     };
+    
+    function resetForms() {
+        // Reset all inputs
+        document.getElementById('loginEmail').value = '';
+        document.getElementById('loginPassword').value = '';
+        document.getElementById('emailLinkEmail').value = '';
+        document.getElementById('registerEmail').value = '';
+        document.getElementById('registerPassword').value = '';
+        document.getElementById('registerPasswordConfirm').value = '';
+        currentMode = 'login';
+    }
+    
+    function switchToLogin() {
+        currentMode = 'login';
+        document.getElementById('modalTitle').textContent = 'Login';
+        document.getElementById('loginForm').classList.remove('hidden');
+        document.getElementById('emailLinkForm').classList.add('hidden');
+        document.getElementById('registerForm').classList.add('hidden');
+        hideMessage();
+    }
+    
+    function switchToEmailLink() {
+        currentMode = 'emailLink';
+        document.getElementById('modalTitle').textContent = 'Email Login Link';
+        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('emailLinkForm').classList.remove('hidden');
+        document.getElementById('registerForm').classList.add('hidden');
+        hideMessage();
+    }
+    
+    function switchToRegister() {
+        currentMode = 'register';
+        document.getElementById('modalTitle').textContent = 'Sign Up';
+        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('emailLinkForm').classList.add('hidden');
+        document.getElementById('registerForm').classList.remove('hidden');
+        hideMessage();
+    }
+    
+    window.switchToLogin = switchToLogin;
+    window.switchToEmailLink = switchToEmailLink;
+    window.switchToRegister = switchToRegister;
     
     function validateEmail(email) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -96,8 +173,99 @@
         }
     }
     
-    async function authenticate() {
-        const email = document.getElementById('authEmail').value.trim();
+    function showError(message) {
+        const errorDiv = document.getElementById('error');
+        if (errorDiv) {
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+        const successDiv = document.getElementById('success');
+        if (successDiv) {
+            successDiv.classList.add('hidden');
+        }
+    }
+    
+    function showSuccess(message) {
+        const successDiv = document.getElementById('success');
+        if (successDiv) {
+            successDiv.textContent = message;
+            successDiv.classList.remove('hidden');
+        }
+        const errorDiv = document.getElementById('error');
+        if (errorDiv) {
+            errorDiv.classList.add('hidden');
+        }
+    }
+    
+    function hideMessage() {
+        const errorDiv = document.getElementById('error');
+        if (errorDiv) {
+            errorDiv.classList.add('hidden');
+        }
+        const successDiv = document.getElementById('success');
+        if (successDiv) {
+            successDiv.classList.add('hidden');
+        }
+    }
+    
+    async function handleLogin() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        
+        if (!email) {
+            showError('Please enter your email address');
+            return;
+        }
+        if (!validateEmail(email)) {
+            showError('Please enter a valid email address');
+            return;
+        }
+        if (!password) {
+            showError('Please enter your password');
+            return;
+        }
+        
+        hideMessage();
+        const loginBtn = document.getElementById('loginBtn');
+        setButtonLoading(loginBtn, true, 'Logging in...');
+        
+        try {
+            if (!window.firebaseAuth || !window.firebaseAuth.signIn) {
+                throw new Error('Firebase Auth not initialized. Please refresh the page.');
+            }
+            
+            await window.firebaseAuth.signIn(email, password);
+            
+            // Success - redirect to dashboard
+            setButtonLoading(loginBtn, true, 'Redirecting...');
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 500);
+        } catch (error) {
+            console.error('Login error:', error);
+            let errorMessage = 'Login failed. Please try again.';
+            
+            if (error.code === 'auth/user-not-found') {
+                errorMessage = 'No account found with this email. Please sign up first.';
+            } else if (error.code === 'auth/wrong-password') {
+                errorMessage = 'Incorrect password. Please try again.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address.';
+            } else if (error.code === 'auth/user-disabled') {
+                errorMessage = 'This account has been disabled.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            showError(errorMessage);
+        } finally {
+            setButtonLoading(loginBtn, false);
+        }
+    }
+    
+    async function handleEmailLink() {
+        const email = document.getElementById('emailLinkEmail').value.trim();
+        
         if (!email) {
             showError('Please enter your email address');
             return;
@@ -107,363 +275,194 @@
             return;
         }
         
-        if (emailLoginMode) {
-            await sendLoginEmail(email);
+        hideMessage();
+        const emailLinkBtn = document.getElementById('emailLinkBtn');
+        setButtonLoading(emailLinkBtn, true, 'Sending login link...');
+        
+        try {
+            if (!window.firebaseAuth || !window.firebaseAuth.signInWithLink) {
+                throw new Error('Firebase Auth not initialized. Please refresh the page.');
+            }
+            
+            // Use Firebase Auth email link sign-in
+            await window.firebaseAuth.signInWithLink(email);
+            showSuccess('Login link sent! Please check your email and click the link to log in.');
+            document.getElementById('emailLinkEmail').value = '';
+        } catch (error) {
+            console.error('Email link error:', error);
+            let errorMessage = 'Failed to send login link. Please try again.';
+            
+            if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address.';
+            } else if (error.code === 'auth/user-disabled') {
+                errorMessage = 'This account has been disabled.';
+            } else if (error.code === 'auth/operation-not-allowed') {
+                errorMessage = 'Email link sign-in is not enabled in Firebase Console. ' +
+                    'Please enable "Email link (passwordless sign-in)" in Firebase Console → Authentication → Sign-in method.';
+            } else if (error.code === 'auth/quota-exceeded') {
+                errorMessage = 'Email sending quota exceeded. Please try again later.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            showError(errorMessage);
+        } finally {
+            setButtonLoading(emailLinkBtn, false);
+        }
+    }
+    
+    async function handleRegister() {
+        const email = document.getElementById('registerEmail').value.trim();
+        const password = document.getElementById('registerPassword').value;
+        const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+        
+        if (!email) {
+            showError('Please enter your email address');
+            return;
+        }
+        if (!validateEmail(email)) {
+            showError('Please enter a valid email address');
+            return;
+        }
+        if (!password) {
+            showError('Please enter a password');
+            return;
+        }
+        if (password.length < 6) {
+            showError('Password must be at least 6 characters long');
+            return;
+        }
+        if (password !== passwordConfirm) {
+            showError('Passwords do not match');
             return;
         }
         
         hideMessage();
-        const continueBtn = document.getElementById('continueBtn');
-        setButtonLoading(continueBtn, true, 'Authenticating...');
+        const registerBtn = document.getElementById('registerBtn');
+        setButtonLoading(registerBtn, true, 'Creating account...');
         
         try {
-            const loginResponse = await fetch('/api/login/begin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            
-            if (loginResponse.ok) {
-                const loginContentType = loginResponse.headers.get('content-type');
-                let loginData;
-                if (loginContentType && loginContentType.includes('application/json')) {
-                    loginData = await loginResponse.json();
-                } else {
-                    const text = await loginResponse.text();
-                    throw new Error(`Invalid response: ${text.substring(0, 100)}`);
-                }
-                await handleLogin(email, loginData);
-            } else {
-                const errorContentType = loginResponse.headers.get('content-type');
-                let error;
-                if (errorContentType && errorContentType.includes('application/json')) {
-                    error = await loginResponse.json();
-                } else {
-                    const text = await loginResponse.text();
-                    throw new Error(`Login failed: ${text.substring(0, 100)}`);
-                }
-                
-                if (error.can_login_via_email || error.error === 'No passkey for this domain' || error.error === 'No credentials found for user') {
-                    emailLoginMode = true;
-                    if (continueBtn) {
-                        setButtonLoading(continueBtn, false);
-                        const btnText = continueBtn.querySelector('.btn-text');
-                        if (btnText) {
-                            btnText.textContent = 'Email Login Code';
-                        }
-                    }
-                    showError('No passkey found. Click "Email Login Code" to receive a login link.');
-                    return;
-                }
-                
-                if (error.error === 'User not found' || (loginResponse.status === 404 && !error.user_exists)) {
-                    await handleRegister(email);
-                } else {
-                    throw new Error(error.error || 'Authentication failed');
-                }
-            }
-        } catch (error) {
-            console.error('Authentication error:', error);
-            if (error.message && (error.message.includes('passkey') || error.message.includes('credential'))) {
-                emailLoginMode = true;
-                if (continueBtn) {
-                    setButtonLoading(continueBtn, false);
-                    const btnText = continueBtn.querySelector('.btn-text');
-                    if (btnText) {
-                        btnText.textContent = 'Email Login Code';
-                    }
-                }
-                showError('No passkey found. Click "Email Login Code" to receive a login link.');
-            } else {
-                showError(error.message || 'Authentication failed. Please try again.');
-            }
-        } finally {
-            const continueBtn = document.getElementById('continueBtn');
-            setButtonLoading(continueBtn, false);
-        }
-    }
-    
-    async function handleLogin(email, options) {
-        try {
-            if (!navigator.credentials || !navigator.credentials.get) {
-                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                const isSecure = window.location.protocol === 'https:' || isLocalhost;
-                if (!isSecure) {
-                    throw new Error('WebAuthn requires HTTPS. Please access this site via HTTPS or use localhost.');
-                } else {
-                    throw new Error('WebAuthn API is not available in this browser.');
-                }
+            if (!window.firebaseAuth || !window.firebaseAuth.signUp) {
+                throw new Error('Firebase Auth not initialized. Please refresh the page.');
             }
             
-            if (!options.challenge) {
-                throw new Error('Missing challenge in options');
-            }
-            if (!options.allowCredentials || !Array.isArray(options.allowCredentials)) {
-                throw new Error('Missing or invalid allowCredentials in options');
-            }
+            const userCredential = await window.firebaseAuth.signUp(email, password);
             
-            const publicKeyCredentialRequestOptions = {
-                challenge: base64urlToUint8Array(options.challenge),
-                allowCredentials: options.allowCredentials.map(cred => ({
-                    id: base64urlToUint8Array(cred.id),
-                    type: cred.type || 'public-key'
-                })),
-                timeout: options.timeout,
-                rpId: options.rpId
-            };
+            // User is automatically signed in after signup
+            // Ensure cookie is set (signUp function should have set it, but double-check)
+            const idToken = await userCredential.user.getIdToken();
+            document.cookie = `firebase_id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
             
-            const credential = await navigator.credentials.get({
-                publicKey: publicKeyCredentialRequestOptions
-            });
+            // Wait a moment for auth state to propagate
+            await new Promise(resolve => setTimeout(resolve, 500));
             
-            const credentialForServer = {
-                id: credential.id,
-                rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
-                response: {
-                    clientDataJSON: uint8ArrayToBase64url(new Uint8Array(credential.response.clientDataJSON)),
-                    authenticatorData: uint8ArrayToBase64url(new Uint8Array(credential.response.authenticatorData)),
-                    signature: uint8ArrayToBase64url(new Uint8Array(credential.response.signature)),
-                    userHandle: credential.response.userHandle ? uint8ArrayToBase64url(new Uint8Array(credential.response.userHandle)) : null
-                },
-                type: credential.type
-            };
-            
-            const completeResponse = await fetch('/api/login/complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ credential: credentialForServer })
-            });
-            
-            if (!completeResponse.ok) {
-                const contentType = completeResponse.headers.get('content-type');
-                let error;
-                if (contentType && contentType.includes('application/json')) {
-                    error = await completeResponse.json();
-                } else {
-                    const text = await completeResponse.text();
-                    throw new Error(`Authentication failed: ${text.substring(0, 100)}`);
-                }
-                throw new Error(error.error || 'Authentication failed');
-            }
-            
-            const resultContentType = completeResponse.headers.get('content-type');
-            let result;
-            if (resultContentType && resultContentType.includes('application/json')) {
-                result = await completeResponse.json();
-            } else {
-                const text = await completeResponse.text();
-                throw new Error(`Invalid response: ${text.substring(0, 100)}`);
-            }
-            
-            if (result.success) {
-                const continueBtn = document.getElementById('continueBtn');
-                if (continueBtn) {
-                    setButtonLoading(continueBtn, true, 'Redirecting...');
-                }
+            // Check if email is verified
+            if (userCredential.user.emailVerified) {
+                showSuccess('Account created! Redirecting...');
                 setTimeout(() => {
-                    window.location.href = result.redirect || '/dashboard';
-                }, 500);
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            throw error;
-        }
-    }
-    
-    async function handleRegister(email) {
-        try {
-            const beginResponse = await fetch('/api/register/begin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            
-            if (!beginResponse.ok) {
-                const contentType = beginResponse.headers.get('content-type');
-                let error;
-                if (contentType && contentType.includes('application/json')) {
-                    error = await beginResponse.json();
-                } else {
-                    const text = await beginResponse.text();
-                    throw new Error(`Registration failed: ${text.substring(0, 100)}`);
-                }
-                
-                if (error.error && error.error.includes('Email already registered')) {
-                    emailLoginMode = true;
-                    const continueBtn = document.getElementById('continueBtn');
-                    if (continueBtn) {
-                        setButtonLoading(continueBtn, false);
-                        continueBtn.querySelector('.btn-text').textContent = 'Email Login Code';
-                    }
-                    showError('Email already registered. Click "Email Login Code" to receive a login link.');
-                    return;
-                }
-                throw new Error(error.error || 'Registration failed');
-            }
-            
-            const optionsContentType = beginResponse.headers.get('content-type');
-            let options;
-            if (optionsContentType && optionsContentType.includes('application/json')) {
-                options = await beginResponse.json();
+                    window.location.href = '/dashboard';
+                }, 1000);
             } else {
-                const text = await beginResponse.text();
-                throw new Error(`Invalid response: ${text.substring(0, 100)}`);
-            }
-            
-            if (!navigator.credentials || !navigator.credentials.create) {
-                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                const isSecure = window.location.protocol === 'https:' || isLocalhost;
-                if (!isSecure) {
-                    throw new Error('WebAuthn requires HTTPS. Please access this site via HTTPS or use localhost.');
-                } else {
-                    throw new Error('WebAuthn API is not available in this browser.');
-                }
-            }
-            
-            if (!options.challenge) {
-                throw new Error('Missing challenge in options');
-            }
-            if (!options.user || !options.user.id) {
-                throw new Error('Missing user.id in options');
-            }
-            
-            const publicKeyCredentialCreationOptions = {
-                challenge: base64urlToUint8Array(options.challenge),
-                rp: options.rp,
-                user: {
-                    id: base64urlToUint8Array(options.user.id),
-                    name: options.user.name,
-                    displayName: options.user.displayName
-                },
-                pubKeyCredParams: options.pubKeyCredParams,
-                authenticatorSelection: options.authenticatorSelection,
-                timeout: options.timeout,
-                attestation: options.attestation
-            };
-            
-            const credential = await navigator.credentials.create({
-                publicKey: publicKeyCredentialCreationOptions
-            });
-            
-            const credentialForServer = {
-                id: credential.id,
-                rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
-                response: {
-                    clientDataJSON: uint8ArrayToBase64url(new Uint8Array(credential.response.clientDataJSON)),
-                    attestationObject: uint8ArrayToBase64url(new Uint8Array(credential.response.attestationObject))
-                },
-                type: credential.type
-            };
-            
-            const completeResponse = await fetch('/api/register/complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ credential: credentialForServer })
-            });
-            
-            if (!completeResponse.ok) {
-                const errorContentType = completeResponse.headers.get('content-type');
-                let error;
-                if (errorContentType && errorContentType.includes('application/json')) {
-                    error = await completeResponse.json();
-                } else {
-                    const text = await completeResponse.text();
-                    throw new Error(`Registration failed: ${text.substring(0, 100)}`);
-                }
-                throw new Error(error.error || 'Registration failed');
-            }
-            
-            const resultContentType = completeResponse.headers.get('content-type');
-            let result;
-            if (resultContentType && resultContentType.includes('application/json')) {
-                result = await completeResponse.json();
-            } else {
-                const text = await completeResponse.text();
-                throw new Error(`Invalid response: ${text.substring(0, 100)}`);
-            }
-            
-            if (result.success) {
-                const continueBtn = document.getElementById('continueBtn');
-                if (continueBtn) {
-                    setButtonLoading(continueBtn, true, 'Redirecting...');
-                }
+                showSuccess('Account created! Please check your email to verify your account. You can still access the app, but some features require verification.');
                 setTimeout(() => {
-                    window.location.href = result.redirect || '/dashboard';
-                }, 500);
+                    window.location.href = '/dashboard';
+                }, 2000);
             }
         } catch (error) {
             console.error('Registration error:', error);
-            throw error;
-        }
-    }
-    
-    async function sendLoginEmail(email) {
-        const continueBtn = document.getElementById('continueBtn');
-        try {
-            hideMessage();
-            setButtonLoading(continueBtn, true, 'Sending login link...');
+            let errorMessage = 'Registration failed. Please try again.';
             
-            const response = await fetch('/api/login/email/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            
-            const responseContentType = response.headers.get('content-type');
-            if (!responseContentType || !responseContentType.includes('application/json')) {
-                const text = await response.text();
-                throw new Error(`Server returned ${response.status}: ${text.substring(0, 100)}`);
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = 'This email is already registered. Please login instead.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address.';
+            } else if (error.code === 'auth/weak-password') {
+                errorMessage = 'Password is too weak. Please choose a stronger password.';
+            } else if (error.message) {
+                errorMessage = error.message;
             }
             
-            if (!response.ok) {
-                let error;
-                if (responseContentType && responseContentType.includes('application/json')) {
-                    error = await response.json();
-                } else {
-                    const text = await response.text();
-                    throw new Error(`Failed to send login email: ${text.substring(0, 100)}`);
-                }
-                throw new Error(error.error || 'Failed to send login email');
-            }
-            
-            let result;
-            if (responseContentType && responseContentType.includes('application/json')) {
-                result = await response.json();
-            } else {
-                const text = await response.text();
-                throw new Error(`Invalid response: ${text.substring(0, 100)}`);
-            }
-            
-            showSuccess('Login link sent! Please check your email and click the link to log in.');
-            document.getElementById('authEmail').value = '';
-            emailLoginMode = false;
-            if (continueBtn) {
-                setButtonLoading(continueBtn, false);
-                const btnText = continueBtn.querySelector('.btn-text');
-                if (btnText) {
-                    btnText.textContent = 'Continue';
-                }
-            }
-        } catch (error) {
-            console.error('Error sending login email:', error);
-            showError('Error: ' + error.message);
+            showError(errorMessage);
         } finally {
-            setButtonLoading(continueBtn, false);
+            setButtonLoading(registerBtn, false);
         }
     }
     
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
-        const authEmail = document.getElementById('authEmail');
-        if (authEmail) {
-            authEmail.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') authenticate();
+        // Login form
+        const loginEmail = document.getElementById('loginEmail');
+        const loginPassword = document.getElementById('loginPassword');
+        const loginBtn = document.getElementById('loginBtn');
+        
+        if (loginEmail) {
+            loginEmail.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleLogin();
             });
         }
+        if (loginPassword) {
+            loginPassword.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleLogin();
+            });
+        }
+        if (loginBtn) {
+            loginBtn.addEventListener('click', handleLogin);
+        }
         
-        const continueBtn = document.getElementById('continueBtn');
-        if (continueBtn) {
-            continueBtn.addEventListener('click', authenticate);
+        // Email link form
+        const emailLinkEmail = document.getElementById('emailLinkEmail');
+        const emailLinkBtn = document.getElementById('emailLinkBtn');
+        
+        if (emailLinkEmail) {
+            emailLinkEmail.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleEmailLink();
+            });
+        }
+        if (emailLinkBtn) {
+            emailLinkBtn.addEventListener('click', handleEmailLink);
+        }
+        
+        // Register form
+        const registerEmail = document.getElementById('registerEmail');
+        const registerPassword = document.getElementById('registerPassword');
+        const registerPasswordConfirm = document.getElementById('registerPasswordConfirm');
+        const registerBtn = document.getElementById('registerBtn');
+        
+        if (registerEmail) {
+            registerEmail.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleRegister();
+            });
+        }
+        if (registerPassword) {
+            registerPassword.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleRegister();
+            });
+        }
+        if (registerPasswordConfirm) {
+            registerPasswordConfirm.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleRegister();
+            });
+        }
+        if (registerBtn) {
+            registerBtn.addEventListener('click', handleRegister);
+        }
+        
+        // Check for email link in URL (for email link authentication)
+        if (window.location.href.includes('emailLinkSignIn')) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const emailLink = urlParams.get('link');
+            const email = localStorage.getItem('emailForSignIn');
+            
+            if (emailLink && email && window.firebaseAuth && window.firebaseAuth.signInWithLinkComplete) {
+                window.firebaseAuth.signInWithLinkComplete(email, window.location.href)
+                    .then(() => {
+                        window.location.href = '/dashboard';
+                    })
+                    .catch((error) => {
+                        console.error('Email link sign-in error:', error);
+                        showError('Invalid or expired login link. Please request a new one.');
+                    });
+            }
         }
     });
 })();

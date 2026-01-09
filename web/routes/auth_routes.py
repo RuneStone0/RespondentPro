@@ -4,306 +4,162 @@ Authentication routes for Respondent.io Manager
 """
 
 import json
-import base64
-from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
-from webauthn import (
-    generate_registration_options,
-    verify_registration_response,
-    generate_authentication_options,
-    verify_authentication_response,
-    options_to_json,
-)
-from webauthn.helpers.structs import (
-    AuthenticatorSelectionCriteria,
-    AuthenticatorAttachment,
-    UserVerificationRequirement,
-    RegistrationCredential,
-    AuthenticationCredential,
-)
-from types import SimpleNamespace
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for
 from google.cloud.firestore_v1.base_query import FieldFilter
-
-# Try to import PublicKeyCredentialDescriptor and PublicKeyCredentialType
-try:
-    from webauthn.helpers.structs import PublicKeyCredentialDescriptor, PublicKeyCredentialType
-except ImportError:
-    PublicKeyCredentialDescriptor = None
-    try:
-        from webauthn.helpers.structs import PublicKeyCredentialType
-    except ImportError:
-        PublicKeyCredentialType = None
 
 # Import user service
 try:
     from ..services.user_service import (
-        user_exists_by_email, create_user, get_user_by_email,
-        load_credentials_by_user_id, add_credential_to_user, delete_credential_from_user,
-        update_credential_counter, get_user_verification_status, is_user_verified,
-        verify_user_email, generate_verification_token, get_email_by_user_id,
+        get_user_by_email,
+        is_user_verified,
         generate_login_token, verify_login_token
     )
-    from ..services.email_service import send_verification_email, send_login_email
+    from ..services.email_service import send_login_email
+    from ..auth.firebase_auth import require_auth, get_id_token_from_request, verify_firebase_token
 except ImportError:
     from services.user_service import (
-        user_exists_by_email, create_user, get_user_by_email,
-        load_credentials_by_user_id, add_credential_to_user, delete_credential_from_user,
-        update_credential_counter, get_user_verification_status, is_user_verified,
-        verify_user_email, generate_verification_token, get_email_by_user_id,
+        get_user_by_email,
+        is_user_verified,
         generate_login_token, verify_login_token
     )
-    from services.email_service import send_verification_email, send_login_email
+    from services.email_service import send_login_email
+    from auth.firebase_auth import require_auth, get_id_token_from_request, verify_firebase_token
 
 bp = Blueprint('auth', __name__)
 
 
-def get_request_origin():
-    """
-    Get the correct origin for the request, handling reverse proxy scenarios.
-    Checks X-Forwarded-Proto header first (set by reverse proxies like load balancers),
-    then falls back to request.scheme.
-    """
-    # Check for X-Forwarded-Proto header (set by reverse proxies)
-    forwarded_proto = request.headers.get('X-Forwarded-Proto', '').lower()
-    if forwarded_proto in ('http', 'https'):
-        scheme = forwarded_proto
-    else:
-        scheme = request.scheme
-    
-    return f"{scheme}://{request.host}"
+# get_request_origin() removed - was only used for WebAuthn
 
 
 @bp.route('/')
 def index():
     """Home page - show about page"""
-    if 'user_id' in session:
-        return redirect(url_for('page.dashboard'))
+    # Check if user is authenticated via Firebase Auth
+    id_token = get_id_token_from_request()
+    if id_token:
+        decoded_token = verify_firebase_token(id_token)
+        if decoded_token:
+            return redirect(url_for('page.dashboard'))
     return redirect(url_for('page.about'))
+
+
+@bp.route('/api/firebase-config')
+def firebase_config():
+    """Provide Firebase configuration for frontend"""
+    import os
+    from flask import jsonify
+    
+    # Get Firebase project ID
+    project_id = (os.environ.get('GCP_PROJECT') or 
+                 os.environ.get('GCLOUD_PROJECT') or 
+                 os.environ.get('PROJECT_ID'))
+    
+    if not project_id:
+        # Try reading from .firebaserc
+        try:
+            import json
+            from pathlib import Path
+            firebaserc_path = Path(__file__).parent.parent.parent / '.firebaserc'
+            if firebaserc_path.exists():
+                with open(firebaserc_path, 'r') as f:
+                    firebaserc = json.load(f)
+                    project_id = firebaserc.get('projects', {}).get('default')
+        except Exception:
+            pass
+    
+    # Firebase web app config
+    # Note: These values should be set in environment variables or config file
+    # For production, get these from Firebase Console > Project Settings > General > Your apps
+    # 
+    # IMPORTANT NOTES:
+    # - authDomain: Can be either:
+    #   * Firebase domain: {project-id}.firebaseapp.com (recommended, always works)
+    #   * Custom domain: your-domain.com (requires proper Firebase Hosting setup)
+    #   If using custom domain, ensure:
+    #   1. Domain is added to Firebase Console > Authentication > Settings > Authorized domains
+    #   2. Domain is configured in Firebase Hosting (if using Firebase Hosting)
+    #   3. DNS records are properly configured
+    # - storageBucket: This is the bucket NAME (not a domain), format: {project-id}.appspot.com
+    #   You cannot change this - it's the actual GCS bucket identifier
+    auth_domain = os.environ.get('FIREBASE_AUTH_DOMAIN', f'{project_id}.firebaseapp.com' if project_id else '')
+    
+    config = {
+        'apiKey': os.environ.get('FIREBASE_API_KEY', ''),
+        'authDomain': auth_domain,
+        'projectId': project_id or '',
+        'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', f'{project_id}.appspot.com' if project_id else ''),
+        'messagingSenderId': os.environ.get('FIREBASE_MESSAGING_SENDER_ID', ''),
+        'appId': os.environ.get('FIREBASE_APP_ID', '')
+    }
+    
+    # Validate custom domain setup if using custom domain
+    if auth_domain and not auth_domain.endswith('.firebaseapp.com'):
+        # Custom domain detected - log a note (but don't fail)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Using custom authDomain: {auth_domain}. Ensure it's properly configured in Firebase Console.")
+    
+    return jsonify(config)
 
 
 @bp.route('/login')
 def login():
     """Login page - redirect to about page (login is now in modal)"""
-    if 'user_id' in session:
-        return redirect(url_for('page.dashboard'))
+    # Check if user is authenticated via Firebase Auth
+    id_token = get_id_token_from_request()
+    if id_token:
+        decoded_token = verify_firebase_token(id_token)
+        if decoded_token:
+            return redirect(url_for('page.dashboard'))
     return redirect(url_for('page.about'))
 
 
-@bp.route('/api/register/begin', methods=['POST'])
-def register_begin():
-    """Begin passkey registration"""
-    try:
-        data = request.json
-        email = data.get('email')
-        
-        if not email:
-            return jsonify({'error': 'Email is required'}), 400
-        
-        # Validate email format
-        import re
-        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
-        if not re.match(email_pattern, email):
-            return jsonify({'error': 'Invalid email format'}), 400
-        
-        # Check if user already exists
-        existing_user_id = get_user_by_email(email)
-        if existing_user_id:
-            # User exists - check if they have any credentials
-            all_credentials = load_credentials_by_user_id(existing_user_id, rp_id=None)
-            if all_credentials and len(all_credentials) > 0:
-                # User has credentials - they should login instead
-                # Check if they have credentials for current domain
-                hostname = request.host.split(':')[0]
-                if hostname == '0.0.0.0':
-                    rp_id = 'localhost'
-                else:
-                    rp_id = hostname
-                
-                domain_credential = load_credentials_by_user_id(existing_user_id, rp_id=rp_id)
-                if domain_credential:
-                    # They have a passkey for this domain - should login
-                    return jsonify({
-                        'error': 'Email already registered. Please log in instead.',
-                        'has_credentials': True,
-                        'can_login_via_email': True
-                    }), 400
-                else:
-                    # They have credentials but not for this domain
-                    return jsonify({
-                        'error': 'Email already registered. Please log in instead.',
-                        'has_credentials': True,
-                        'no_domain_passkey': True,
-                        'can_login_via_email': True
-                    }), 400
-            else:
-                # User exists but has no credentials - allow them to register first passkey
-                # We'll use the existing user_id when completing registration
-                session['existing_user_id'] = existing_user_id
-                session['registration_email'] = email
-                session['registration'] = True
-        
-        # If we get here, either user doesn't exist (new registration) or exists but has no credentials
-        if 'registration_email' not in session:
-            session['registration_email'] = email
-            session['registration'] = True
-        
-        # Generate registration options
-        hostname = request.host.split(':')[0]
-        if hostname == '0.0.0.0':
-            rp_id = 'localhost'
-        else:
-            rp_id = hostname
-        
-        options = generate_registration_options(
-            rp_id=rp_id,
-            rp_name="Respondent Pro",
-            user_id=email.encode('utf-8'),
-            user_name=email,
-            user_display_name=email,
-            authenticator_selection=AuthenticatorSelectionCriteria(
-                authenticator_attachment=AuthenticatorAttachment.CROSS_PLATFORM,
-                user_verification=UserVerificationRequirement.PREFERRED
-            )
-        )
-        
-        session['challenge'] = base64.urlsafe_b64encode(options.challenge).decode('utf-8').rstrip('=')
-        
-        options_json_str = options_to_json(options)
-        if isinstance(options_json_str, str):
-            options_json = json.loads(options_json_str)
-        elif isinstance(options_json_str, dict):
-            options_json = options_json_str
-        else:
-            try:
-                options_json = json.loads(json.dumps(options_json_str))
-            except:
-                options_json = {}
-        
-        challenge_b64 = base64.urlsafe_b64encode(options.challenge).decode('utf-8').rstrip('=')
-        options_json['challenge'] = challenge_b64
-        
-        return jsonify(options_json)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# WebAuthn routes removed - Firebase Auth handles authentication now
+
+# Firebase Auth endpoints
+@bp.route('/api/auth/signup', methods=['POST'])
+def firebase_signup():
+    """Firebase Auth signup endpoint (handled by frontend, this is for reference)"""
+    return jsonify({'error': 'Signup is handled by Firebase Auth client SDK on the frontend'}), 400
 
 
-@bp.route('/api/register/complete', methods=['POST'])
-def register_complete():
-    """Complete passkey registration"""
-    try:
-        if 'registration' not in session or not session['registration']:
-            return jsonify({'error': 'No registration in progress'}), 400
-        
-        email = session.get('registration_email')
-        challenge_b64 = session.get('challenge')
-        
-        if not email or not challenge_b64:
-            return jsonify({'error': 'Session expired'}), 400
-        
-        data = request.json
-        credential_data = data.get('credential')
-        
-        if not credential_data:
-            return jsonify({'error': 'Credential is required'}), 400
-        
-        hostname = request.host.split(':')[0]
-        if hostname == '0.0.0.0':
-            rp_id = 'localhost'
-        else:
-            rp_id = hostname
-        
-        try:
-            challenge_b64_padded = challenge_b64
-            padding = 4 - (len(challenge_b64_padded) % 4)
-            if padding != 4:
-                challenge_b64_padded += '=' * padding
-            challenge = base64.urlsafe_b64decode(challenge_b64_padded)
-            
-            def decode_base64(s):
-                padding = 4 - (len(s) % 4)
-                if padding != 4:
-                    s += '=' * padding
-                return base64.urlsafe_b64decode(s)
-            
-            registration_response = SimpleNamespace(
-                client_data_json=decode_base64(credential_data['response']['clientDataJSON']),
-                attestation_object=decode_base64(credential_data['response']['attestationObject'])
-            )
-            
-            credential = RegistrationCredential(
-                id=credential_data['id'],
-                raw_id=decode_base64(credential_data['rawId']),
-                response=registration_response,
-                type=credential_data.get('type', 'public-key')
-            )
-            
-            origin = get_request_origin()
-            hostname = request.host.split(':')[0]
-            if hostname == '0.0.0.0':
-                expected_rp_id = 'localhost'
-            else:
-                expected_rp_id = hostname
-            
-            verification = verify_registration_response(
-                credential=credential,
-                expected_challenge=challenge,
-                expected_rp_id=expected_rp_id,
-                expected_origin=origin
-            )
-            
-            # Check if user already exists (from session)
-            existing_user_id = session.get('existing_user_id')
-            if existing_user_id:
-                # User exists but had no credentials - use existing user_id
-                user_id = existing_user_id
-                session.pop('existing_user_id', None)
-            else:
-                # New user - create account
-                user_id = create_user(email)
-            
-            # Add credential with rp_id
-            add_credential_to_user(user_id, {
-                'credential_id': verification.credential_id,
-                'public_key': verification.credential_public_key,
-                'counter': verification.sign_count
-            }, rp_id=expected_rp_id)
-            
-            # Send verification email
-            try:
-                from ..db import users_collection
-            except ImportError:
-                from db import users_collection
-            
-            try:
-                if users_collection:
-                    user_doc = users_collection.document(str(user_id)).get()
-                    if user_doc.exists:
-                        user_data = user_doc.to_dict()
-                        token = user_data.get('verification_token')
-                        if token:
-                            send_verification_email(email, token)
-            except Exception as e:
-                print(f"Warning: Failed to send verification email: {e}")
-            
-            session['user_id'] = user_id
-            session['email'] = email
-            session.permanent = True
-            session.pop('registration', None)
-            session.pop('registration_email', None)
-            session.pop('challenge', None)
-            
-            # Redirect to verification pending page
-            return jsonify({'success': True, 'redirect': url_for('auth.verify_pending')})
-        except Exception as e:
-            import traceback
-            return jsonify({'error': f'Verification failed: {str(e)}\n{traceback.format_exc()}'}), 400
-            
-    except Exception as e:
-        import traceback
-        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
+@bp.route('/api/auth/signin', methods=['POST'])
+def firebase_signin():
+    """Firebase Auth signin endpoint (handled by frontend, this is for reference)"""
+    return jsonify({'error': 'Signin is handled by Firebase Auth client SDK on the frontend'}), 400
 
 
-@bp.route('/api/login/begin', methods=['POST'])
-def login_begin():
+@bp.route('/api/auth/logout', methods=['POST'])
+@require_auth
+def firebase_logout():
+    """Firebase Auth logout endpoint"""
+    # Logout is handled by frontend Firebase Auth SDK
+    # This endpoint can be used for any server-side cleanup if needed
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
+
+
+# All WebAuthn routes removed - Firebase Auth handles authentication
+
+
+@bp.route('/logout')
+def logout():
+    """Logout user - clears Firebase Auth session (handled by frontend)"""
+    # Logout is handled by Firebase Auth client SDK
+    # This endpoint redirects to about page
+    return redirect(url_for('page.about'))
+
+
+# Legacy WebAuthn routes removed:
+# - /api/register/begin
+# - /api/register/complete  
+# - /api/login/begin
+# - /api/login/complete
+# - /api/passkeys
+# - /api/passkeys/add
+# - /api/passkeys/add/complete
+# - /api/passkeys/<credential_id> (DELETE)
+
+# All WebAuthn route implementations removed
     """Begin passkey authentication"""
     try:
         data = request.json
@@ -399,8 +255,18 @@ def login_begin():
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
-@bp.route('/api/login/complete', methods=['POST'])
-def login_complete():
+# All WebAuthn routes removed - Firebase Auth handles authentication
+# Removed routes:
+# - /api/register/begin
+# - /api/register/complete
+# - /api/login/begin  
+# - /api/login/complete
+# - /api/passkeys
+# - /api/passkeys/add
+# - /api/passkeys/add/complete
+# - /api/passkeys/<credential_id> (DELETE)
+
+def login_complete_removed():
     """Complete passkey authentication"""
     try:
         if 'login_user_id' not in session:
@@ -554,107 +420,77 @@ def login_complete():
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
-@bp.route('/logout')
-def logout():
-    """Logout user"""
-    session.clear()
-    return redirect(url_for('auth.login'))
+# Logout route already defined above
 
 
 @bp.route('/verify-pending')
 def verify_pending():
     """Verification pending page - shown when user is not verified"""
-    if 'user_id' not in session:
-        return redirect(url_for('auth.login'))
+    # Check for Firebase Auth token
+    id_token = get_id_token_from_request()
+    if id_token:
+        decoded_token = verify_firebase_token(id_token)
+        if decoded_token:
+            email = decoded_token.get('email', '')
+            # If already verified, redirect to dashboard
+            if decoded_token.get('email_verified', False):
+                return redirect(url_for('page.dashboard'))
+            return render_template('verify_pending.html', email=email)
     
-    user_id = session['user_id']
-    email = session.get('email', '')
-    
-    # If already verified, redirect to dashboard
-    try:
-        if is_user_verified(user_id):
-            return redirect(url_for('page.dashboard'))
-    except Exception:
-        pass
-    
-    return render_template('verify_pending.html', email=email)
+    # Not authenticated - redirect to about page
+    return redirect(url_for('page.about'))
 
 
 @bp.route('/api/verify-email/send', methods=['POST'])
+@require_auth
 def send_verification_email_api():
-    """Send verification email (resend functionality)"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    user_id = session['user_id']
-    email = session.get('email')
-    
-    if not email:
-        email = get_email_by_user_id(user_id)
-    
-    if not email:
-        return jsonify({'error': 'Email not found'}), 404
-    
-    try:
-        # Generate new token
-        token = generate_verification_token(user_id)
-        send_verification_email(email, token)
-        return jsonify({'success': True, 'message': 'Verification email sent'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    """Send verification email (resend functionality) - Firebase Auth handles this"""
+    # Firebase Auth handles email verification natively
+    # This endpoint is kept for backward compatibility but redirects to Firebase Auth flow
+    return jsonify({
+        'error': 'Email verification is handled by Firebase Auth. Please use the Firebase Auth client SDK to resend verification emails.'
+    }), 400
 
 
 @bp.route('/api/verify-email/<token>')
 def verify_email_token(token):
-    """Verify email with token (GET endpoint for email links)"""
-    if 'user_id' not in session:
-        # Try to find user by token
-        try:
-            try:
-                from ..db import users_collection
-            except ImportError:
-                from db import users_collection
-            
-            if users_collection:
-                query = users_collection.where(filter=FieldFilter('verification_token', '==', token)).limit(1).stream()
-                docs = list(query)
-                if docs:
-                    user_doc = docs[0]
-                    user_data = user_doc.to_dict()
-                    user_id = user_doc.id
-                    if verify_user_email(user_id, token):
-                        # Set session and redirect
-                        session['user_id'] = user_id
-                        session['email'] = user_data.get('username', '')
-                        session.permanent = True
-                        return redirect(url_for('page.dashboard'))
-        except Exception:
-            pass
-        
-        return redirect(url_for('auth.login'))
-    
-    user_id = session['user_id']
-    
+    """Verify email with token (GET endpoint for email links) - Legacy support"""
+    # Legacy email verification - Firebase Auth handles this natively
+    # This endpoint is kept for backward compatibility with old verification emails
     try:
-        if verify_user_email(user_id, token):
-            return redirect(url_for('page.dashboard'))
-        else:
-            return render_template('verify_pending.html', 
-                                 email=session.get('email', ''),
-                                 error='Invalid or expired verification token')
-    except Exception as e:
-        return render_template('verify_pending.html',
-                             email=session.get('email', ''),
-                             error=str(e))
+        try:
+            from ..db import users_collection
+        except ImportError:
+            from db import users_collection
+        
+        if users_collection:
+            query = users_collection.where(filter=FieldFilter('verification_token', '==', token)).limit(1).stream()
+            docs = list(query)
+            if docs:
+                user_doc = docs[0]
+                user_data = user_doc.to_dict()
+                user_id = user_doc.id
+                # Import verify_user_email if needed
+                try:
+                    from ..services.user_service import verify_user_email
+                except ImportError:
+                    from services.user_service import verify_user_email
+                
+                if verify_user_email(user_id, token):
+                    # Redirect to dashboard - user will need to sign in with Firebase Auth
+                    return redirect(url_for('page.dashboard'))
+    except Exception:
+        pass
+    
+    return redirect(url_for('page.about'))
 
 
 @bp.route('/api/verify-email/verify', methods=['POST'])
+@require_auth
 def verify_email_api():
-    """Verify email with token (POST endpoint for API calls)"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    user_id = session['user_id']
+    """Verify email with token (POST endpoint for API calls) - Legacy support"""
+    # Firebase Auth handles email verification natively
+    # This endpoint is kept for backward compatibility
     data = request.json
     token = data.get('token')
     
@@ -662,6 +498,13 @@ def verify_email_api():
         return jsonify({'error': 'Token is required'}), 400
     
     try:
+        # Import verify_user_email if needed
+        try:
+            from ..services.user_service import verify_user_email
+        except ImportError:
+            from services.user_service import verify_user_email
+        
+        user_id = request.auth['uid']
         if verify_user_email(user_id, token):
             return jsonify({'success': True, 'message': 'Email verified'})
         else:
@@ -670,8 +513,10 @@ def verify_email_api():
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/api/passkeys', methods=['GET'])
-def list_passkeys():
+# All WebAuthn passkey routes removed - Firebase Auth handles passkeys natively
+# Removed: /api/passkeys, /api/passkeys/add, /api/passkeys/add/complete, /api/passkeys/<credential_id>
+
+def list_passkeys_removed():
     """List all passkeys for current user"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -716,8 +561,7 @@ def list_passkeys():
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
-@bp.route('/api/passkeys/add', methods=['POST'])
-def add_passkey_begin():
+def add_passkey_begin_removed():
     """Begin adding new passkey"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -777,8 +621,7 @@ def add_passkey_begin():
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
-@bp.route('/api/passkeys/add/complete', methods=['POST'])
-def add_passkey_complete():
+def add_passkey_complete_removed():
     """Complete adding new passkey"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -855,8 +698,7 @@ def add_passkey_complete():
         return jsonify({'error': f'Verification failed: {str(e)}\n{traceback.format_exc()}'}), 400
 
 
-@bp.route('/api/passkeys/<credential_id>', methods=['DELETE'])
-def delete_passkey(credential_id):
+def delete_passkey_removed(credential_id):
     """Delete a passkey"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -894,7 +736,7 @@ def delete_passkey(credential_id):
 
 @bp.route('/api/login/email/send', methods=['POST'])
 def send_login_email_api():
-    """Send login link via email"""
+    """Send login link via email (works with both Firebase Auth and legacy users)"""
     try:
         data = request.json
         email = data.get('email')
@@ -908,10 +750,32 @@ def send_login_email_api():
         if not re.match(email_pattern, email):
             return jsonify({'error': 'Invalid email format'}), 400
         
-        # Check if user exists
+        # Check if user exists in Firestore
         user_id = get_user_by_email(email)
+        
+        # If user doesn't exist in Firestore, check if they exist in Firebase Auth
         if not user_id:
-            return jsonify({'error': 'User not found'}), 404
+            try:
+                import firebase_admin
+                from firebase_admin import auth
+                firebase_user = auth.get_user_by_email(email)
+                # User exists in Firebase Auth but not in Firestore
+                # Create Firestore user document
+                from ..auth.firebase_auth import ensure_firestore_user_exists
+                user_id = ensure_firestore_user_exists(
+                    firebase_user.uid,
+                    email,
+                    firebase_user.email_verified
+                )
+            except auth.UserNotFoundError:
+                # User doesn't exist in Firebase Auth either
+                return jsonify({'error': 'User not found. Please sign up first.'}), 404
+            except Exception as e:
+                # Other error - log and return generic message
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error checking Firebase Auth for user {email}: {e}")
+                return jsonify({'error': 'User not found. Please sign up first.'}), 404
         
         # Generate login token and send email
         try:
@@ -926,66 +790,5 @@ def send_login_email_api():
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
-@bp.route('/api/login/email/<token>')
-def verify_login_email_token(token):
-    """Verify login email token and log user in"""
-    try:
-        # Find user by login token
-        try:
-            from ..db import users_collection
-        except ImportError:
-            from db import users_collection
-        
-        if users_collection is None:
-            return redirect(url_for('auth.login'))
-        
-        query = users_collection.where(filter=FieldFilter('login_token', '==', token)).limit(1).stream()
-        docs = list(query)
-        if not docs:
-            return render_template('login.html', error='Invalid or expired login link')
-        
-        user_doc = docs[0]
-        user_data = user_doc.to_dict()
-        user_id = user_doc.id
-        email = user_data.get('username', '')
-        
-        # Verify token
-        if not verify_login_token(user_id, token):
-            return render_template('login.html', error='Invalid or expired login link')
-        
-        # Check if email is verified
-        if not is_user_verified(user_id):
-            # Set session and redirect to verification pending
-            session['user_id'] = user_id
-            session['email'] = email
-            session.permanent = True
-            return redirect(url_for('auth.verify_pending'))
-        
-        # Log user in
-        session['user_id'] = user_id
-        session['email'] = email
-        session.permanent = True
-        
-        # Check if user has credentials for current domain
-        hostname = request.host.split(':')[0]
-        if hostname == '0.0.0.0':
-            rp_id = 'localhost'
-        else:
-            rp_id = hostname
-        
-        user_credential = load_credentials_by_user_id(user_id, rp_id=rp_id)
-        
-        if not user_credential:
-            # User logged in but has no passkey for this domain - redirect to account to add one
-            # Set a flag in session to show message about adding passkey
-            session['needs_passkey_for_domain'] = True
-            return redirect(url_for('page.account'))
-        
-        # User has passkey, redirect to dashboard
-        return redirect(url_for('page.dashboard'))
-        
-    except Exception as e:
-        import traceback
-        print(f"Error verifying login token: {traceback.format_exc()}")
-        return render_template('login.html', error='An error occurred. Please try again.')
+# Removed /api/login/email/<token> endpoint - now handled on /about page with ?token= query parameter
 

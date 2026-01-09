@@ -52,7 +52,55 @@
     
     {% include 'partials/login_modal.html' %}
     
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    
+    <!-- Initialize Firebase Auth -->
+    <script>
+        // Load Firebase config and initialize
+        (async function() {
+            try {
+                const response = await fetch('/api/firebase-config');
+                const config = await response.json();
+                
+                if (config.apiKey && config.projectId) {
+                    // Initialize Firebase
+                    if (typeof firebase !== 'undefined') {
+                        firebase.initializeApp(config);
+                        // Initialize Firebase Auth helper
+                        if (window.firebaseAuth && window.firebaseAuth.init) {
+                            window.firebaseAuth.init(config);
+                        }
+                    }
+                } else {
+                    console.warn('Firebase config is incomplete. Please set FIREBASE_API_KEY and other config values.');
+                }
+            } catch (error) {
+                console.error('Error loading Firebase config:', error);
+            }
+        })();
+    </script>
+    
+    <script src="{{ url_for('static', filename='js/firebase-auth.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // Handle logout with Firebase Auth
+        async function handleLogout(event) {
+            event.preventDefault();
+            try {
+                if (window.firebaseAuth && window.firebaseAuth.signOut) {
+                    await window.firebaseAuth.signOut();
+                }
+                // Redirect to about page after logout
+                window.location.href = '/about';
+            } catch (error) {
+                console.error('Error during logout:', error);
+                // Still redirect even if there's an error
+                window.location.href = '/about';
+            }
+        }
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

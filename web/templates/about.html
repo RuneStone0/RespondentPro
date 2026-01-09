@@ -222,4 +222,88 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Handle Firebase Auth email link sign-in
+    (async function() {
+        // Check if this is an email link sign-in
+        const urlParams = new URLSearchParams(window.location.search);
+        const oobCode = urlParams.get('oobCode');
+        const mode = urlParams.get('mode');
+        
+        if (oobCode && mode === 'signIn') {
+            // This is a Firebase Auth email link
+            // Wait for Firebase Auth to be initialized
+            const maxWaitTime = 10000; // 10 seconds max wait
+            const checkInterval = 100; // Check every 100ms
+            let waited = 0;
+            
+            // Wait for Firebase Auth to be ready
+            while (waited < maxWaitTime) {
+                if (window.firebaseAuth && window.firebaseAuth.getAuth && window.firebaseAuth.getAuth()) {
+                    // Firebase Auth is initialized
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, checkInterval));
+                waited += checkInterval;
+            }
+            
+            // Check if Firebase Auth is ready
+            if (!window.firebaseAuth || !window.firebaseAuth.getAuth || !window.firebaseAuth.getAuth()) {
+                console.error('Firebase Auth not initialized after waiting');
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-error fixed top-4 right-4 z-50';
+                errorDiv.innerHTML = '<span>Firebase Auth failed to initialize. Please refresh the page.</span>';
+                document.body.appendChild(errorDiv);
+                setTimeout(() => errorDiv.remove(), 5000);
+                return;
+            }
+            
+            try {
+                // Get email from localStorage (stored when user requested the link)
+                const email = window.localStorage.getItem('emailForSignIn');
+                
+                if (!email) {
+                    console.error('Email not found in localStorage. Please request a new login link.');
+                    // Show error message to user
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-error fixed top-4 right-4 z-50';
+                    errorDiv.innerHTML = '<span>Email not found. Please request a new login link.</span>';
+                    document.body.appendChild(errorDiv);
+                    setTimeout(() => errorDiv.remove(), 5000);
+                    return;
+                }
+                
+                // Complete the sign-in
+                if (window.firebaseAuth && window.firebaseAuth.completeSignInWithEmailLink) {
+                    const fullUrl = window.location.href;
+                    await window.firebaseAuth.completeSignInWithEmailLink(email, fullUrl);
+                    
+                    // Clear email from localStorage
+                    window.localStorage.removeItem('emailForSignIn');
+                    
+                    // Show success message
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'alert alert-success fixed top-4 right-4 z-50';
+                    successDiv.innerHTML = '<span>Successfully signed in! Redirecting...</span>';
+                    document.body.appendChild(successDiv);
+                    
+                    // Redirect to dashboard
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    throw new Error('Firebase Auth completeSignInWithEmailLink method not available');
+                }
+            } catch (error) {
+                console.error('Error completing email link sign-in:', error);
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-error fixed top-4 right-4 z-50';
+                errorDiv.innerHTML = `<span>Error signing in: ${error.message || 'Please try again.'}</span>`;
+                document.body.appendChild(errorDiv);
+                setTimeout(() => errorDiv.remove(), 5000);
+            }
+        }
+    })();
+</script>
 {% endblock %}

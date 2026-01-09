@@ -11,6 +11,12 @@ from flask import Blueprint, request, jsonify, session
 from datetime import datetime
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+# Import Firebase Auth decorators
+try:
+    from ..auth.firebase_auth import require_auth, get_user_id_from_token
+except ImportError:
+    from auth.firebase_auth import require_auth, get_user_id_from_token
+
 # Import services
 try:
     from ..services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_last_synced, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
@@ -99,11 +105,9 @@ def extract_session_sid_from_cookie_blob(cookie_string):
 
 
 @bp.route('/session-keys', methods=['POST'])
+@require_auth
 def save_session_keys():
     """Save user's Respondent.io session keys to MongoDB and test them"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
         data = request.json
         session_sid = data.get('session_sid', '').strip()
@@ -117,7 +121,7 @@ def save_session_keys():
         if not session_sid:
             return jsonify({'error': 'respondent.session.sid is required'}), 400
         
-        user_id = session['user_id']
+        user_id = request.auth['uid']
         config = {
             'cookies': {
                 'respondent.session.sid': session_sid
@@ -163,12 +167,10 @@ def save_session_keys():
 
 
 @bp.route('/session-keys', methods=['GET'])
+@require_auth
 def get_session_keys():
     """Get user's Respondent.io session keys"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    user_id = session['user_id']
+    user_id = request.auth['uid']
     config = load_user_config(user_id)
     
     if not config:
@@ -178,11 +180,9 @@ def get_session_keys():
 
 
 @bp.route('/session-keys/validate', methods=['POST'])
+@require_auth
 def validate_session_keys():
     """Validate session keys without saving them"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
         data = request.json
         session_sid = data.get('session_sid', '').strip()
@@ -217,11 +217,9 @@ def validate_session_keys():
 
 
 @bp.route('/onboarding/has-account', methods=['POST'])
+@require_auth
 def save_has_account():
     """Save user's has_respondent_account status"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
         data = request.json
         has_account = data.get('has_account', False)
@@ -231,7 +229,7 @@ def save_has_account():
             has_account = has_account.lower() in ('true', '1', 'yes', 'on')
         has_account = bool(has_account)
         
-        user_id = session['user_id']
+        user_id = request.auth['uid']
         update_user_onboarding_status(user_id, has_account)
         
         return jsonify({
@@ -245,23 +243,19 @@ def save_has_account():
 
 
 @bp.route('/filters', methods=['GET'])
+@require_auth
 def get_filters():
     """Get user's project filter preferences"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    user_id = session['user_id']
+    user_id = request.auth['uid']
     filters = load_user_filters(user_id)
     
     return jsonify(filters)
 
 
 @bp.route('/topics', methods=['GET'])
+@require_auth
 def get_topics():
     """Get all available topics"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
         topics = get_all_topics(topics_collection)
         return jsonify({'topics': topics})
@@ -271,13 +265,11 @@ def get_topics():
 
 
 @bp.route('/filters', methods=['POST'])
+@require_auth
 def save_filters():
     """Save user's project filter preferences"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = session['user_id']
+        user_id = request.auth['uid']
         data = request.json
         
         # Default to empty dict if no data provided (save_user_filters handles this)
@@ -340,13 +332,11 @@ def save_filters():
 
 
 @bp.route('/hide-projects', methods=['POST'])
+@require_auth
 def hide_projects():
     """Start the process of hiding projects based on filters"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = session['user_id']
+        user_id = request.auth['uid']
         
         # Check user credits before starting
         try:
@@ -408,13 +398,11 @@ def hide_projects():
 
 
 @bp.route('/preview-hide', methods=['POST'])
+@require_auth
 def preview_hide():
     """Preview projects that would be hidden based on current filter settings"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = session['user_id']
+        user_id = request.auth['uid']
         user_id_str = str(user_id)
         data = request.json
         
@@ -556,20 +544,18 @@ def preview_hide():
         
     except Exception as e:
         import traceback
-        user_id_str = str(session.get('user_id', 'unknown'))
+        user_id_str = str(request.auth.get('uid', 'unknown') if hasattr(request, 'auth') and request.auth else 'unknown')
         if user_id_str in preview_hide_progress:
             preview_hide_progress[user_id_str]['status'] = 'error'
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 
 
 @bp.route('/preview-hide-progress', methods=['GET'])
+@require_auth
 def get_preview_hide_progress():
     """Get the current preview-hide progress for a user"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id_str = str(session['user_id'])
+        user_id_str = str(request.auth['uid'])
         progress = preview_hide_progress.get(user_id_str, {
             'status': 'not_started',
             'current': 0,
@@ -582,13 +568,11 @@ def get_preview_hide_progress():
 
 
 @bp.route('/hide-progress', methods=['GET'])
+@require_auth
 def get_hide_progress_route():
     """Get the current progress of hiding projects"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         progress = get_hide_progress(user_id)
         return jsonify(progress)
     except Exception as e:
@@ -596,13 +580,11 @@ def get_hide_progress_route():
 
 
 @bp.route('/hide-project', methods=['POST'])
+@require_auth
 def hide_project():
     """Hide a single project with optional feedback and generate AI question"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         
         # Check user credits before hiding
         try:
@@ -719,13 +701,11 @@ def hide_project():
 
 
 @bp.route('/hide-suggestions', methods=['POST'])
+@require_auth
 def get_hide_suggestions():
     """Get AI-generated suggestions for why a user might hide a project"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         data = request.json
         project_id = data.get('project_id')
         
@@ -767,13 +747,11 @@ def get_hide_suggestions():
 
 
 @bp.route('/answer-question', methods=['POST'])
+@require_auth
 def answer_question():
     """Answer an AI-generated question and auto-hide similar projects if applicable"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         data = request.json
         question_id = data.get('question_id')
         question_text = data.get('question_text')
@@ -872,13 +850,11 @@ def answer_question():
 
 
 @bp.route('/hide-feedback', methods=['GET'])
+@require_auth
 def get_hide_feedback():
     """Get all hide_feedback entries for the current user"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         
         if user_preferences_collection is None:
             return jsonify({'success': True, 'feedback': []})
@@ -915,13 +891,11 @@ def get_hide_feedback():
 
 
 @bp.route('/hide-feedback/<feedback_id>', methods=['PUT', 'PATCH'])
+@require_auth
 def update_hide_feedback(feedback_id):
     """Update a specific hide_feedback entry's text"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         data = request.json
         
         if not data or 'feedback_text' not in data:
@@ -974,13 +948,11 @@ def update_hide_feedback(feedback_id):
 
 
 @bp.route('/hide-feedback/<feedback_id>', methods=['DELETE'])
+@require_auth
 def delete_hide_feedback(feedback_id):
     """Delete a specific hide_feedback entry"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         
         if user_preferences_collection is None:
             return jsonify({'error': 'Database not available'}), 500
@@ -1022,13 +994,11 @@ def delete_hide_feedback(feedback_id):
 
 
 @bp.route('/analytics/hidden-count', methods=['GET'])
+@require_auth
 def get_hidden_count_api():
     """Get total count of hidden projects"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         count = get_hidden_count(user_id)
         return jsonify({'total_count': count})
     except Exception as e:
@@ -1036,13 +1006,11 @@ def get_hidden_count_api():
 
 
 @bp.route('/analytics/hidden-timeline', methods=['GET'])
+@require_auth
 def get_hidden_timeline():
     """Get hidden projects grouped by date for graphing"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         group_by = request.args.get('group_by', 'day')
@@ -1070,13 +1038,11 @@ def get_hidden_timeline():
 
 
 @bp.route('/analytics/hidden-stats', methods=['GET'])
+@require_auth
 def get_hidden_stats():
     """Get detailed statistics about hidden projects"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         if hidden_projects_log_collection is not None:
             stats = get_hidden_projects_stats(hidden_projects_log_collection, user_id)
             return jsonify(stats)
@@ -1092,13 +1058,11 @@ def get_hidden_stats():
 
 
 @bp.route('/projects', methods=['GET'])
+@require_auth
 def get_projects():
     """Get cached projects as JSON for AJAX loading"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         
         # Get cached projects if available
         projects_data = None
@@ -1166,13 +1130,11 @@ def get_projects():
 
 
 @bp.route('/cache/stats', methods=['GET'])
+@require_auth
 def get_cache_stats_api():
     """Get cache statistics including refresh time"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         
         # Get last sync time from hidden_projects_log
         last_sync = None
@@ -1214,13 +1176,11 @@ def get_cache_stats_api():
 
 
 @bp.route('/cache/refresh', methods=['POST'])
+@require_auth
 def refresh_cache():
     """Manually refresh the project cache (runs in background)"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         
         config = load_user_config(user_id)
         if not config or not config.get('cookies', {}).get('respondent.session.sid'):
@@ -1347,13 +1307,11 @@ def refresh_cache():
 
 
 @bp.route('/notifications/preferences', methods=['GET'])
+@require_auth
 def get_notification_preferences():
     """Get user's notification preferences"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = session['user_id']
+        user_id = request.auth['uid']
         
         # Import notification service
         try:
@@ -1383,13 +1341,11 @@ def get_notification_preferences():
 
 
 @bp.route('/notifications/preferences', methods=['POST'])
+@require_auth
 def save_notification_preferences():
     """Save user's notification preferences"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = session['user_id']
+        user_id = request.auth['uid']
         data = request.json
         
         if not data:
@@ -1427,13 +1383,11 @@ def save_notification_preferences():
 
 
 @bp.route('/history', methods=['GET'])
+@require_auth
 def get_history():
     """Get hidden projects history with pagination and counts"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
     try:
-        user_id = str(session['user_id'])
+        user_id = str(request.auth['uid'])
         
         # Get pagination parameters
         page = request.args.get('page', 1, type=int)
@@ -1464,18 +1418,54 @@ def get_history():
             limit=limit
         )
         
-        # Count manual vs automated
+        # Count manual vs automated - optimize by calculating from the results we already have
+        # This avoids a separate full collection scan
         manual_methods = ['manual', 'feedback_based', 'applied']
         automated_methods = ['auto', 'ai_auto', 'auto_similar', 'category']
         
-        # Count by method using Firestore query (Firestore doesn't support aggregation pipelines)
+        # Calculate method counts from the paginated results we already fetched
+        # For accurate counts, we still need the full scan, but we can optimize it
         method_counts = {}
         try:
-            query = hidden_projects_log_collection.where(filter=FieldFilter('user_id', '==', user_id)).stream()
-            for doc in query:
-                doc_data = doc.to_dict()
-                method = doc_data.get('hidden_method', 'unknown')
-                method_counts[method] = method_counts.get(method, 0) + 1
+            from ..cache_manager import resolve_user_id_for_query
+        except ImportError:
+            try:
+                from web.cache_manager import resolve_user_id_for_query
+            except ImportError:
+                def resolve_user_id_for_query(user_id: str):
+                    return str(user_id), None
+        
+        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        
+        try:
+            # OPTIMIZATION: Only do full method count for small datasets (< 500 records)
+            # For larger datasets, skip to avoid timeout (method counts are nice-to-have)
+            total_from_result = result.get('total', 0)
+            
+            # If dataset is small, do accurate count
+            # Otherwise, skip method counting for performance
+            if total_from_result > 0 and total_from_result <= 500:
+                # Small dataset - do full count for accuracy
+                query = hidden_projects_log_collection.where(filter=FieldFilter('user_id', '==', current_user_id)).stream()
+                for doc in query:
+                    doc_data = doc.to_dict()
+                    method = doc_data.get('hidden_method', 'unknown')
+                    method_counts[method] = method_counts.get(method, 0) + 1
+                
+                # If no results and we have old_user_id, try that
+                if not method_counts and old_user_id:
+                    query_old = hidden_projects_log_collection.where(filter=FieldFilter('user_id', '==', old_user_id)).stream()
+                    for doc in query_old:
+                        doc_data = doc.to_dict()
+                        method = doc_data.get('hidden_method', 'unknown')
+                        method_counts[method] = method_counts.get(method, 0) + 1
+            else:
+                # Large dataset - estimate from paginated results or skip
+                # Count from the projects we already fetched as a sample
+                for project in result.get('projects', []):
+                    method = project.get('hidden_method', 'unknown')
+                    method_counts[method] = method_counts.get(method, 0) + 1
+                # These are estimates, not exact counts
         except Exception as e:
             print(f"Error counting by method: {e}")
             method_counts = {}
@@ -1521,12 +1511,10 @@ def get_history():
 
 
 @bp.route('/admin/update-user-billing', methods=['POST'])
+@require_auth
 def update_user_billing():
     """Update user billing limit (admin only)"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    user_id = session['user_id']
+    user_id = request.auth['uid']
     
     # Check if user is admin
     if not is_admin(user_id):
@@ -1568,13 +1556,11 @@ def update_user_billing():
 
 
 @bp.route('/support', methods=['POST'])
+@require_auth
 def submit_support():
     """Submit a support request (authenticated users only)"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    user_id = session['user_id']
-    user_email = session.get('email')
+    user_id = request.auth['uid']
+    user_email = request.auth.get('email')
     
     if not user_email:
         return jsonify({'error': 'Email not found in session'}), 400

@@ -472,7 +472,7 @@ def hide_project_via_api(session, project_id):
 
 
 def get_hidden_count(user_id):
-    """Get the current hidden count for a user"""
+    """Get the current hidden count for a user, handling migration from old user_id to Firebase Auth UID"""
     if hidden_projects_log_collection is None:
         return 0
     try:

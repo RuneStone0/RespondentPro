@@ -26,6 +26,12 @@
         @apply truncate inline-block align-middle;
         max-width: calc(100% - 2rem);
     }
+    .project-name-link {
+        @apply text-base-content no-underline;
+    }
+    .project-name-link:hover {
+        @apply underline;
+    }
 </style>
 {% endblock %}
 
@@ -267,16 +273,11 @@ async function loadHistory(page = 1) {
                 const isUnknownProject = !project.project_name || projectName === 'Unknown Project';
                 row.innerHTML = `
                     <td class="project-name-cell">
-                        <div class="flex items-center gap-2">
-                            <span class="project-name-text ${isUnknownProject ? 'text-base-content/50' : ''}" title="${escapeHtml(projectName)}">${escapeHtml(projectName)}</span>
-                            ${projectId !== 'Unknown' ? `
-                            <a href="${projectUrl}" target="_blank" class="link link-primary flex-shrink-0" title="Open project">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                            </a>
-                            ` : ''}
-                        </div>
+                        ${projectId !== 'Unknown' ? `
+                        <a href="${projectUrl}" target="_blank" class="project-name-link project-name-text ${isUnknownProject ? 'text-base-content/50' : ''}" title="${escapeHtml(projectName)}">${escapeHtml(projectName)}</a>
+                        ` : `
+                        <span class="project-name-text ${isUnknownProject ? 'text-base-content/50' : ''}" title="${escapeHtml(projectName)}">${escapeHtml(projectName)}</span>
+                        `}
                     </td>
                     <td title="${formatDate(project.hidden_at)}">${formatRelativeTime(project.hidden_at)}</td>
                     <td>
