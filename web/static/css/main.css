@@ -182,7 +182,8 @@ textarea {
     font-family: monospace;
 }
 
-input[type="text"][name="session_sid"] {
+input[type="text"][name="session_sid"],
+input[type="text"][name="authorization"] {
     font-family: monospace;
 }
 
@@ -784,7 +785,7 @@ input[type="text"][name="session_sid"] {
 
 .project-list {
     display: grid;
-    gap: 24px;
+    gap: 16px;
     margin-bottom: 32px;
 }
 
@@ -793,7 +794,6 @@ input[type="text"][name="session_sid"] {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 20px;
-    margin-bottom: 16px;
     transition: all 0.3s ease;
 }
 
@@ -936,6 +936,9 @@ input[type="text"][name="session_sid"] {
     width: 8px;
     height: 8px;
     border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+    position: relative;
 }
 
 .status-dot.blue {

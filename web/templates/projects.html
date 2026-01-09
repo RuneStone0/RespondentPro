@@ -6,7 +6,7 @@
 {% block extra_css %}
 <style>
     .toast-container {
-        @apply fixed bottom-16 right-5 z-[10000] flex flex-col gap-3;
+        @apply fixed bottom-24 right-5 z-[10001] flex flex-col gap-3;
     }
     .toast {
         @apply min-w-[300px] max-w-[400px] p-4 bg-base-100 border border-base-300 rounded-lg shadow-lg flex items-center gap-3 relative;
@@ -192,7 +192,7 @@
         </div>
         <div class="footer-right">
             <div class="footer-stat" id="footerSyncStatus" style="display: none;">
-                <span>Synced <span id="footerSyncTime"></span> • Next refresh in <span id="footerCountdown"></span></span>
+                <span>Last sync: <span id="footerSyncTime"></span></span>
             </div>
             <div class="footer-stat">
                 <button onclick="refreshCache()" id="footerRefreshCacheBtn" style="background: none; border: none; padding: 4px; cursor: pointer; display: flex; align-items: center; color: var(--text-secondary); transition: color 0.2s;" title="Refresh project cache manually" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">
@@ -394,7 +394,7 @@
             ? '<svg class="toast-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>'
             : type === 'error'
             ? '<svg class="toast-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>'
-            : '<svg class="toast-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>';
+            : '';
         
         toast.innerHTML = `
             ${iconSvg}
@@ -904,102 +904,125 @@
         }
     }
     
-    // Convert UTC timestamp to local timezone and format
-    function formatLocalTime(utcTimestamp) {
-        if (!utcTimestamp) return null;
+    // Convert UTC timestamp to relative time format (e.g., "8 hours ago", "2 days ago")
+    function formatRelativeTime(utcTimestamp) {
+        if (!utcTimestamp) {
+            console.log('formatRelativeTime: No timestamp provided');
+            return null;
+        }
         
         try {
             const utcDate = new Date(utcTimestamp);
             if (isNaN(utcDate.getTime())) {
-                console.error('Invalid UTC timestamp:', utcTimestamp);
+                console.error('Invalid UTC timestamp:', utcTimestamp, 'Parsed as:', utcDate);
                 return null;
             }
             
-            // Format in user's local timezone
-            const timeStr = utcDate.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-                timeZone: userTimezone || undefined
-            });
+            const now = new Date();
+            const diffMs = now - utcDate;
             
-            return timeStr;
+            // Handle future dates (shouldn't happen, but just in case)
+            if (diffMs < 0) {
+                console.warn('Timestamp is in the future:', utcTimestamp);
+                return 'just now';
+            }
+            
+            const diffSeconds = Math.floor(diffMs / 1000);
+            const diffMinutes = Math.floor(diffSeconds / 60);
+            const diffHours = Math.floor(diffMinutes / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            const diffWeeks = Math.floor(diffDays / 7);
+            const diffMonths = Math.floor(diffDays / 30);
+            const diffYears = Math.floor(diffDays / 365);
+            
+            if (diffSeconds < 60) {
+                return diffSeconds <= 1 ? 'just now' : `${diffSeconds} seconds ago`;
+            } else if (diffMinutes < 60) {
+                return diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
+            } else if (diffHours < 24) {
+                return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+            } else if (diffDays < 7) {
+                return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+            } else if (diffWeeks < 4) {
+                return diffWeeks === 1 ? '1 week ago' : `${diffWeeks} weeks ago`;
+            } else if (diffMonths < 12) {
+                return diffMonths === 1 ? '1 month ago' : `${diffMonths} months ago`;
+            } else {
+                return diffYears === 1 ? '1 year ago' : `${diffYears} years ago`;
+            }
         } catch (e) {
-            console.error('Error formatting local time:', e);
+            console.error('Error formatting relative time:', e, 'Timestamp:', utcTimestamp);
             return null;
         }
     }
     
     // Update cache refresh time display
     function updateCacheRefreshDisplay(utcTimestamp) {
-        if (!utcTimestamp) return;
+        const footerSyncTimeEl = document.getElementById('footerSyncTime');
+        const footerSyncStatusEl = document.getElementById('footerSyncStatus');
         
-        const localTime = formatLocalTime(utcTimestamp);
-        if (localTime) {
-            // Update footer sync time
-            const footerSyncTimeEl = document.getElementById('footerSyncTime');
-            const footerSyncStatusEl = document.getElementById('footerSyncStatus');
-            if (footerSyncTimeEl) {
-                footerSyncTimeEl.textContent = localTime;
-            }
-            if (footerSyncStatusEl) {
-                footerSyncStatusEl.style.display = 'block';
-            }
-            
-            // Update countdown timer
-            updateCountdownTimer(utcTimestamp);
-        }
-    }
-    
-    // Update countdown timer
-    function updateCountdownTimer(utcTimestamp) {
-        if (!utcTimestamp) return;
+        if (!footerSyncStatusEl) return;
         
-        const countdownEl = document.getElementById('footerCountdown');
-        if (!countdownEl) return;
-        
-        try {
-            const lastUpdated = new Date(utcTimestamp);
-            const nextRefresh = new Date(lastUpdated.getTime() + 24 * 60 * 60 * 1000); // Add 24 hours
-            const now = new Date();
-            const diff = nextRefresh - now;
+        if (utcTimestamp) {
+            // Store timestamp for periodic updates
+            currentCacheTimestamp = utcTimestamp;
             
-            if (diff <= 0) {
-                countdownEl.textContent = 'Refreshing...';
-                return;
-            }
-            
-            const hours = Math.floor(diff / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-            
-            if (hours > 0) {
-                countdownEl.textContent = `${hours}h ${minutes}m`;
-            } else if (minutes > 0) {
-                countdownEl.textContent = `${minutes}m ${seconds}s`;
+            const relativeTime = formatRelativeTime(utcTimestamp);
+            if (relativeTime) {
+                // Update footer sync time with relative time
+                if (footerSyncTimeEl) {
+                    footerSyncTimeEl.textContent = relativeTime;
+                }
+                footerSyncStatusEl.style.display = 'flex';
             } else {
-                countdownEl.textContent = `${seconds}s`;
+                // Show status even if time formatting fails
+                if (footerSyncTimeEl) {
+                    footerSyncTimeEl.textContent = 'unknown';
+                }
+                footerSyncStatusEl.style.display = 'flex';
             }
-        } catch (e) {
-            console.error('Error updating countdown timer:', e);
-            countdownEl.textContent = '--';
+        } else {
+            // No timestamp available - show a message
+            currentCacheTimestamp = null;
+            if (footerSyncTimeEl) {
+                footerSyncTimeEl.textContent = 'never';
+            }
+            footerSyncStatusEl.style.display = 'flex';
         }
     }
     
-    // Start countdown timer interval
-    let countdownInterval = null;
-    function startCountdownTimer(utcTimestamp) {
-        if (countdownInterval) {
-            clearInterval(countdownInterval);
+    // Store the current cache timestamp for periodic updates
+    let currentCacheTimestamp = null;
+    let relativeTimeInterval = null;
+    
+    // Start relative time updater interval
+    function startRelativeTimeUpdater(utcTimestamp) {
+        currentCacheTimestamp = utcTimestamp;
+        
+        if (relativeTimeInterval) {
+            clearInterval(relativeTimeInterval);
         }
         
         // Update immediately
-        updateCountdownTimer(utcTimestamp);
+        updateRelativeTimeDisplay();
         
-        // Update every second
-        countdownInterval = setInterval(() => {
-            updateCountdownTimer(utcTimestamp);
-        }, 1000);
+        // Update every minute to keep relative time current
+        relativeTimeInterval = setInterval(() => {
+            updateRelativeTimeDisplay();
+        }, 60000); // Update every minute
+    }
+    
+    // Update just the relative time display
+    function updateRelativeTimeDisplay() {
+        if (!currentCacheTimestamp) return;
+        
+        const footerSyncTimeEl = document.getElementById('footerSyncTime');
+        if (footerSyncTimeEl) {
+            const relativeTime = formatRelativeTime(currentCacheTimestamp);
+            if (relativeTime) {
+                footerSyncTimeEl.textContent = relativeTime;
+            }
+        }
     }
     
     // Update cache refresh time after projects are fetched
@@ -1013,14 +1036,35 @@
             const response = await fetch('/api/cache/stats');
             if (response.ok) {
                 const data = await response.json();
+                console.log('Cache stats response:', data);
                 const utcTimestamp = data.last_updated || data.cache_refreshed_str;
+                console.log('Using timestamp:', utcTimestamp);
+                updateCacheRefreshDisplay(utcTimestamp);
                 if (utcTimestamp) {
-                    updateCacheRefreshDisplay(utcTimestamp);
-                    startCountdownTimer(utcTimestamp);
+                    startRelativeTimeUpdater(utcTimestamp);
                 }
+            } else {
+                console.error('Failed to fetch cache stats:', response.status, response.statusText);
+                // Even if API fails, try to show the status
+                updateCacheRefreshDisplay(null);
             }
         } catch (error) {
             console.error('Error updating cache refresh time:', error);
+            // Show status even on error
+            updateCacheRefreshDisplay(null);
+        }
+    }
+    
+    // Store original button state
+    const originalRefreshBtnSvg = '<svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>';
+    
+    // Function to restore refresh button to normal state
+    function restoreRefreshButton() {
+        const btn = document.getElementById('footerRefreshCacheBtn');
+        if (btn) {
+            btn.innerHTML = originalRefreshBtnSvg;
+            btn.disabled = false;
+            btn.style.opacity = '1';
         }
     }
     
@@ -1029,7 +1073,6 @@
         const btn = document.getElementById('footerRefreshCacheBtn');
         if (!btn) return;
         
-        const originalSvg = btn.innerHTML;
         btn.disabled = true;
         btn.style.opacity = '0.5';
         btn.innerHTML = '<svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>';
@@ -1055,9 +1098,7 @@
         } catch (error) {
             console.error('Error refreshing cache:', error);
             showToast('Error refreshing cache: ' + error.message, 'error');
-            btn.innerHTML = originalSvg;
-            btn.disabled = false;
-            btn.style.opacity = '1';
+            restoreRefreshButton();
         }
     }
     
@@ -2003,14 +2044,30 @@
     
     // Poll cache refresh status and reload projects when complete
     let refreshPollInterval = null;
-    function pollCacheRefresh() {
+    let initialCacheTime = null; // Track initial cache timestamp
+    
+    async function pollCacheRefresh() {
         // Clear any existing interval
         if (refreshPollInterval) {
             clearInterval(refreshPollInterval);
         }
         
+        // Get the initial cache timestamp before refresh starts
+        try {
+            const initialResponse = await fetch('/api/cache/stats');
+            if (initialResponse.ok) {
+                const initialData = await initialResponse.json();
+                if (initialData.last_updated) {
+                    initialCacheTime = new Date(initialData.last_updated).getTime();
+                }
+            }
+        } catch (err) {
+            console.error('Error getting initial cache time:', err);
+        }
+        
+        const refreshStartTime = Date.now();
         let pollCount = 0;
-        const maxPolls = 60; // Poll for up to 60 seconds (1 second intervals)
+        const maxPolls = 120; // Poll for up to 120 seconds (1 second intervals)
         
         refreshPollInterval = setInterval(async () => {
             pollCount++;
@@ -2019,19 +2076,27 @@
                 const response = await fetch('/api/cache/stats');
                 if (response.ok) {
                     const data = await response.json();
-                    // Check if cache was recently updated (within last 5 seconds)
                     if (data.last_updated) {
                         const lastUpdated = new Date(data.last_updated);
-                        const now = new Date();
-                        const diffSeconds = (now - lastUpdated) / 1000;
+                        const lastUpdatedTime = lastUpdated.getTime();
+                        const now = Date.now();
+                        const timeSinceUpdate = now - lastUpdatedTime;
                         
-                        if (diffSeconds < 5) {
+                        // Check if cache was updated after we started the refresh
+                        // Either the timestamp is newer than initial, or it was updated within last 15 seconds
+                        const timestampChanged = initialCacheTime === null || lastUpdatedTime > initialCacheTime;
+                        const wasRecentlyUpdated = timeSinceUpdate < 15000; // Within last 15 seconds
+                        
+                        if (timestampChanged && wasRecentlyUpdated) {
                             // Cache was just updated, reload projects
                             clearInterval(refreshPollInterval);
                             refreshPollInterval = null;
+                            initialCacheTime = null; // Reset
                             await loadProjects();
                             await updateCacheRefreshTime();
+                            restoreRefreshButton();
                             showToast('Projects refreshed successfully!', 'success');
+                            return;
                         }
                     }
                 }
@@ -2042,6 +2107,9 @@
             if (pollCount >= maxPolls) {
                 clearInterval(refreshPollInterval);
                 refreshPollInterval = null;
+                initialCacheTime = null; // Reset
+                restoreRefreshButton();
+                showToast('Cache refresh timed out', 'error');
             }
         }, 1000);
     }

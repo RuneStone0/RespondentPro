@@ -22,7 +22,7 @@ try:
     from ..cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
     from ..hidden_projects_tracker import (
         get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
-        get_all_hidden_projects
+        get_all_hidden_projects, get_last_sync_time
     )
     from ..ai_analyzer import (
         generate_question_from_project, find_similar_projects, generate_hide_suggestions
@@ -48,7 +48,7 @@ except ImportError:
     from cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
     from hidden_projects_tracker import (
         get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
-        get_all_hidden_projects
+        get_all_hidden_projects, get_last_sync_time
     )
     from ai_analyzer import (
         generate_question_from_project, find_similar_projects, generate_hide_suggestions
@@ -1191,39 +1191,42 @@ def get_cache_stats_api():
     
     try:
         user_id = str(session['user_id'])
+        
+        # Get last sync time from hidden_projects_log
+        last_sync = None
+        if hidden_projects_log_collection is not None:
+            last_sync = get_last_sync_time(hidden_projects_log_collection, user_id)
+            print(f"[Cache Stats] Last sync from hidden_projects_log: {last_sync}, type: {type(last_sync)}")
+        
+        # Convert to ISO format for client-side timezone conversion
+        last_sync_iso = None
+        if last_sync:
+            if isinstance(last_sync, datetime):
+                last_sync_iso = last_sync.isoformat() + 'Z'
+            elif isinstance(last_sync, str):
+                if not last_sync.endswith('Z') and '+' not in last_sync:
+                    last_sync_iso = last_sync + 'Z'
+                else:
+                    last_sync_iso = last_sync
+            else:
+                if hasattr(last_sync, 'isoformat'):
+                    last_sync_iso = last_sync.isoformat() + 'Z'
+                elif hasattr(last_sync, 'strftime'):
+                    last_sync_iso = datetime.fromtimestamp(last_sync.timestamp()).isoformat() + 'Z'
+                else:
+                    last_sync_iso = str(last_sync)
+        
+        # Also get cache stats for total_count
+        total_count = 0
         if projects_cache_collection is not None:
             stats = get_cache_stats(projects_cache_collection, user_id)
-            last_updated = stats.get('last_updated')
-            
-            # Return UTC timestamp for client-side timezone conversion
-            last_updated_iso = None
-            if last_updated:
-                if isinstance(last_updated, datetime):
-                    last_updated_iso = last_updated.isoformat() + 'Z'
-                elif isinstance(last_updated, str):
-                    if not last_updated.endswith('Z') and '+' not in last_updated:
-                        last_updated_iso = last_updated + 'Z'
-                    else:
-                        last_updated_iso = last_updated
-                else:
-                    if hasattr(last_updated, 'isoformat'):
-                        last_updated_iso = last_updated.isoformat() + 'Z'
-                    elif hasattr(last_updated, 'strftime'):
-                        last_updated_iso = datetime.fromtimestamp(last_updated.timestamp()).isoformat() + 'Z'
-                    else:
-                        last_updated_iso = str(last_updated)
-            
-            return jsonify({
-                'exists': stats.get('exists', False),
-                'last_updated': last_updated_iso,
-                'total_count': stats.get('total_count', 0)
-            })
-        else:
-            return jsonify({
-                'exists': False,
-                'last_updated': None,
-                'total_count': 0
-            })
+            total_count = stats.get('total_count', 0)
+        
+        return jsonify({
+            'exists': True,
+            'last_updated': last_sync_iso,
+            'total_count': total_count
+        })
     except Exception as e:
         import traceback
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500

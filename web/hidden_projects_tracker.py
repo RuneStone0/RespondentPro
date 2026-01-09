@@ -243,6 +243,51 @@ def is_project_hidden(collection, user_id: str, project_id: str) -> bool:
         return False
 
 
+def get_last_sync_time(collection, user_id: str) -> Optional[datetime]:
+    """
+    Get the last sync time from hidden_projects_log (most recent hidden_at timestamp)
+    
+    Args:
+        collection: Firestore collection for hidden_projects_log
+        user_id: User ID
+        
+    Returns:
+        Most recent hidden_at datetime, or None if no projects have been hidden
+    """
+    try:
+        # Get the most recent document sorted by hidden_at descending
+        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).order_by('hidden_at', direction='DESCENDING').limit(1).stream()
+        docs = list(query)
+        
+        if docs:
+            doc_data = docs[0].to_dict()
+            last_sync = doc_data.get('hidden_at')
+            if last_sync:
+                # Handle Firestore Timestamp objects
+                if hasattr(last_sync, 'timestamp'):
+                    # Firestore Timestamp object
+                    return datetime.utcfromtimestamp(last_sync.timestamp())
+                elif isinstance(last_sync, datetime):
+                    # Already a datetime object
+                    return last_sync
+                elif isinstance(last_sync, str):
+                    # Try to parse ISO format string
+                    try:
+                        return datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                    except:
+                        return None
+                else:
+                    print(f"Unexpected timestamp type: {type(last_sync)}, value: {last_sync}")
+                    return None
+        
+        return None
+    except Exception as e:
+        print(f"Error getting last sync time: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def get_recently_hidden(
     collection,
     user_id: str,
