@@ -1,0 +1,58 @@
+steps:
+  # Install Firebase CLI
+  - name: 'node:22'
+    entrypoint: 'npm'
+    args: ['install', '-g', 'firebase-tools']
+
+  # Deploy Firestore rules and indexes
+  - name: 'node:22'
+    entrypoint: 'firebase'
+    args:
+      - 'deploy'
+      #- '--only'
+      #- 'firestore:rules,firestore:indexes'
+      #- '--project'
+      #- 'respondentpro-xyz'
+      #- '--non-interactive'
+    env:
+      - 'FIREBASE_TOKEN=${_FIREBASE_TOKEN}'
+
+  # Deploy Cloud Functions
+  - name: 'node:22'
+    entrypoint: 'firebase'
+    args:
+      - 'deploy'
+      - '--only'
+      - 'functions'
+      - '--project'
+      - 'respondentpro-xyz'
+      - '--non-interactive'
+    env:
+      - 'FIREBASE_TOKEN=${_FIREBASE_TOKEN}'
+
+  # Deploy Hosting
+  - name: 'node:22'
+    entrypoint: 'firebase'
+    args:
+      - 'deploy'
+      - '--only'
+      - 'hosting'
+      - '--project'
+      - 'respondentpro-xyz'
+      - '--non-interactive'
+    env:
+      - 'FIREBASE_TOKEN=${_FIREBASE_TOKEN}'
+
+# Substitution variables
+# _FIREBASE_TOKEN should be set as a substitution variable in Cloud Build
+# You can get this token by running: firebase login:ci
+substitutions:
+  _FIREBASE_TOKEN: ''
+
+# Build timeout (optional, adjust as needed)
+timeout: '1200s'
+
+# Options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
