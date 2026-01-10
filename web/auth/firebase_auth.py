@@ -5,7 +5,7 @@ Firebase Auth token verification utilities
 
 import logging
 from functools import wraps
-from flask import request, jsonify, redirect, url_for, abort
+from flask import request, jsonify, abort
 import firebase_admin
 from firebase_admin import auth
 
@@ -90,22 +90,21 @@ def require_auth(f):
         id_token = get_id_token_from_request()
         
         if not id_token:
-            # Check if this is an API request (JSON) or page request (HTML)
+            # Return 401 for all requests when no token is present
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required'}), 401
             else:
-                # Return 404 for page requests to prevent path enumeration
-                abort(404)
+                return jsonify({'error': 'Authentication required'}), 401
         
         # Verify token
         decoded_token = verify_firebase_token(id_token)
         
         if not decoded_token:
+            # Return 401 for all requests when token is invalid
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Invalid or expired token'}), 401
             else:
-                # Return 404 for page requests to prevent path enumeration
-                abort(404)
+                return jsonify({'error': 'Invalid or expired token'}), 401
         
         # Attach decoded token to request for use in route handler
         request.auth = decoded_token
@@ -151,11 +150,11 @@ def require_verified(f):
                 f"require_verified: No token found for {request.path} "
                 f"(method: {request.method}, cookies: {list(request.cookies.keys())})"
             )
+            # Return 401 for all requests when no token is present
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required'}), 401
             else:
-                # Return 404 for page requests to prevent path enumeration
-                abort(404)
+                return jsonify({'error': 'Authentication required'}), 401
         
         decoded_token = verify_firebase_token(id_token)
         
@@ -164,11 +163,11 @@ def require_verified(f):
                 f"require_verified: Token verification failed for {request.path} "
                 f"(token preview: {id_token[:50] if id_token else 'None'}...)"
             )
+            # Return 401 for all requests when token is invalid
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Invalid or expired token'}), 401
             else:
-                # Return 404 for page requests to prevent path enumeration
-                abort(404)
+                return jsonify({'error': 'Invalid or expired token'}), 401
         
         # Check email verification
         # Note: We allow unverified users to access pages, but they'll see a verification notice

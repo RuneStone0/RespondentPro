@@ -170,8 +170,8 @@ def admin():
     
     # Check if user is admin
     if not is_admin(user_id):
-        # Return 404 to prevent path enumeration
-        abort(404)
+        # Return 403 Forbidden for non-admin users
+        abort(403)
     
     # Get all users with billing info
     users_data = []

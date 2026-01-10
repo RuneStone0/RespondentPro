@@ -352,11 +352,6 @@ except ImportError:
     app.register_blueprint(page_bp)
     app.register_blueprint(api_bp)
 
-# Register 404 error handler
-@app.errorhandler(404)
-def not_found_error(error):
-    """Handle 404 errors with a custom page"""
-    return render_template('404.html'), 404
 
 
 # Background threads disabled - Cloud Scheduler handles these tasks via scheduled functions:
