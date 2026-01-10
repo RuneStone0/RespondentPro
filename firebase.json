@@ -21,7 +21,6 @@
         "*.md",
         "Dockerfile",
         "cloudbuild.yaml",
-        "run.sh",
         "web.py",
         "config.json",
         "migration_log.json",

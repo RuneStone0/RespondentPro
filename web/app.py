@@ -7,17 +7,10 @@ import os
 import secrets
 import time
 import requests
-import logging
-import warnings
 from pathlib import Path
 from flask import Flask, jsonify, send_from_directory, render_template
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
-
-# Suppress SSL certificate warnings for local development
-# This is especially useful when using self-signed certificates
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Import database collections
 try:
@@ -138,27 +131,6 @@ app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
 # Configure sessions to last as long as possible (10 years)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=3650)
-
-# Suppress SSL certificate warnings for local development
-class SSLCertificateFilter(logging.Filter):
-    """Filter to suppress SSL certificate unknown warnings in local development"""
-    def filter(self, record):
-        # Suppress warnings about SSL certificate unknown (common with self-signed certs)
-        if 'SSLV3_ALERT_CERTIFICATE_UNKNOWN' in str(record.getMessage()):
-            return False
-        if 'ssl/tls alert certificate unknown' in str(record.getMessage()).lower():
-            return False
-        if 'certificate unknown' in str(record.getMessage()).lower():
-            return False
-        return True
-
-# Apply filter to gunicorn's error logger
-gunicorn_error_logger = logging.getLogger('gunicorn.error')
-gunicorn_error_logger.addFilter(SSLCertificateFilter())
-
-# Also apply to root logger to catch any other SSL warnings
-root_logger = logging.getLogger()
-root_logger.addFilter(SSLCertificateFilter())
 
 
 @app.route('/health', methods=['GET'])
