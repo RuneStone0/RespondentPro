@@ -351,7 +351,12 @@
             // User is automatically signed in after signup
             // Ensure cookie is set (signUp function should have set it, but double-check)
             const idToken = await userCredential.user.getIdToken();
-            document.cookie = `firebase_id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
+            // Add Secure flag in production (HTTPS), but not in local development (HTTP)
+            const isSecure = window.location.protocol === 'https:';
+            const cookieOptions = isSecure 
+                ? 'path=/; max-age=3600; SameSite=Lax; Secure'
+                : 'path=/; max-age=3600; SameSite=Lax';
+            document.cookie = `firebase_id_token=${idToken}; ${cookieOptions}`;
             
             // Wait a moment for auth state to propagate
             await new Promise(resolve => setTimeout(resolve, 500));

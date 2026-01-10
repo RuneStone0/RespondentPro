@@ -14,8 +14,12 @@ let currentUser = null;
 async function setIdTokenCookie(user) {
     try {
         const idToken = await user.getIdToken();
-        // Set cookie with ID token (no Secure flag)
-        const cookieOptions = 'path=/; max-age=3600; SameSite=Lax';
+        // Set cookie with ID token
+        // Add Secure flag in production (HTTPS), but not in local development (HTTP)
+        const isSecure = window.location.protocol === 'https:';
+        const cookieOptions = isSecure 
+            ? 'path=/; max-age=3600; SameSite=Lax; Secure'
+            : 'path=/; max-age=3600; SameSite=Lax';
         document.cookie = `firebase_id_token=${idToken}; ${cookieOptions}`;
         
         // Set up periodic token refresh (every 50 minutes, before 1 hour expiry)
