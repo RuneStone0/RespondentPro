@@ -10,7 +10,7 @@ import requests
 import logging
 import warnings
 from pathlib import Path
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, render_template
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
@@ -379,6 +379,13 @@ except ImportError:
     app.register_blueprint(auth_bp)
     app.register_blueprint(page_bp)
     app.register_blueprint(api_bp)
+
+# Register 404 error handler
+@app.errorhandler(404)
+def not_found_error(error):
+    """Handle 404 errors with a custom page"""
+    return render_template('404.html'), 404
+
 
 # Background threads disabled - Cloud Scheduler handles these tasks via scheduled functions:
 # - scheduled_notifications (runs every Friday at 9:00 AM)

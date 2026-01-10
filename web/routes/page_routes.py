@@ -3,7 +3,7 @@
 Page routes for Respondent.io Manager
 """
 
-from flask import Blueprint, render_template, session, redirect, url_for, request
+from flask import Blueprint, render_template, session, redirect, url_for, request, abort
 from datetime import datetime
 
 # Import services
@@ -170,7 +170,8 @@ def admin():
     
     # Check if user is admin
     if not is_admin(user_id):
-        return redirect(url_for('page.account'))
+        # Return 404 to prevent path enumeration
+        abort(404)
     
     # Get all users with billing info
     users_data = []

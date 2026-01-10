@@ -5,7 +5,7 @@ Firebase Auth token verification utilities
 
 import logging
 from functools import wraps
-from flask import request, jsonify, redirect, url_for
+from flask import request, jsonify, redirect, url_for, abort
 import firebase_admin
 from firebase_admin import auth
 
@@ -87,8 +87,8 @@ def require_auth(f):
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required'}), 401
             else:
-                # Redirect to login for page requests
-                return redirect(url_for('page.about'))
+                # Return 404 for page requests to prevent path enumeration
+                abort(404)
         
         # Verify token
         decoded_token = verify_firebase_token(id_token)
@@ -97,7 +97,8 @@ def require_auth(f):
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Invalid or expired token'}), 401
             else:
-                return redirect(url_for('page.about'))
+                # Return 404 for page requests to prevent path enumeration
+                abort(404)
         
         # Attach decoded token to request for use in route handler
         request.auth = decoded_token
@@ -146,7 +147,8 @@ def require_verified(f):
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required'}), 401
             else:
-                return redirect(url_for('page.about'))
+                # Return 404 for page requests to prevent path enumeration
+                abort(404)
         
         decoded_token = verify_firebase_token(id_token)
         
@@ -158,7 +160,8 @@ def require_verified(f):
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Invalid or expired token'}), 401
             else:
-                return redirect(url_for('page.about'))
+                # Return 404 for page requests to prevent path enumeration
+                abort(404)
         
         # Check email verification
         # Note: We allow unverified users to access pages, but they'll see a verification notice
