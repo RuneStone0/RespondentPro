@@ -910,24 +910,32 @@ def get_user_billing_info(user_id):
         - projects_processed_count: Total projects processed (counted from hidden_projects_log)
         - projects_remaining: Number of projects remaining
     """
+    # Always get the actual projects processed count from the hidden projects log
+    # This count should be accurate regardless of whether a user document exists
+    try:
+        processed = get_projects_processed_count(user_id)
+    except Exception as e:
+        print(f"Error getting projects processed count in billing info: {e}")
+        processed = 0
+    
     if users_collection is None:
         return {
             'projects_processed_limit': 500,
-            'projects_processed_count': 0,
-            'projects_remaining': 500
+            'projects_processed_count': processed,
+            'projects_remaining': max(0, 500 - processed)
         }
     try:
         user_doc = users_collection.document(str(user_id)).get()
         if not user_doc.exists:
+            # User document doesn't exist, but we still have the processed count
             return {
                 'projects_processed_limit': 500,
-                'projects_processed_count': 0,
-                'projects_remaining': 500
+                'projects_processed_count': processed,
+                'projects_remaining': max(0, 500 - processed)
             }
         
         user_data = user_doc.to_dict()
         limit = user_data.get('projects_processed_limit', 500)
-        processed = get_projects_processed_count(user_id)
         
         # Calculate remaining (None if unlimited)
         if limit is None or limit >= 999999999:
@@ -942,10 +950,11 @@ def get_user_billing_info(user_id):
         }
     except Exception as e:
         print(f"Error getting user billing info: {e}")
+        # Even on error, return the actual processed count we got earlier
         return {
             'projects_processed_limit': 500,
-            'projects_processed_count': 0,
-            'projects_remaining': 500
+            'projects_processed_count': processed,
+            'projects_remaining': max(0, 500 - processed)
         }
 
 
