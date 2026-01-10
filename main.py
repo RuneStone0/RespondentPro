@@ -116,24 +116,30 @@ def respondentpro(request):
     # Convert headers to dict (functions-framework provides them as a case-insensitive dict-like object)
     headers = dict(request.headers)
     
-    # Extract Cookie header if present - Flask's test_request_context needs it
-    # The Cookie header should already be in request.headers from functions-framework
+    # Extract Cookie header - check both cases
     cookie_header = headers.get('Cookie') or headers.get('cookie', '')
     
-    # If cookies are available as an attribute (some frameworks provide this), use them
+    # If cookies are available as an attribute, reconstruct the header
     if not cookie_header and hasattr(request, 'cookies') and request.cookies:
-        # Reconstruct Cookie header from cookies dict
         cookie_parts = [f"{name}={value}" for name, value in request.cookies.items()]
         if cookie_parts:
             cookie_header = '; '.join(cookie_parts)
-            headers['Cookie'] = cookie_header
     
-    # Use Flask's test request context to handle the request
-    # Pass cookies via environ_base to ensure Flask can parse them into request.cookies
+    # Ensure Cookie header is in headers dict (Flask needs this to parse cookies)
+    if cookie_header:
+        headers['Cookie'] = cookie_header
+    
+    # Flask's test_request_context parses cookies from the Cookie header in headers
+    # We can also manually parse and set in environ_base as a fallback
     environ_base = {}
     if cookie_header:
-        # Flask's WSGI expects HTTP_COOKIE in environ_base
+        # Set in environ_base as HTTP_COOKIE (WSGI standard)
         environ_base['HTTP_COOKIE'] = cookie_header
+    
+    # Flask's test_request_context should parse cookies from the Cookie header
+    # But if it doesn't, we need to ensure they're in the WSGI environ
+    # The key is that Flask's Request class looks for cookies in environ['HTTP_COOKIE']
+    # But test_request_context might not set this from headers automatically
     
     with app.test_request_context(
         path=request.path,
@@ -143,6 +149,11 @@ def respondentpro(request):
         query_string=request.query_string.decode('utf-8') if request.query_string else '',
         environ_base=environ_base
     ):
+        # Debug: Check if cookies were parsed
+        if cookie_header:
+            logger.debug(f"Cookie header: {cookie_header[:200]}...")
+            logger.debug(f"Parsed cookies: {list(request.cookies.keys())}")
+        
         # Process the request through Flask
         response = app.full_dispatch_request()
         

@@ -61,10 +61,11 @@ def get_id_token_from_request():
     if id_token:
         return id_token
     
-    # Debug logging when token is not found
-    logger.debug(
+    # Debug logging when token is not found - use warning level so it shows in production
+    logger.warning(
         f"No token found for {request.path}. "
         f"Cookies present: {list(request.cookies.keys())}, "
+        f"Cookie header: {request.headers.get('Cookie', '')[:100] if request.headers.get('Cookie') else 'None'}, "
         f"Has Authorization header: {'Authorization' in request.headers}"
     )
     
