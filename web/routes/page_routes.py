@@ -29,7 +29,13 @@ bp = Blueprint('page', __name__)
 @require_verified
 def dashboard():
     """Dashboard - redirect to projects page if credentials valid, otherwise onboarding"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     user_id = request.auth['uid']
+    email = request.auth.get('email', 'Unknown')
+    logger.info(f"Dashboard accessed by user {user_id} ({email})")
+    
     config = load_user_config(user_id)
     
     # Check if user has configured session keys
@@ -42,11 +48,15 @@ def dashboard():
                 cookies=config.get('cookies', {})
             )
             if verification.get('success', False):
+                logger.info(f"User {user_id} has valid credentials, redirecting to /projects")
                 return redirect(url_for('page.projects'))
-        except Exception:
-            pass
+            else:
+                logger.info(f"User {user_id} has invalid credentials, redirecting to /account")
+        except Exception as e:
+            logger.warning(f"Error verifying credentials for user {user_id}: {e}")
     
     # No valid credentials, redirect to account
+    logger.info(f"User {user_id} has no credentials configured, redirecting to /account")
     return redirect(url_for('page.account'))
 
 

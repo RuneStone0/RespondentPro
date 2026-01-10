@@ -102,6 +102,52 @@ def firebase_config():
     return jsonify(config)
 
 
+@bp.route('/api/debug/token-check')
+def debug_token_check():
+    """Debug endpoint to check token status - helps diagnose authentication issues"""
+    from flask import jsonify
+    from ..auth.firebase_auth import get_id_token_from_request, verify_firebase_token
+    
+    id_token = get_id_token_from_request()
+    
+    response_data = {
+        'token_present': bool(id_token),
+        'request_path': request.path,
+        'request_method': request.method,
+        'cookies_present': list(request.cookies.keys()),
+        'has_authorization_header': 'Authorization' in request.headers,
+    }
+    
+    if not id_token:
+        response_data['error'] = 'No token found in request'
+        # Check if Authorization header exists but is empty
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header:
+            response_data['authorization_header'] = auth_header[:50] + '...' if len(auth_header) > 50 else auth_header
+        return jsonify(response_data), 200
+    
+    # Token is present, try to verify it
+    response_data['token_length'] = len(id_token)
+    response_data['token_preview'] = id_token[:50] + '...' if len(id_token) > 50 else id_token
+    
+    decoded_token = verify_firebase_token(id_token)
+    
+    if not decoded_token:
+        response_data['token_valid'] = False
+        response_data['error'] = 'Token verification failed'
+        return jsonify(response_data), 200
+    
+    # Token is valid
+    response_data['token_valid'] = True
+    response_data['uid'] = decoded_token.get('uid')
+    response_data['email'] = decoded_token.get('email')
+    response_data['email_verified'] = decoded_token.get('email_verified', False)
+    response_data['token_exp'] = decoded_token.get('exp')
+    response_data['token_iat'] = decoded_token.get('iat')
+    
+    return jsonify(response_data), 200
+
+
 @bp.route('/login')
 def login():
     """Login page - redirect to about page (login is now in modal)"""

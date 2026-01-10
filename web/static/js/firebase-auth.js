@@ -26,19 +26,46 @@ function initFirebaseAuth(config) {
         auth = firebase.auth();
         
         // Set up auth state observer
-        auth.onAuthStateChanged((user) => {
+        auth.onAuthStateChanged(async (user) => {
             currentUser = user;
             if (user) {
                 // User is signed in
                 console.log('User signed in:', user.email);
                 // Store ID token in cookie for backend requests
-                user.getIdToken().then((idToken) => {
+                try {
+                    const idToken = await user.getIdToken();
                     // Set cookie with ID token
-                    document.cookie = `firebase_id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
-                });
+                    // Add Secure flag if using HTTPS
+                    const isSecure = window.location.protocol === 'https:';
+                    const cookieOptions = `path=/; max-age=3600; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+                    document.cookie = `firebase_id_token=${idToken}; ${cookieOptions}`;
+                    
+                    // Set up periodic token refresh (every 50 minutes, before 1 hour expiry)
+                    // Clear any existing interval first
+                    if (window._tokenRefreshInterval) {
+                        clearInterval(window._tokenRefreshInterval);
+                    }
+                    window._tokenRefreshInterval = setInterval(async () => {
+                        try {
+                            const refreshedToken = await user.getIdToken(true); // Force refresh
+                            const refreshedCookieOptions = `path=/; max-age=3600; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+                            document.cookie = `firebase_id_token=${refreshedToken}; ${refreshedCookieOptions}`;
+                            console.log('Token refreshed automatically');
+                        } catch (error) {
+                            console.error('Error refreshing token:', error);
+                        }
+                    }, 50 * 60 * 1000); // 50 minutes
+                } catch (error) {
+                    console.error('Error getting ID token:', error);
+                }
             } else {
                 // User is signed out
                 console.log('User signed out');
+                // Clear token refresh interval
+                if (window._tokenRefreshInterval) {
+                    clearInterval(window._tokenRefreshInterval);
+                    window._tokenRefreshInterval = null;
+                }
                 // Remove cookie
                 document.cookie = 'firebase_id_token=; path=/; max-age=0';
             }
@@ -69,7 +96,9 @@ async function signUpWithEmail(email, password) {
         await userCredential.user.sendEmailVerification();
         // Set ID token cookie (user is already signed in)
         const idToken = await userCredential.user.getIdToken();
-        document.cookie = `firebase_id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
+        const isSecure = window.location.protocol === 'https:';
+        const cookieOptions = `path=/; max-age=3600; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+        document.cookie = `firebase_id_token=${idToken}; ${cookieOptions}`;
         return userCredential;
     } catch (error) {
         console.error('Error signing up:', error);
@@ -92,7 +121,9 @@ async function signInWithEmail(email, password) {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
         // Update ID token cookie
         const idToken = await userCredential.user.getIdToken();
-        document.cookie = `firebase_id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
+        const isSecure = window.location.protocol === 'https:';
+        const cookieOptions = `path=/; max-age=3600; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+        document.cookie = `firebase_id_token=${idToken}; ${cookieOptions}`;
         return userCredential;
     } catch (error) {
         console.error('Error signing in:', error);
@@ -156,7 +187,9 @@ async function signInWithEmailLinkComplete(email, emailLink) {
             window.localStorage.removeItem('emailForSignIn');
             // Update ID token cookie
             const idToken = await userCredential.user.getIdToken();
-            document.cookie = `firebase_id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
+            const isSecure = window.location.protocol === 'https:';
+            const cookieOptions = `path=/; max-age=3600; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+            document.cookie = `firebase_id_token=${idToken}; ${cookieOptions}`;
             return userCredential;
         } else {
             throw new Error('Invalid email link');

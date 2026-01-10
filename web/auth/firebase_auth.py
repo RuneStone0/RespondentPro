@@ -139,6 +139,10 @@ def require_verified(f):
         id_token = get_id_token_from_request()
         
         if not id_token:
+            logger.warning(
+                f"require_verified: No token found for {request.path} "
+                f"(method: {request.method}, cookies: {list(request.cookies.keys())})"
+            )
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required'}), 401
             else:
@@ -147,6 +151,10 @@ def require_verified(f):
         decoded_token = verify_firebase_token(id_token)
         
         if not decoded_token:
+            logger.warning(
+                f"require_verified: Token verification failed for {request.path} "
+                f"(token preview: {id_token[:50] if id_token else 'None'}...)"
+            )
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Invalid or expired token'}), 401
             else:
