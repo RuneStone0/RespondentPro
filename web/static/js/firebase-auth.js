@@ -91,11 +91,16 @@ async function signUpWithEmail(email, password) {
     
     try {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        // Firebase automatically signs the user in and triggers onAuthStateChanged
+        // Firebase automatically signs the user in
+        currentUser = userCredential.user;
+        
+        // Explicitly set cookie immediately (don't wait for onIdTokenChanged)
+        await setIdTokenCookie(userCredential.user);
+        
         // Send email verification
         await userCredential.user.sendEmailVerification();
-        currentUser = userCredential.user;
-        // Cookie will be set by onAuthStateChanged listener
+        
+        console.log('Sign up successful, cookie set');
         return userCredential;
     } catch (error) {
         console.error('Error signing up:', error);
@@ -116,8 +121,13 @@ async function signInWithEmail(email, password) {
     
     try {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        // Firebase triggers onAuthStateChanged which sets the cookie
         currentUser = userCredential.user;
+        
+        // Explicitly set cookie immediately (don't wait for onIdTokenChanged)
+        // This ensures cookie is set before any redirect happens
+        await setIdTokenCookie(userCredential.user);
+        
+        console.log('Sign in successful, cookie set');
         return userCredential;
     } catch (error) {
         console.error('Error signing in:', error);
@@ -177,8 +187,12 @@ async function signInWithEmailLinkComplete(email, emailLink) {
             const userCredential = await auth.signInWithEmailLink(email, emailLink);
             // Clear email from localStorage
             window.localStorage.removeItem('emailForSignIn');
-            // Firebase triggers onAuthStateChanged which sets the cookie
             currentUser = userCredential.user;
+            
+            // Explicitly set cookie immediately
+            await setIdTokenCookie(userCredential.user);
+            
+            console.log('Email link sign in successful, cookie set');
             return userCredential;
         } else {
             throw new Error('Invalid email link');
