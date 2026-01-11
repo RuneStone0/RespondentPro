@@ -48,6 +48,7 @@ def firebase_config():
     """Provide Firebase configuration for frontend"""
     import os
     from flask import jsonify
+    from pathlib import Path
     
     # Get Firebase project ID
     project_id = (os.environ.get('GCP_PROJECT') or 
@@ -57,8 +58,6 @@ def firebase_config():
     if not project_id:
         # Try reading from .firebaserc
         try:
-            import json
-            from pathlib import Path
             firebaserc_path = Path(__file__).parent.parent.parent / '.firebaserc'
             if firebaserc_path.exists():
                 with open(firebaserc_path, 'r') as f:
@@ -67,10 +66,21 @@ def firebase_config():
         except Exception:
             pass
     
-    # Firebase web app config
-    # Note: These values should be set in environment variables or config file
-    # For production, get these from Firebase Console > Project Settings > General > Your apps
-    # 
+    # Load app config from app_config.json
+    app_config = {}
+    try:
+        app_config_path = Path(__file__).parent.parent.parent / 'app_config.json'
+        if app_config_path.exists():
+            with open(app_config_path, 'r') as f:
+                app_config = json.load(f)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Could not load app_config.json: {e}")
+    
+    # Get Firebase config from app_config.json (not secret, safe to store in config file)
+    firebase_config_data = app_config.get('firebase', {})
+    
     # IMPORTANT NOTES:
     # - authDomain: Can be either:
     #   * Firebase domain: {project-id}.firebaseapp.com (recommended, always works)
@@ -81,15 +91,23 @@ def firebase_config():
     #   3. DNS records are properly configured
     # - storageBucket: This is the bucket NAME (not a domain), format: {project-id}.appspot.com
     #   You cannot change this - it's the actual GCS bucket identifier
-    auth_domain = os.environ.get('FIREBASE_AUTH_DOMAIN', f'{project_id}.firebaseapp.com' if project_id else '')
+    
+    # Use values from config file, with fallbacks for computed values
+    auth_domain = firebase_config_data.get('authDomain', '')
+    if not auth_domain and project_id:
+        auth_domain = f'{project_id}.firebaseapp.com'
+    
+    storage_bucket = firebase_config_data.get('storageBucket', '')
+    if not storage_bucket and project_id:
+        storage_bucket = f'{project_id}.appspot.com'
     
     config = {
-        'apiKey': os.environ.get('FIREBASE_API_KEY', ''),
+        'apiKey': firebase_config_data.get('apiKey', ''),
         'authDomain': auth_domain,
-        'projectId': project_id or '',
-        'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', f'{project_id}.appspot.com' if project_id else ''),
-        'messagingSenderId': os.environ.get('FIREBASE_MESSAGING_SENDER_ID', ''),
-        'appId': os.environ.get('FIREBASE_APP_ID', '')
+        'projectId': project_id or firebase_config_data.get('projectId', ''),
+        'storageBucket': storage_bucket,
+        'messagingSenderId': firebase_config_data.get('messagingSenderId', ''),
+        'appId': firebase_config_data.get('appId', '')
     }
     
     # Validate custom domain setup if using custom domain
