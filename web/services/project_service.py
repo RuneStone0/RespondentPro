@@ -5,7 +5,11 @@ Project fetching and management service for Respondent.io Manager
 
 import json
 import time
+import logging
 import requests
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Import database collections
 try:
@@ -69,7 +73,7 @@ def fetch_project_details(session, project_id, project_details_collection=None):
     if project_details_collection is not None:
         cached_details = get_cached_project_details(project_details_collection, project_id)
         if cached_details:
-            print(f"[Project Details] Using cached details for project {project_id}")
+            logger.debug(f"[Project Details] Using cached details for project {project_id}")
             return cached_details
     
     # Fetch from API
@@ -81,19 +85,19 @@ def fetch_project_details(session, project_id, project_details_collection=None):
     
     try:
         start_time = time.time()
-        print(f"[Project Details] GET {url}")
+        logger.debug(f"[Project Details] GET {url}")
         response = session.get(url, headers=headers, timeout=30)
         elapsed_time = time.time() - start_time
-        print(f"[Project Details] Response: {response.status_code} ({elapsed_time:.2f}s) - {len(response.content)} bytes")
+        logger.debug(f"[Project Details] Response: {response.status_code} ({elapsed_time:.2f}s) - {len(response.content)} bytes")
         
         # Check if response is successful
         if not response.ok:
-            print(f"[Project Details] ERROR: {response.status_code} - {response.text[:500]}")
+            logger.error(f"[Project Details] ERROR: {response.status_code} - {response.text[:500]}")
             # If we have cached data, return it even if API fails
             if project_details_collection is not None:
                 cached_details = get_cached_project_details(project_details_collection, project_id)
                 if cached_details:
-                    print(f"[Project Details] API failed, returning cached data for project {project_id}")
+                    logger.warning(f"[Project Details] API failed, returning cached data for project {project_id}")
                     return cached_details
             return None
         
@@ -123,21 +127,21 @@ def fetch_project_details(session, project_id, project_details_collection=None):
             
             return project_data
         except json.JSONDecodeError as e:
-            print(f"[Project Details] Invalid JSON response: {e}")
+            logger.error(f"[Project Details] Invalid JSON response: {e}", exc_info=True)
             # If we have cached data, return it even if parsing fails
             if project_details_collection is not None:
                 cached_details = get_cached_project_details(project_details_collection, project_id)
                 if cached_details:
-                    print(f"[Project Details] JSON parse failed, returning cached data for project {project_id}")
+                    logger.warning(f"[Project Details] JSON parse failed, returning cached data for project {project_id}")
                     return cached_details
             return None
     except Exception as e:
-        print(f"[Project Details] ERROR fetching project {project_id}: {e}")
+        logger.error(f"[Project Details] ERROR fetching project {project_id}: {e}", exc_info=True)
         # If we have cached data, return it even if request fails
         if project_details_collection is not None:
             cached_details = get_cached_project_details(project_details_collection, project_id)
             if cached_details:
-                print(f"[Project Details] Request failed, returning cached data for project {project_id}")
+                logger.warning(f"[Project Details] Request failed, returning cached data for project {project_id}")
                 return cached_details
         return None
 
@@ -218,14 +222,14 @@ def fetch_respondent_projects(session, profile_id, page_size=50, page=1, user_id
     
     # Make the request
     start_time = time.time()
-    print(f"[Respondent.io API] GET {url} (page={page}, page_size={page_size})")
+    logger.debug(f"[Respondent.io API] GET {url} (page={page}, page_size={page_size})")
     response = session.get(url, params=params, headers=headers, timeout=30)
     elapsed_time = time.time() - start_time
-    print(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s) - {len(response.content)} bytes")
+    logger.debug(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s) - {len(response.content)} bytes")
     
     # Check if response is successful
     if not response.ok:
-        print(f"[Respondent.io API] ERROR: {response.status_code} - {response.text[:500]}")
+        logger.error(f"[Respondent.io API] ERROR: {response.status_code} - {response.text[:500]}")
         raise Exception(f"Failed to fetch projects: {response.status_code} - {response.text[:500]}")
     
     # Parse JSON response
@@ -260,13 +264,13 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
     """
     # Verify session keys are still valid before fetching (if cookies provided)
     if cookies:
-        print(f"[Respondent.io API] Verifying session keys before fetching projects...")
+        logger.debug(f"[Respondent.io API] Verifying session keys before fetching projects...")
         verification = verify_respondent_authentication(cookies)
         if not verification.get('success'):
             error_msg = verification.get('message', 'Session keys are invalid or expired')
-            print(f"[Respondent.io API] {error_msg}")
+            logger.warning(f"[Respondent.io API] {error_msg}")
             raise Exception(f"Session keys are invalid or expired: {error_msg}")
-        print(f"[Respondent.io API] Session keys verified successfully")
+        logger.debug(f"[Respondent.io API] Session keys verified successfully")
     
     # Check cache first if user_id provided and cache is enabled
     if use_cache and user_id and projects_cache_collection is not None:
@@ -280,19 +284,19 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
     demographic_params = {}
     if user_id:
         try:
-            print(f"[Respondent.io API] Fetching user profile from MongoDB (user_id={user_id})")
+            logger.debug(f"[Respondent.io API] Fetching user profile from MongoDB (user_id={user_id})")
             profile_data = get_user_profile(str(user_id))
             if profile_data:
                 demographic_params = extract_demographic_params_from_mongodb(profile_data)
-                print(f"[Respondent.io API] Extracted demographic params from MongoDB: {demographic_params}")
+                logger.debug(f"[Respondent.io API] Extracted demographic params from MongoDB: {demographic_params}")
             else:
-                print(f"[Respondent.io API] No profile data found in MongoDB, continuing without demographic filters")
+                logger.debug(f"[Respondent.io API] No profile data found in MongoDB, continuing without demographic filters")
         except Exception as e:
-            print(f"[Respondent.io API] Failed to fetch profile from MongoDB (continuing without demographic filters): {e}")
+            logger.warning(f"[Respondent.io API] Failed to fetch profile from MongoDB (continuing without demographic filters): {e}")
             # Continue without demographic parameters - they're optional
     
     # Fetch all pages using totalResults-based pagination
-    print(f"[Respondent.io API] Fetching all projects (profile_id={profile_id}, page_size={page_size})")
+    logger.info(f"[Respondent.io API] Fetching all projects (profile_id={profile_id}, page_size={page_size})")
     all_projects = []
     total_results = None
     total_pages = None
@@ -321,7 +325,7 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
         # Extract totalResults from first page response
         total_results = page_data.get('totalResults')
         if total_results is None:
-            print(f"[Respondent.io API] WARNING: totalResults not found in response, falling back to count of results")
+            logger.warning(f"[Respondent.io API] WARNING: totalResults not found in response, falling back to count of results")
             # Fallback: use the count of results we got
             total_results = len(page_results)
         
@@ -329,12 +333,12 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
         total_pages = (total_results + page_size - 1) // page_size
         
         all_projects.extend(page_results)
-        print(f"[Respondent.io API] Fetched page 1: {len(page_results)} results (totalResults: {total_results}, total pages: {total_pages})")
+        logger.info(f"[Respondent.io API] Fetched page 1: {len(page_results)} results (totalResults: {total_results}, total pages: {total_pages})")
         
         # Safety limit to prevent excessive requests
         max_pages = 100
         if total_pages > max_pages:
-            print(f"[Respondent.io API] WARNING: total_pages ({total_pages}) exceeds safety limit ({max_pages}), limiting to {max_pages} pages")
+            logger.warning(f"[Respondent.io API] WARNING: total_pages ({total_pages}) exceeds safety limit ({max_pages}), limiting to {max_pages} pages")
             total_pages = max_pages
         
         # Fetch remaining pages (2 through total_pages)
@@ -352,38 +356,38 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
                 
                 # Validate response structure
                 if not isinstance(page_data, dict):
-                    print(f"[Respondent.io API] Invalid response format for page {page}, stopping pagination")
+                    logger.warning(f"[Respondent.io API] Invalid response format for page {page}, stopping pagination")
                     break
                 
                 page_results = page_data.get('results', [])
                 if not isinstance(page_results, list):
-                    print(f"[Respondent.io API] Invalid results format for page {page}, stopping pagination")
+                    logger.warning(f"[Respondent.io API] Invalid results format for page {page}, stopping pagination")
                     break
                 
                 results_count = len(page_results)
                 if results_count == 0:
-                    print(f"[Respondent.io API] Reached last page (got 0 results on page {page})")
+                    logger.debug(f"[Respondent.io API] Reached last page (got 0 results on page {page})")
                     break
                 
                 all_projects.extend(page_results)
-                print(f"[Respondent.io API] Fetched page {page}: {results_count} results (total: {len(all_projects)} projects)")
+                logger.debug(f"[Respondent.io API] Fetched page {page}: {results_count} results (total: {len(all_projects)} projects)")
                 
             except Exception as e:
-                print(f"[Respondent.io API] ERROR fetching page {page}: {e}")
+                logger.error(f"[Respondent.io API] ERROR fetching page {page}: {e}", exc_info=True)
                 # For subsequent pages, stop pagination but return what we have
-                print(f"[Respondent.io API] Stopping pagination due to error, returning {len(all_projects)} projects collected so far")
+                logger.warning(f"[Respondent.io API] Stopping pagination due to error, returning {len(all_projects)} projects collected so far")
                 break
         
     except Exception as e:
-        print(f"[Respondent.io API] ERROR fetching first page: {e}")
+        logger.error(f"[Respondent.io API] ERROR fetching first page: {e}", exc_info=True)
         raise
     
     # Use totalResults if available, otherwise use count of fetched projects
     total_count = total_results if total_results is not None else len(all_projects)
-    print(f"[Respondent.io API] Completed fetching all projects: {len(all_projects)} projects fetched (totalResults: {total_count})")
+    logger.info(f"[Respondent.io API] Completed fetching all projects: {len(all_projects)} projects fetched (totalResults: {total_count})")
     
     # Fetch detailed project information for each project
-    print(f"[Project Details] Fetching detailed information for {len(all_projects)} projects...")
+    logger.info(f"[Project Details] Fetching detailed information for {len(all_projects)} projects...")
     all_topics = []
     enriched_projects = []
     
@@ -411,24 +415,24 @@ def fetch_all_respondent_projects(session, profile_id, page_size=50, user_id=Non
             else:
                 # If details fetch failed, use original project
                 enriched_projects.append(project)
-                print(f"[Project Details] Warning: Failed to fetch details for project {project_id}, using basic data")
+                logger.warning(f"[Project Details] Warning: Failed to fetch details for project {project_id}, using basic data")
         except Exception as e:
-            print(f"[Project Details] Error processing project {project_id}: {e}")
+            logger.error(f"[Project Details] Error processing project {project_id}: {e}", exc_info=True)
             # Continue with original project if details fetch fails
             enriched_projects.append(project)
         
         # Progress update every 10 projects
         if (idx + 1) % 10 == 0:
-            print(f"[Project Details] Processed {idx + 1}/{len(all_projects)} projects...")
+            logger.debug(f"[Project Details] Processed {idx + 1}/{len(all_projects)} projects...")
     
-    print(f"[Project Details] Completed fetching details for {len(enriched_projects)} projects")
+    logger.info(f"[Project Details] Completed fetching details for {len(enriched_projects)} projects")
     
     # Store unique topics in topics collection
     if topics_collection is not None and all_topics:
-        print(f"[Topics] Storing {len(all_topics)} topic references...")
+        logger.debug(f"[Topics] Storing {len(all_topics)} topic references...")
         store_unique_topics(topics_collection, all_topics)
         unique_topic_count = len(set(t.get('id') for t in all_topics if t.get('id')))
-        print(f"[Topics] Stored {unique_topic_count} unique topics")
+        logger.info(f"[Topics] Stored {unique_topic_count} unique topics")
     
     # Cache the enriched results if user_id provided
     if user_id and projects_cache_collection is not None:
@@ -461,13 +465,13 @@ def hide_project_via_api(session, project_id):
     
     try:
         start_time = time.time()
-        print(f"[Respondent.io API] POST {url} (project_id={project_id})")
+        logger.debug(f"[Respondent.io API] POST {url} (project_id={project_id})")
         response = session.post(url, headers=headers, timeout=30)
         elapsed_time = time.time() - start_time
-        print(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
+        logger.debug(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
         return response.ok
     except Exception as e:
-        print(f"[Respondent.io API] ERROR hiding project {project_id}: {e}")
+        logger.error(f"[Respondent.io API] ERROR hiding project {project_id}: {e}", exc_info=True)
         return False
 
 
@@ -478,7 +482,7 @@ def get_hidden_count(user_id):
     try:
         return get_hidden_projects_count(hidden_projects_log_collection, user_id)
     except Exception as e:
-        print(f"Error getting hidden count: {e}")
+        logger.error(f"Error getting hidden count: {e}", exc_info=True)
         return 0
 
 
@@ -514,7 +518,7 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         if "reached your project processing limit" in str(e):
             raise
         # Otherwise, log and continue (don't block on billing info errors)
-        print(f"Warning: Could not check billing info: {e}")
+        logger.warning(f"Warning: Could not check billing info: {e}")
     
     # Initialize progress
     hide_progress[user_id_str] = {
@@ -551,8 +555,8 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
                 projects_to_hide.append(project)
         
         total_to_hide = len(projects_to_hide)
-        print(f"[Project Service] Found {total_to_hide} projects to hide out of {len(all_projects)} total projects")
-        print(f"[Project Service] Filters: {filters}")
+        logger.info(f"[Project Service] Found {total_to_hide} projects to hide out of {len(all_projects)} total projects")
+        logger.debug(f"[Project Service] Filters: {filters}")
         hidden_count = 0
         errors = []
         hidden_project_ids = []
@@ -592,15 +596,15 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         # Refresh cache from API to get updated project list after hiding
         if projects_cache_collection is not None and hidden_project_ids:
             try:
-                print(f"[Project Service] Refreshing cache after hiding {len(hidden_project_ids)} projects")
+                logger.info(f"[Project Service] Refreshing cache after hiding {len(hidden_project_ids)} projects")
                 # Fetch fresh data from API (bypassing cache)
                 all_projects_refreshed, total_count_refreshed = fetch_all_respondent_projects(
                     session, profile_id, page_size, user_id=user_id, use_cache=False, 
                     cookies=cookies
                 )
-                print(f"[Project Service] Cache refreshed: {len(all_projects_refreshed)} projects now in cache")
+                logger.info(f"[Project Service] Cache refreshed: {len(all_projects_refreshed)} projects now in cache")
             except Exception as e:
-                print(f"[Project Service] Error refreshing cache after hiding: {e}")
+                logger.error(f"[Project Service] Error refreshing cache after hiding: {e}", exc_info=True)
                 # Don't fail the whole operation if cache refresh fails
         
         # Update progress to completed
@@ -610,7 +614,7 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         try:
             check_and_send_credit_notifications(user_id)
         except Exception as e:
-            print(f"Error checking credit notifications: {e}")
+            logger.error(f"Error checking credit notifications: {e}", exc_info=True)
             # Don't fail the operation if notification check fails
         
         return {

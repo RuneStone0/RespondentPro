@@ -4,10 +4,15 @@ Email service for sending verification and notification emails
 """
 
 import os
+import logging
 import smtplib
+import traceback
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Get the directory where this file is located
 BASE_DIR = Path(__file__).parent.parent
@@ -32,16 +37,16 @@ def send_email(to_email, subject, html_body, text_body=None):
     
     if not config['user'] or not config['password']:
         error_msg = "SMTP credentials not configured. Please set SMTP_USER and SMTP_PASSWORD environment variables."
-        print(f"[Email Service] ERROR: {error_msg}")
+        logger.error(f"[Email Service] ERROR: {error_msg}")
         raise Exception(error_msg)
     
     if not config['from_email']:
         error_msg = "SMTP_FROM_EMAIL not configured."
-        print(f"[Email Service] ERROR: {error_msg}")
+        logger.error(f"[Email Service] ERROR: {error_msg}")
         raise Exception(error_msg)
     
     try:
-        print(f"[Email Service] Attempting to send email to {to_email} with subject: {subject}")
+        logger.info(f"[Email Service] Attempting to send email to {to_email} with subject: {subject}")
         
         # Create message
         msg = MIMEMultipart('alternative')
@@ -58,21 +63,19 @@ def send_email(to_email, subject, html_body, text_body=None):
         msg.attach(part2)
         
         # Send email
-        print(f"[Email Service] Connecting to SMTP server {config['host']}:{config['port']}")
+        logger.debug(f"[Email Service] Connecting to SMTP server {config['host']}:{config['port']}")
         with smtplib.SMTP(config['host'], config['port']) as server:
             server.starttls()
-            print(f"[Email Service] Logging in with user: {config['user']}")
+            logger.debug(f"[Email Service] Logging in with user: {config['user']}")
             server.login(config['user'], config['password'])
-            print(f"[Email Service] Sending email...")
+            logger.debug(f"[Email Service] Sending email...")
             server.send_message(msg)
-            print(f"[Email Service] Email sent successfully to {to_email}")
+            logger.info(f"[Email Service] Email sent successfully to {to_email}")
         
         return True
     except Exception as e:
         error_msg = f"Failed to send email: {e}"
-        print(f"[Email Service] ERROR: {error_msg}")
-        import traceback
-        print(f"[Email Service] Traceback: {traceback.format_exc()}")
+        logger.error(f"[Email Service] ERROR: {error_msg}", exc_info=True)
         raise Exception(error_msg)
 
 

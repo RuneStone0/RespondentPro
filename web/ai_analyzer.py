@@ -4,6 +4,7 @@ Module for AI analysis using Grok API
 """
 
 import json
+import logging
 from typing import Dict, Any, List, Optional
 
 # Import centralized Grok service
@@ -11,6 +12,9 @@ try:
     from .services.grok_service import call_grok_api
 except ImportError:
     from services.grok_service import call_grok_api
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 
 def analyze_project(project_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -79,7 +83,7 @@ Return format:
             'industries': metadata.get('industries', [])
         }
     except Exception as e:
-        print(f"Error parsing Grok response: {e}")
+        logger.error(f"Error parsing Grok response: {e}", exc_info=True)
         return {'regions': [], 'professions': [], 'industries': []}
 
 
@@ -155,7 +159,7 @@ Return ONLY a valid JSON object:
             'patterns': result.get('patterns', {})
         }
     except Exception as e:
-        print(f"Error parsing feedback analysis: {e}")
+        logger.error(f"Error parsing feedback analysis: {e}", exc_info=True)
         return {'reasons': [], 'patterns': {}}
 
 
@@ -300,7 +304,7 @@ Return 5-10 relevant categories."""
         
         return recommendations[:10]  # Return top 10
     except Exception as e:
-        print(f"Error parsing category recommendations: {e}")
+        logger.error(f"Error parsing category recommendations: {e}", exc_info=True)
         return []
 
 
@@ -437,7 +441,7 @@ Make each suggestion specific to this project, written in first person, short an
         else:
             raise ValueError("Invalid response format")
     except Exception as e:
-        print(f"Error parsing hide suggestions: {e}")
+        logger.error(f"Error parsing hide suggestions: {e}", exc_info=True)
         # Return fallback suggestions
         return [
             "I'm not interested in this",
@@ -504,10 +508,10 @@ Return ONLY "true" or "false" (lowercase, no quotes, no additional text)."""
             return False
         else:
             # If response is unclear, default to False (don't hide)
-            print(f"Unexpected AI response for hide decision: {response}")
+            logger.warning(f"Unexpected AI response for hide decision: {response}")
             return False
     except Exception as e:
-        print(f"Error parsing AI hide decision: {e}")
+        logger.error(f"Error parsing AI hide decision: {e}", exc_info=True)
         return False
 
 
@@ -586,6 +590,6 @@ If no clear pattern is detected, return null or an empty object."""
         
         return question_data
     except Exception as e:
-        print(f"Error parsing question generation response: {e}")
+        logger.error(f"Error parsing question generation response: {e}", exc_info=True)
         return None
 

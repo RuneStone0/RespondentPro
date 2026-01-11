@@ -3,8 +3,13 @@
 Page routes for Respondent.io Manager
 """
 
+import logging
+import traceback
 from flask import Blueprint, render_template, session, redirect, url_for, request, abort
 from datetime import datetime
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Import services
 try:
@@ -88,7 +93,7 @@ def account():
     try:
         billing_info = get_user_billing_info(user_id)
     except Exception as e:
-        print(f"Error loading billing info: {e}")
+        logger.error(f"Error loading billing info: {e}", exc_info=True)
         billing_info = {
             'projects_processed_limit': 500,
             'projects_processed_count': 0,
@@ -194,7 +199,7 @@ def admin():
                         'billing_info': billing_info
                     })
                 except Exception as e:
-                    print(f"Error getting billing info for user {user_id_str}: {e}")
+                    logger.error(f"Error getting billing info for user {user_id_str}: {e}", exc_info=True)
                     # Still add user with default billing info
                     users_data.append({
                         'user_id': user_id_str,
@@ -210,7 +215,7 @@ def admin():
                 error_message = "No users found in database"
     except Exception as e:
         error_message = f"Error loading users: {str(e)}"
-        print(f"Error loading users for admin: {e}")
+        logger.error(f"Error loading users for admin: {e}", exc_info=True)
         import traceback
         traceback.print_exc()
     
@@ -241,7 +246,7 @@ def projects():
         except Exception as e:
             # Error verifying, redirect to account
             import traceback
-            print(f"Error verifying authentication in projects route: {e}\n{traceback.format_exc()}")
+            logger.error(f"Error verifying authentication in projects route: {e}", exc_info=True)
             return redirect(url_for('page.account'))
     else:
         # No credentials configured, redirect to account
@@ -293,7 +298,7 @@ def projects():
         except Exception as e:
             # If error occurs, just log it - don't block page load
             import traceback
-            print(f"Error getting cached projects: {traceback.format_exc()}")
+            logger.error(f"Error getting cached projects", exc_info=True)
     
     # Get cache refresh time and total count
     cache_refreshed_utc = None
@@ -322,7 +327,7 @@ def projects():
                     except:
                         cache_refreshed_utc = None
         except Exception as e:
-            print(f"Error getting cache refresh time: {e}")
+            logger.error(f"Error getting cache refresh time: {e}", exc_info=True)
             cache_refreshed_utc = None
     
     return render_template(

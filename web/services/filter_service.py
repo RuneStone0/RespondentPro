@@ -3,12 +3,17 @@
 Filtering service for Respondent.io Manager
 """
 
+import logging
+
 try:
     from ..cache_manager import get_cached_project_details
     from ..db import project_details_collection
 except ImportError:
     from cache_manager import get_cached_project_details
     from db import project_details_collection
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 
 def get_project_is_remote(project_id):
@@ -37,7 +42,7 @@ def get_project_is_remote(project_id):
                 return bool(is_remote)
         return None
     except Exception as e:
-        print(f"Error getting project isRemote for {project_id}: {e}")
+        logger.error(f"Error getting project isRemote for {project_id}: {e}", exc_info=True)
         return None
 
 

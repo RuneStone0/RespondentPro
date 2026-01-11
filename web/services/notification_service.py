@@ -3,9 +3,13 @@
 Notification service for managing user notification preferences and sending notifications
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Import database collections
 try:
@@ -87,13 +91,13 @@ def load_notification_preferences(user_id: str, auto_create: bool = True) -> Dic
             default_prefs = get_default_notification_preferences()
             try:
                 save_notification_preferences(user_id, default_prefs)
-                print(f"[Notifications] Created default preferences for user {user_id}")
+                logger.info(f"[Notifications] Created default preferences for user {user_id}")
             except Exception as save_error:
-                print(f"[Notifications] Failed to auto-create preferences for user {user_id}: {save_error}")
+                logger.warning(f"[Notifications] Failed to auto-create preferences for user {user_id}: {save_error}")
         
         return get_default_notification_preferences()
     except Exception as e:
-        print(f"Error loading notification preferences: {e}")
+        logger.error(f"Error loading notification preferences: {e}", exc_info=True)
         return get_default_notification_preferences()
 
 
@@ -195,7 +199,7 @@ def get_visible_projects_count(user_id: str) -> int:
                     cookies=config.get('cookies', {})
                 )
             except Exception as e:
-                print(f"Error fetching projects for notification count: {e}")
+                logger.error(f"Error fetching projects for notification count: {e}", exc_info=True)
                 # If we can't fetch, return 0
                 return 0
         
@@ -216,7 +220,7 @@ def get_visible_projects_count(user_id: str) -> int:
         
         return visible_count
     except Exception as e:
-        print(f"Error getting visible projects count: {e}")
+        logger.error(f"Error getting visible projects count: {e}", exc_info=True)
         return 0
 
 
@@ -243,7 +247,7 @@ def check_session_token_validity(user_id: str) -> bool:
         
         return verification.get('success', False)
     except Exception as e:
-        print(f"Error checking session token validity: {e}")
+        logger.error(f"Error checking session token validity: {e}", exc_info=True)
         return False
 
 
@@ -304,7 +308,7 @@ def should_send_weekly_notification(user_id: str) -> bool:
         
         return True
     except Exception as e:
-        print(f"Error checking if weekly notification should be sent: {e}")
+        logger.error(f"Error checking if weekly notification should be sent: {e}", exc_info=True)
         return False
 
 
@@ -323,7 +327,7 @@ def mark_weekly_notification_sent(user_id: str) -> bool:
         prefs['weekly_project_summary']['last_sent'] = datetime.now(timezone.utc)
         return save_notification_preferences(user_id, prefs)
     except Exception as e:
-        print(f"Error marking weekly notification as sent: {e}")
+        logger.error(f"Error marking weekly notification as sent: {e}", exc_info=True)
         return False
 
 
@@ -371,7 +375,7 @@ def should_send_token_expiration_notification(user_id: str) -> bool:
         
         return True
     except Exception as e:
-        print(f"Error checking if token expiration notification should be sent: {e}")
+        logger.error(f"Error checking if token expiration notification should be sent: {e}", exc_info=True)
         return False
 
 
@@ -390,5 +394,5 @@ def mark_token_expiration_notification_sent(user_id: str) -> bool:
         prefs['session_token_expired']['last_sent'] = datetime.now(timezone.utc)
         return save_notification_preferences(user_id, prefs)
     except Exception as e:
-        print(f"Error marking token expiration notification as sent: {e}")
+        logger.error(f"Error marking token expiration notification as sent: {e}", exc_info=True)
         return False

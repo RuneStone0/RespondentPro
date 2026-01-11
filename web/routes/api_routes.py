@@ -5,11 +5,16 @@ API routes for Respondent.io Manager
 
 import json
 import base64
+import logging
 import threading
 import time
+import traceback
 from flask import Blueprint, request, jsonify, session
 from datetime import datetime
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Import Firebase Auth decorators
 try:
@@ -148,7 +153,7 @@ def save_session_keys():
                 try:
                     fetch_and_store_user_profile(user_id, respondent_user_id)
                 except Exception as e:
-                    print(f"Error fetching profile in background: {e}")
+                    logger.error(f"Error fetching profile in background: {e}", exc_info=True)
             
             thread = threading.Thread(target=fetch_profile_background)
             thread.daemon = True
@@ -310,7 +315,7 @@ def save_filters():
                             )
                         except Exception as e:
                             import traceback
-                            print(f"Error in background hide process: {traceback.format_exc()}")
+                            logger.error(f"Error in background hide process", exc_info=True)
                             user_id_str = str(user_id)
                             if user_id_str in hide_progress:
                                 hide_progress[user_id_str]['status'] = 'error'
@@ -352,7 +357,7 @@ def hide_projects():
                         'redirect': '/account'
                     }), 403
         except Exception as e:
-            print(f"Warning: Could not check billing info: {e}")
+            logger.warning(f"Warning: Could not check billing info: {e}")
             # Continue anyway - don't block on billing info errors
         
         config = load_user_config(user_id)
@@ -377,7 +382,7 @@ def hide_projects():
                 )
             except Exception as e:
                 import traceback
-                print(f"Error in background hide process: {traceback.format_exc()}")
+                logger.error(f"Error in background hide process", exc_info=True)
                 user_id_str = str(user_id)
                 if user_id_str in hide_progress:
                     hide_progress[user_id_str]['status'] = 'error'
@@ -600,7 +605,7 @@ def hide_project():
                         'redirect': '/account'
                     }), 403
         except Exception as e:
-            print(f"Warning: Could not check billing info: {e}")
+            logger.warning(f"Warning: Could not check billing info: {e}")
             # Continue anyway - don't block on billing info errors
         
         data = request.json
@@ -685,7 +690,7 @@ def hide_project():
         try:
             check_and_send_credit_notifications(user_id)
         except Exception as e:
-            print(f"Error checking credit notifications: {e}")
+            logger.error(f"Error checking credit notifications: {e}", exc_info=True)
             # Don't fail the operation if notification check fails
         
         return jsonify({
@@ -1193,7 +1198,7 @@ def refresh_cache():
         # Define background refresh function
         def refresh_cache_background():
             try:
-                print(f"[Cache Refresh] Starting background refresh for user {user_id}")
+                logger.info(f"[Cache Refresh] Starting background refresh for user {user_id}")
                 req_session = create_respondent_session(
                     cookies=config.get('cookies', {})
                 )
@@ -1215,7 +1220,7 @@ def refresh_cache():
                 errors = []
                 
                 if hide_using_ai:
-                    print(f"[Cache Refresh] AI-based hiding is enabled, checking {len(all_projects)} projects")
+                    logger.info(f"[Cache Refresh] AI-based hiding is enabled, checking {len(all_projects)} projects")
                     
                     # Find projects that should be hidden based on AI preferences
                     projects_to_hide = []
@@ -1230,7 +1235,7 @@ def refresh_cache():
                         ):
                             projects_to_hide.append(project)
                     
-                    print(f"[Cache Refresh] Found {len(projects_to_hide)} projects to hide based on AI preferences")
+                    logger.info(f"[Cache Refresh] Found {len(projects_to_hide)} projects to hide based on AI preferences")
                     
                     # Hide each project via API
                     for project in projects_to_hide:
@@ -1254,10 +1259,10 @@ def refresh_cache():
                                         )
                                 else:
                                     errors.append(project_id)
-                                    print(f"[Cache Refresh] Failed to hide project {project_id}")
+                                    logger.warning(f"[Cache Refresh] Failed to hide project {project_id}")
                             except Exception as e:
                                 errors.append(project_id)
-                                print(f"[Cache Refresh] Error hiding project {project_id}: {e}")
+                                logger.error(f"[Cache Refresh] Error hiding project {project_id}: {e}", exc_info=True)
                             
                             # Small delay to avoid rate limiting
                             time.sleep(0.1)
@@ -1265,12 +1270,12 @@ def refresh_cache():
                     # Update cache to mark projects as hidden
                     if projects_cache_collection is not None and hidden_project_ids:
                         mark_projects_hidden_in_cache(projects_cache_collection, user_id, hidden_project_ids)
-                        print(f"[Cache Refresh] Marked {len(hidden_project_ids)} projects as hidden in cache")
+                        logger.info(f"[Cache Refresh] Marked {len(hidden_project_ids)} projects as hidden in cache")
                     
                     # Refresh cache from API to get updated project list after hiding
                     if projects_cache_collection is not None and hidden_project_ids:
                         try:
-                            print(f"[Cache Refresh] Refreshing cache after hiding {len(hidden_project_ids)} projects")
+                            logger.info(f"[Cache Refresh] Refreshing cache after hiding {len(hidden_project_ids)} projects")
                             all_projects, total_count = fetch_all_respondent_projects(
                                 session=req_session,
                                 profile_id=profile_id,
@@ -1279,15 +1284,15 @@ def refresh_cache():
                                 use_cache=False,
                                 cookies=config.get('cookies', {})
                             )
-                            print(f"[Cache Refresh] Cache refreshed: {len(all_projects)} projects now in cache")
+                            logger.info(f"[Cache Refresh] Cache refreshed: {len(all_projects)} projects now in cache")
                         except Exception as e:
-                            print(f"[Cache Refresh] Error refreshing cache after hiding: {e}")
+                            logger.error(f"[Cache Refresh] Error refreshing cache after hiding: {e}", exc_info=True)
                             # Don't fail the whole operation if cache refresh fails
                 
-                print(f"[Cache Refresh] Background refresh completed for user {user_id}")
+                logger.info(f"[Cache Refresh] Background refresh completed for user {user_id}")
             except Exception as e:
                 import traceback
-                print(f"[Cache Refresh] Error in background refresh: {e}\n{traceback.format_exc()}")
+                logger.error(f"[Cache Refresh] Error in background refresh: {e}", exc_info=True)
         
         # Start background thread
         thread = threading.Thread(target=refresh_cache_background)
@@ -1467,7 +1472,7 @@ def get_history():
                     method_counts[method] = method_counts.get(method, 0) + 1
                 # These are estimates, not exact counts
         except Exception as e:
-            print(f"Error counting by method: {e}")
+            logger.error(f"Error counting by method: {e}", exc_info=True)
             method_counts = {}
         
         # Calculate manual and automated counts
@@ -1589,8 +1594,7 @@ def submit_support():
         except Exception as email_error:
             import traceback
             error_trace = traceback.format_exc()
-            print(f"Error sending support email: {email_error}")
-            print(f"Traceback: {error_trace}")
+            logger.error(f"Error sending support email: {email_error}", exc_info=True)
             # Return error to user so they know email failed
             return jsonify({
                 'error': f'Failed to send email: {str(email_error)}. Please check your email configuration or try again later.'
@@ -1603,7 +1607,6 @@ def submit_support():
         
     except Exception as e:
         import traceback
-        print(f"Error in support route: {e}")
-        print(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in support route: {e}", exc_info=True)
         return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
 

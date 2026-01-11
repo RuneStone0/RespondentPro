@@ -6,6 +6,7 @@ Firestore implementation
 
 import base64
 import secrets
+import logging
 from datetime import datetime, timedelta
 from google.cloud.firestore import DELETE_FIELD
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -15,6 +16,9 @@ try:
     from ..db import users_collection, session_keys_collection, user_preferences_collection, projects_cache_collection, hidden_projects_log_collection
 except ImportError:
     from web.db import users_collection, session_keys_collection, user_preferences_collection, projects_cache_collection, hidden_projects_log_collection
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 
 def get_user_by_email(email):
@@ -409,7 +413,7 @@ def load_user_config(user_id):
                             'last_synced': config_doc.get('last_synced')
                         }
     except Exception as e:
-        print(f"Error loading user config: {e}")
+        logger.error(f"Error loading user config: {e}", exc_info=True)
     return None
 
 
@@ -425,7 +429,7 @@ def update_last_synced(user_id):
                 'last_synced': datetime.utcnow()
             })
     except Exception as e:
-        print(f"Error updating last synced time: {e}")
+        logger.error(f"Error updating last synced time: {e}", exc_info=True)
 
 
 def save_user_config(user_id, config, profile_id=None):
@@ -499,7 +503,7 @@ def load_user_filters(user_id):
             # If found, migrate it
             if docs:
                 docs[0].reference.update({'user_id': current_user_id})
-                print(f"[Migration] Migrated user preferences from old user_id {old_user_id} to {current_user_id}")
+                logger.info(f"[Migration] Migrated user preferences from old user_id {old_user_id} to {current_user_id}")
         
         if docs:
             prefs_doc = docs[0].to_dict()
@@ -526,7 +530,7 @@ def load_user_filters(user_id):
                     'hide_using_ai': filters.get('hide_using_ai', False)
                 }
     except Exception as e:
-        print(f"Error loading user filters: {e}")
+        logger.error(f"Error loading user filters: {e}", exc_info=True)
     return {
         'min_incentive': None,
         'min_hourly_rate': None,
@@ -643,7 +647,7 @@ def save_user_filters(user_id, filters):
             if docs:
                 # Migrate to new user_id
                 docs[0].reference.update({'user_id': current_user_id})
-                print(f"[Migration] Migrated user preferences from old user_id {old_user_id} to {current_user_id}")
+                logger.info(f"[Migration] Migrated user preferences from old user_id {old_user_id} to {current_user_id}")
         
         if docs:
             docs[0].reference.update(update_data)
@@ -677,7 +681,7 @@ def get_user_onboarding_status(user_id):
             return user_doc.to_dict().get('has_respondent_account')
         return None
     except Exception as e:
-        print(f"Error getting onboarding status: {e}")
+        logger.error(f"Error getting onboarding status: {e}", exc_info=True)
         return None
 
 
@@ -823,7 +827,7 @@ def get_projects_processed_count(user_id):
                         migrated_count += 1
                     if migrated_count > 0:
                         batch.commit()
-                        print(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                        logger.info(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
                     count = migrated_count
                 else:
                     # Fallback: update documents one by one
@@ -831,12 +835,12 @@ def get_projects_processed_count(user_id):
                     for doc in docs:
                         doc.reference.update({'user_id': current_user_id})
                         migrated_count += 1
-                    print(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                    logger.info(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
                     count = migrated_count
         
         return count
     except Exception as e:
-        print(f"Error getting projects processed count: {e}")
+        logger.error(f"Error getting projects processed count: {e}", exc_info=True)
         return 0
 
 
@@ -864,7 +868,7 @@ def get_projects_remaining(user_id):
         remaining = max(0, limit - processed)
         return remaining
     except Exception as e:
-        print(f"Error getting projects remaining: {e}")
+        logger.error(f"Error getting projects remaining: {e}", exc_info=True)
         return None
 
 
@@ -894,7 +898,7 @@ def check_user_has_credits(user_id, projects_needed=1):
         
         return (remaining >= projects_needed, max(0, remaining))
     except Exception as e:
-        print(f"Error checking user credits: {e}")
+        logger.error(f"Error checking user credits: {e}", exc_info=True)
         return (False, 0)
 
 
@@ -915,7 +919,7 @@ def get_user_billing_info(user_id):
     try:
         processed = get_projects_processed_count(user_id)
     except Exception as e:
-        print(f"Error getting projects processed count in billing info: {e}")
+        logger.error(f"Error getting projects processed count in billing info: {e}", exc_info=True)
         processed = 0
     
     if users_collection is None:
@@ -949,7 +953,7 @@ def get_user_billing_info(user_id):
             'projects_remaining': remaining
         }
     except Exception as e:
-        print(f"Error getting user billing info: {e}")
+        logger.error(f"Error getting user billing info: {e}", exc_info=True)
         # Even on error, return the actual processed count we got earlier
         return {
             'projects_processed_limit': 500,
@@ -1042,7 +1046,7 @@ def check_and_send_credit_notifications(user_id):
                         'updated_at': datetime.utcnow()
                     })
                 except Exception as e:
-                    print(f"Error sending credits exhausted email: {e}")
+                    logger.error(f"Error sending credits exhausted email: {e}", exc_info=True)
         
         # Check if < 10% remaining
         elif remaining is not None and remaining < limit * 0.1:
@@ -1056,7 +1060,7 @@ def check_and_send_credit_notifications(user_id):
                         'updated_at': datetime.utcnow()
                     })
                 except Exception as e:
-                    print(f"Error sending credits low email: {e}")
+                    logger.error(f"Error sending credits low email: {e}", exc_info=True)
     
     except Exception as e:
-        print(f"Error checking credit notifications: {e}")
+        logger.error(f"Error checking credit notifications: {e}", exc_info=True)

@@ -4,6 +4,7 @@ Module for tracking hidden projects with timestamps for analytics
 Firestore implementation
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
@@ -18,6 +19,9 @@ except ImportError:
     except ImportError:
         def resolve_user_id_for_query(user_id: str):
             return str(user_id), None
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 
 def log_hidden_project(
@@ -115,11 +119,11 @@ def log_hidden_project(
                         })
                 except Exception as e:
                     # Don't fail if cache update fails
-                    print(f"Warning: Failed to update cached count: {e}")
+                    logger.warning(f"Warning: Failed to update cached count: {e}")
         
         return True
     except Exception as e:
-        print(f"Error logging hidden project: {e}")
+        logger.error(f"Error logging hidden project: {e}", exc_info=True)
         return False
 
 
@@ -163,19 +167,19 @@ def get_hidden_projects_count(collection, user_id: str) -> int:
                         batch.update(doc.reference, {'user_id': current_user_id})
                         migrated_count += 1
                     batch.commit()
-                    print(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                    logger.info(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
                 else:
                     # Fallback: update documents one by one
                     migrated_count = 0
                     for doc in docs:
                         doc.reference.update({'user_id': current_user_id})
                         migrated_count += 1
-                    print(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                    logger.info(f"[Migration] Migrated {migrated_count} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
                 count = migrated_count
         
         return count
     except Exception as e:
-        print(f"Error getting hidden projects count: {e}")
+        logger.error(f"Error getting hidden projects count: {e}", exc_info=True)
         return 0
 
 
@@ -235,7 +239,7 @@ def get_hidden_projects_timeline(
         results = [{'date': date, 'count': count} for date, count in sorted(grouped.items())]
         return results
     except Exception as e:
-        print(f"Error getting hidden projects timeline: {e}")
+        logger.error(f"Error getting hidden projects timeline: {e}", exc_info=True)
         return []
 
 
@@ -287,12 +291,12 @@ def get_hidden_projects_stats(collection, user_id: str) -> Dict[str, Any]:
                     for doc in docs:
                         batch.update(doc.reference, {'user_id': current_user_id})
                     batch.commit()
-                    print(f"[Migration] Migrated {len(docs)} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                    logger.info(f"[Migration] Migrated {len(docs)} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
                 else:
                     # Fallback: update documents one by one
                     for doc in docs:
                         doc.reference.update({'user_id': current_user_id})
-                    print(f"[Migration] Migrated {len(docs)} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
+                    logger.info(f"[Migration] Migrated {len(docs)} hidden project log(s) from old user_id {old_user_id} to {current_user_id}")
         
         total = len(docs)
         
@@ -333,7 +337,7 @@ def get_hidden_projects_stats(collection, user_id: str) -> Dict[str, Any]:
             'recent': recent
         }
     except Exception as e:
-        print(f"Error getting hidden projects stats: {e}")
+        logger.error(f"Error getting hidden projects stats: {e}", exc_info=True)
         return {
             'total': 0,
             'by_method': {},
@@ -367,11 +371,11 @@ def is_project_hidden(collection, user_id: str, project_id: str) -> bool:
             # If found, migrate it
             if docs:
                 docs[0].reference.update({'user_id': current_user_id})
-                print(f"[Migration] Migrated hidden project log from old user_id {old_user_id} to {current_user_id}")
+                logger.info(f"[Migration] Migrated hidden project log from old user_id {old_user_id} to {current_user_id}")
         
         return len(docs) > 0
     except Exception as e:
-        print(f"Error checking if project is hidden: {e}")
+        logger.error(f"Error checking if project is hidden: {e}", exc_info=True)
         return False
 
 
@@ -416,12 +420,12 @@ def get_last_sync_time(collection, user_id: str) -> Optional[datetime]:
                     except:
                         return None
                 else:
-                    print(f"Unexpected timestamp type: {type(last_sync)}, value: {last_sync}")
+                    logger.warning(f"Unexpected timestamp type: {type(last_sync)}, value: {last_sync}")
                     return None
         
         return None
     except Exception as e:
-        print(f"Error getting last sync time: {e}")
+        logger.error(f"Error getting last sync time: {e}", exc_info=True)
         import traceback
         traceback.print_exc()
         return None
@@ -467,7 +471,7 @@ def get_recently_hidden(
         
         return results
     except Exception as e:
-        print(f"Error getting recently hidden projects: {e}")
+        logger.error(f"Error getting recently hidden projects: {e}", exc_info=True)
         return []
 
 
@@ -566,7 +570,7 @@ def get_all_hidden_projects(
                     if migrated > 0:
                         batch.commit()
                     if migrated > 0 or migrated == 0:
-                        print(f"[Migration] Migrated hidden project logs from old user_id {old_user_id} to {current_user_id}")
+                        logger.info(f"[Migration] Migrated hidden project logs from old user_id {old_user_id} to {current_user_id}")
                 
                 # Merge old results
                 all_results.extend(old_results)
@@ -604,7 +608,7 @@ def get_all_hidden_projects(
             'total_pages': total_pages
         }
     except Exception as e:
-        print(f"Error getting all hidden projects: {e}")
+        logger.error(f"Error getting all hidden projects: {e}", exc_info=True)
         return {
             'projects': [],
             'total': 0,

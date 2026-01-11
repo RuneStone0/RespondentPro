@@ -4,9 +4,14 @@ Respondent.io authentication and session management service
 """
 
 import time
+import logging
 import requests
+import traceback
 from datetime import datetime
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Import database collections
 try:
@@ -74,10 +79,10 @@ def verify_respondent_authentication(cookies):
         
         # Make the request
         start_time = time.time()
-        print(f"[Respondent.io API] GET {auth_url} (verify_authentication)")
+        logger.debug(f"[Respondent.io API] GET {auth_url} (verify_authentication)")
         response = req_session.get(auth_url, timeout=30)
         elapsed_time = time.time() - start_time
-        print(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
+        logger.debug(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
         
         # Check response status
         if response.status_code == 200:
@@ -183,23 +188,23 @@ def fetch_user_profile(session, user_id):
         }
         
         start_time = time.time()
-        print(f"[Respondent.io API] GET {profile_url} (fetch_user_profile)")
+        logger.debug(f"[Respondent.io API] GET {profile_url} (fetch_user_profile)")
         # Use shorter timeout for profile fetch since it's optional
         response = session.get(profile_url, headers=headers, timeout=10)
         elapsed_time = time.time() - start_time
-        print(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
+        logger.debug(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
         
         if response.status_code == 200:
             profile_data = response.json()
             return profile_data
         else:
-            print(f"[Respondent.io API] Failed to fetch profile: {response.status_code} - {response.text[:500]}")
+            logger.warning(f"[Respondent.io API] Failed to fetch profile: {response.status_code} - {response.text[:500]}")
             return None
     except requests.exceptions.Timeout:
-        print(f"[Respondent.io API] Profile fetch timed out (this is optional, continuing without demographic filters)")
+        logger.warning(f"[Respondent.io API] Profile fetch timed out (this is optional, continuing without demographic filters)")
         return None
     except Exception as e:
-        print(f"[Respondent.io API] Error fetching profile: {e}")
+        logger.error(f"[Respondent.io API] Error fetching profile: {e}", exc_info=True)
         return None
 
 
@@ -337,7 +342,7 @@ def get_user_profile(mongo_user_id):
             return profile_doc.get('profile')
         return None
     except Exception as e:
-        print(f"[Profile] Error retrieving profile for user {mongo_user_id}: {e}")
+        logger.error(f"[Profile] Error retrieving profile for user {mongo_user_id}: {e}", exc_info=True)
         return None
 
 
@@ -376,7 +381,7 @@ def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
                 respondent_user_id = verification_result.get('user_id')
         
         if not respondent_user_id:
-            print(f"[Profile] Could not determine Respondent.io user_id for user {mongo_user_id}")
+            logger.warning(f"[Profile] Could not determine Respondent.io user_id for user {mongo_user_id}")
             return None
         
         # Fetch the profile
@@ -401,15 +406,13 @@ def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
                 # Create new document
                 profile_data_to_store['created_at'] = datetime.utcnow()
                 user_profiles_collection.add(profile_data_to_store)
-            print(f"[Profile] Successfully fetched and stored profile for user {mongo_user_id}")
+            logger.info(f"[Profile] Successfully fetched and stored profile for user {mongo_user_id}")
             return profile_data
         else:
-            print(f"[Profile] Failed to fetch profile for user {mongo_user_id}")
+            logger.error(f"[Profile] Failed to fetch profile for user {mongo_user_id}")
             return None
             
     except Exception as e:
-        print(f"[Profile] Error fetching/storing profile for user {mongo_user_id}: {e}")
-        import traceback
-        print(traceback.format_exc())
+        logger.error(f"[Profile] Error fetching/storing profile for user {mongo_user_id}: {e}", exc_info=True)
         return None
 

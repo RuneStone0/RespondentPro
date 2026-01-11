@@ -5,6 +5,7 @@ Background cache refresh module
 
 import threading
 import time
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -18,6 +19,9 @@ try:
 except ImportError:
     from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
     from services.project_service import fetch_all_respondent_projects
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 
 def start_background_refresh(
@@ -36,7 +40,7 @@ def start_background_refresh(
             try:
                 refresh_stale_caches(cache_max_age_hours)
             except Exception as e:
-                print(f"Error in background cache refresh: {e}")
+                logger.error(f"Error in background cache refresh: {e}", exc_info=True)
             
             # Sleep for check_interval_hours
             time.sleep(check_interval_hours * 3600)
@@ -82,7 +86,7 @@ def refresh_stale_caches(max_age_hours: int = 24):
                     query = session_keys_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
                     docs = list(query)
                     if not docs:
-                        print(f"[Background Refresh] No session keys found for user {user_id}, skipping")
+                        logger.warning(f"[Background Refresh] No session keys found for user {user_id}, skipping")
                         continue
                     
                     config_doc = docs[0].to_dict()
@@ -90,14 +94,14 @@ def refresh_stale_caches(max_age_hours: int = 24):
                     profile_id = config_doc.get('profile_id')
                     
                     if not cookies.get('respondent.session.sid') or not profile_id:
-                        print(f"[Background Refresh] Missing session keys or profile_id for user {user_id}, skipping")
+                        logger.warning(f"[Background Refresh] Missing session keys or profile_id for user {user_id}, skipping")
                         continue
                     
                     # Verify session is still valid
-                    print(f"[Background Refresh] Verifying session for user {user_id} before refresh...")
+                    logger.debug(f"[Background Refresh] Verifying session for user {user_id} before refresh...")
                     verification = verify_respondent_authentication(cookies)
                     if not verification.get('success'):
-                        print(f"[Background Refresh] Session invalid for user {user_id}: {verification.get('message', 'Unknown error')}")
+                        logger.warning(f"[Background Refresh] Session invalid for user {user_id}: {verification.get('message', 'Unknown error')}")
                         error_count += 1
                         continue
                     
@@ -105,7 +109,7 @@ def refresh_stale_caches(max_age_hours: int = 24):
                     req_session = create_respondent_session(cookies=cookies)
                     
                     # Fetch all projects (this will bypass cache since use_cache=False)
-                    print(f"[Background Refresh] Fetching projects for user {user_id} (profile_id={profile_id})...")
+                    logger.debug(f"[Background Refresh] Fetching projects for user {user_id} (profile_id={profile_id})...")
                     all_projects, total_count = fetch_all_respondent_projects(
                         session=req_session,
                         profile_id=profile_id,
@@ -123,25 +127,21 @@ def refresh_stale_caches(max_age_hours: int = 24):
                             all_projects,
                             total_count
                         )
-                        print(f"[Background Refresh] Successfully refreshed cache for user {user_id}: {len(all_projects)} projects")
+                        logger.info(f"[Background Refresh] Successfully refreshed cache for user {user_id}: {len(all_projects)} projects")
                         refreshed_count += 1
                     else:
-                        print(f"[Background Refresh] No projects fetched for user {user_id}")
+                        logger.warning(f"[Background Refresh] No projects fetched for user {user_id}")
                         error_count += 1
                         
                 except Exception as e:
-                    print(f"[Background Refresh] Error refreshing cache for user {user_id}: {e}")
-                    import traceback
-                    print(traceback.format_exc())
+                    logger.error(f"[Background Refresh] Error refreshing cache for user {user_id}: {e}", exc_info=True)
                     error_count += 1
         
         if refreshed_count > 0 or error_count > 0:
-            print(f"[Background Refresh] Completed: {refreshed_count} refreshed, {error_count} errors")
+            logger.info(f"[Background Refresh] Completed: {refreshed_count} refreshed, {error_count} errors")
                 
     except Exception as e:
-        print(f"[Background Refresh] Error in refresh_stale_caches: {e}")
-        import traceback
-        print(traceback.format_exc())
+        logger.error(f"[Background Refresh] Error in refresh_stale_caches: {e}", exc_info=True)
 
 
 def keep_sessions_alive():
@@ -161,7 +161,7 @@ def keep_sessions_alive():
             from db import session_keys_collection
         
         if session_keys_collection is None:
-            print("[Session Keep-Alive] session_keys_collection not available, skipping")
+            logger.warning("[Session Keep-Alive] session_keys_collection not available, skipping")
             return
         
         # Get all users with session keys
@@ -184,20 +184,20 @@ def keep_sessions_alive():
             try:
                 # Create authenticated session using the same method as the rest of the app
                 # This ensures we're using the exact same authentication pattern
-                print(f"[Session Keep-Alive] Checking session for user {user_id}...")
+                logger.debug(f"[Session Keep-Alive] Checking session for user {user_id}...")
                 req_session = create_respondent_session(cookies=cookies)
                 
                 # Make verification request to keep session alive
                 auth_url = "https://app.respondent.io/v2/respondents/me"
                 start_time = time.time()
-                print(f"[Respondent.io API] GET {auth_url} (verify_authentication)")
+                logger.debug(f"[Respondent.io API] GET {auth_url} (verify_authentication)")
                 response = req_session.get(auth_url, timeout=30)
                 elapsed_time = time.time() - start_time
-                print(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
+                logger.debug(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
                 
                 if response.status_code == 200:
                     kept_alive_count += 1
-                    print(f"[Session Keep-Alive] ✓ Session alive for user {user_id}")
+                    logger.info(f"[Session Keep-Alive] ✓ Session alive for user {user_id}")
                 else:
                     expired_count += 1
                     error_msg = f"Authentication failed: {response.status_code}"
@@ -205,21 +205,17 @@ def keep_sessions_alive():
                         error_msg = "Authentication failed: Unauthorized (401)"
                     elif response.status_code == 403:
                         error_msg = "Authentication failed: Forbidden (403)"
-                    print(f"[Session Keep-Alive] ✗ Session expired for user {user_id}: {error_msg}")
+                    logger.warning(f"[Session Keep-Alive] ✗ Session expired for user {user_id}: {error_msg}")
                     
             except Exception as e:
                 error_count += 1
-                print(f"[Session Keep-Alive] Error for user {user_id}: {e}")
-                import traceback
-                print(traceback.format_exc())
+                logger.error(f"[Session Keep-Alive] Error for user {user_id}: {e}", exc_info=True)
         
-        # Print summary
+        # Log summary
         total = kept_alive_count + expired_count + error_count + skipped_count
         if total > 0:
-            print(f"[Session Keep-Alive] Completed: {kept_alive_count} kept alive, {expired_count} expired, {error_count} errors, {skipped_count} skipped (total: {total})")
+            logger.info(f"[Session Keep-Alive] Completed: {kept_alive_count} kept alive, {expired_count} expired, {error_count} errors, {skipped_count} skipped (total: {total})")
                 
     except Exception as e:
-        print(f"[Session Keep-Alive] Error in keep_sessions_alive: {e}")
-        import traceback
-        print(traceback.format_exc())
+        logger.error(f"[Session Keep-Alive] Error in keep_sessions_alive: {e}", exc_info=True)
 

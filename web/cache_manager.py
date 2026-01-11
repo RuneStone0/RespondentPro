@@ -3,9 +3,13 @@
 Module for managing project cache in Firestore
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Import users_collection for user_id resolution
 try:
@@ -47,7 +51,7 @@ def resolve_user_id_for_query(user_id: str) -> tuple[str, Optional[str]]:
                 old_user_id = firebase_uid_docs[0].id
                 return str(user_id), old_user_id
         except Exception as e:
-            print(f"Error resolving user_id: {e}")
+            logger.error(f"Error resolving user_id: {e}", exc_info=True)
     
     # Fallback: use the provided user_id as-is
     return str(user_id), None
@@ -90,7 +94,7 @@ def query_with_user_id_fallback(collection, user_id: str, additional_filters=Non
         
         # If we found docs with old_user_id, migrate them
         if docs:
-            print(f"[Migration] Found {len(docs)} document(s) with old user_id {old_user_id}, migrating to {current_user_id}")
+            logger.info(f"[Migration] Found {len(docs)} document(s) with old user_id {old_user_id}, migrating to {current_user_id}")
             for doc in docs:
                 doc.reference.update({'user_id': current_user_id})
     
@@ -151,7 +155,7 @@ def is_cache_fresh(
         age = now - cached_at
         return age < timedelta(hours=max_age_hours)
     except Exception as e:
-        print(f"Error checking cache freshness: {e}")
+        logger.error(f"Error checking cache freshness: {e}", exc_info=True)
         return False
 
 
@@ -192,7 +196,7 @@ def get_cached_projects(collection, user_id: str) -> Optional[Dict[str, Any]]:
                     # Migrate cache to use new user_id
                     cache_doc['user_id'] = current_user_id
                     docs[0].reference.update({'user_id': current_user_id})
-                    print(f"[Cache Migration] Migrated projects cache from old user_id {old_user_id} to {current_user_id}")
+                    logger.info(f"[Cache Migration] Migrated projects cache from old user_id {old_user_id} to {current_user_id}")
                     return {
                         'projects': cache_doc['projects'],
                         'cached_at': cache_doc.get('cached_at'),
@@ -201,7 +205,7 @@ def get_cached_projects(collection, user_id: str) -> Optional[Dict[str, Any]]:
         
         return None
     except Exception as e:
-        print(f"Error getting cached projects: {e}")
+        logger.error(f"Error getting cached projects: {e}", exc_info=True)
         return None
 
 
@@ -243,7 +247,7 @@ def refresh_project_cache(
         
         return True
     except Exception as e:
-        print(f"Error refreshing project cache: {e}")
+        logger.error(f"Error refreshing project cache: {e}", exc_info=True)
         return False
 
 
@@ -287,7 +291,7 @@ def get_cache_stats(collection, user_id: str) -> Dict[str, Any]:
             'total_count': cache_doc.get('total_count', 0)
         }
     except Exception as e:
-        print(f"Error getting cache stats: {e}")
+        logger.error(f"Error getting cache stats: {e}", exc_info=True)
         return {
             'exists': False,
             'cached_at': None,
@@ -339,7 +343,7 @@ def mark_projects_hidden_in_cache(
         # If we found cache with old_user_id, migrate it first
         if old_user_id and cache_doc.get('user_id') == old_user_id:
             docs[0].reference.update({'user_id': current_user_id})
-            print(f"[Cache Migration] Migrated projects cache from old user_id {old_user_id} to {current_user_id}")
+            logger.info(f"[Cache Migration] Migrated projects cache from old user_id {old_user_id} to {current_user_id}")
         
         projects = cache_doc.get('projects', [])
         project_ids_set = set(str(pid) for pid in project_ids)
@@ -357,10 +361,10 @@ def mark_projects_hidden_in_cache(
             'last_updated': datetime.now(timezone.utc)
         })
         
-        print(f"[Cache] Marked {len(project_ids)} project(s) as hidden in cache for user {current_user_id}")
+        logger.info(f"[Cache] Marked {len(project_ids)} project(s) as hidden in cache for user {current_user_id}")
         return True
     except Exception as e:
-        print(f"Error marking projects as hidden in cache: {e}")
+        logger.error(f"Error marking projects as hidden in cache: {e}", exc_info=True)
         return False
 
 
@@ -386,7 +390,7 @@ def get_cached_project_details(collection, project_id: str) -> Optional[Dict[str
                 return cache_doc['details']
         return None
     except Exception as e:
-        print(f"Error getting cached project details: {e}")
+        logger.error(f"Error getting cached project details: {e}", exc_info=True)
         return None
 
 
@@ -423,5 +427,5 @@ def cache_project_details(collection, project_id: str, details: Dict[str, Any]) 
         
         return True
     except Exception as e:
-        print(f"Error caching project details: {e}")
+        logger.error(f"Error caching project details: {e}", exc_info=True)
         return False

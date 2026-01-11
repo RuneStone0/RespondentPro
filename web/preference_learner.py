@@ -4,12 +4,16 @@ Module for learning user preferences from behavior
 Firestore implementation
 """
 
+import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 import uuid
 import hashlib
 import json
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 try:
     from .hidden_projects_tracker import log_hidden_project, is_project_hidden
     from .ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
@@ -86,7 +90,7 @@ def record_project_hidden(
         
         return True
     except Exception as e:
-        print(f"Error recording project hidden: {e}")
+        logger.error(f"Error recording project hidden: {e}", exc_info=True)
         return False
 
 
@@ -152,7 +156,7 @@ def record_category_hidden(
         
         return True
     except Exception as e:
-        print(f"Error recording category hidden: {e}")
+        logger.error(f"Error recording category hidden: {e}", exc_info=True)
         return False
 
 
@@ -183,7 +187,7 @@ def record_project_kept(
         })
         return True
     except Exception as e:
-        print(f"Error recording project kept: {e}")
+        logger.error(f"Error recording project kept: {e}", exc_info=True)
         return False
 
 
@@ -235,7 +239,7 @@ def analyze_feedback_and_learn(
         
         return {'feedback_text': feedback_text, 'project_id': project_id}
     except Exception as e:
-        print(f"Error storing feedback: {e}")
+        logger.error(f"Error storing feedback: {e}", exc_info=True)
         return {'feedback_text': feedback_text, 'project_id': project_id}
 
 
@@ -272,7 +276,7 @@ def update_user_preferences(
             'learned_patterns': prefs.get('learned_patterns', [])
         }
     except Exception as e:
-        print(f"Error updating user preferences: {e}")
+        logger.error(f"Error updating user preferences: {e}", exc_info=True)
         return {}
 
 
@@ -315,7 +319,7 @@ def get_user_preferences(
             'hide_feedback': prefs.get('hide_feedback', [])
         }
     except Exception as e:
-        print(f"Error getting user preferences: {e}")
+        logger.error(f"Error getting user preferences: {e}", exc_info=True)
         return {
             'hidden_projects': [],
             'kept_projects': [],
@@ -365,7 +369,7 @@ def should_hide_project(
         
         return False
     except Exception as e:
-        print(f"Error checking if should hide project: {e}")
+        logger.error(f"Error checking if should hide project: {e}", exc_info=True)
         return False
 
 
@@ -466,7 +470,7 @@ def should_hide_based_on_ai_preferences(
         
         return should_hide
     except Exception as e:
-        print(f"Error checking AI preferences: {e}")
+        logger.error(f"Error checking AI preferences: {e}", exc_info=True)
         return False
 
 
@@ -535,7 +539,7 @@ def store_question_answer(
         
         return True
     except Exception as e:
-        print(f"Error storing question answer: {e}")
+        logger.error(f"Error storing question answer: {e}", exc_info=True)
         return False
 
 
@@ -595,5 +599,5 @@ def find_and_auto_hide_similar(
         
         return auto_hidden_ids
     except Exception as e:
-        print(f"Error finding and auto-hiding similar projects: {e}")
+        logger.error(f"Error finding and auto-hiding similar projects: {e}", exc_info=True)
         return []

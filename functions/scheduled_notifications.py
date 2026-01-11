@@ -5,6 +5,7 @@ Automatically scheduled by Firebase (runs every Friday morning at 9:00 AM)
 
 import os
 import sys
+import logging
 import firebase_admin
 from pathlib import Path
 
@@ -26,6 +27,9 @@ except ImportError:
 from firebase_functions import scheduler_fn
 from web.notification_scheduler import check_and_send_weekly_notifications, check_and_send_token_expiration_notifications
 
+# Create logger for this module
+logger = logging.getLogger(__name__)
+
 
 @scheduler_fn.on_schedule(schedule="every friday 09:00", timezone="America/New_York")
 def scheduled_notifications(event: scheduler_fn.ScheduledEvent) -> None:
@@ -40,9 +44,7 @@ def scheduled_notifications(event: scheduler_fn.ScheduledEvent) -> None:
         # Check token expiration notifications
         check_and_send_token_expiration_notifications()
         
-        print("[Notifications] Scheduled task completed successfully")
+        logger.info("[Notifications] Scheduled task completed successfully")
     except Exception as e:
-        print(f"[Notifications] Error in scheduled task: {e}")
-        import traceback
-        print(traceback.format_exc())
+        logger.error(f"[Notifications] Error in scheduled task: {e}", exc_info=True)
         raise

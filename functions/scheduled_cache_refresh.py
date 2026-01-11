@@ -3,6 +3,8 @@ Cloud Function for scheduled cache refresh
 Automatically scheduled by Firebase (runs daily at 6:00 AM)
 """
 
+import logging
+
 # Initialize Firebase Admin (if not already initialized)
 import firebase_admin
 try:
@@ -15,6 +17,9 @@ except ValueError:
 from firebase_functions import scheduler_fn
 from web.cache_refresh import refresh_stale_caches
 
+# Create logger for this module
+logger = logging.getLogger(__name__)
+
 
 @scheduler_fn.on_schedule(schedule="every day 06:00", timezone="America/New_York")
 def scheduled_cache_refresh(event: scheduler_fn.ScheduledEvent) -> None:
@@ -25,9 +30,7 @@ def scheduled_cache_refresh(event: scheduler_fn.ScheduledEvent) -> None:
     try:
         # Refresh stale caches (default max age: 24 hours)
         refresh_stale_caches(max_age_hours=24)
-        print("[Cache Refresh] Scheduled task completed successfully")
+        logger.info("[Cache Refresh] Scheduled task completed successfully")
     except Exception as e:
-        print(f"[Cache Refresh] Error in scheduled task: {e}")
-        import traceback
-        print(traceback.format_exc())
+        logger.error(f"[Cache Refresh] Error in scheduled task: {e}", exc_info=True)
         raise

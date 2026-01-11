@@ -5,6 +5,7 @@ Background notification scheduler for sending email notifications
 
 import threading
 import time
+import logging
 from datetime import datetime
 
 # Import services
@@ -24,6 +25,9 @@ except ImportError:
     )
     from services.email_service import send_weekly_summary_email, send_session_token_expired_email
     from services.user_service import get_email_by_user_id
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 
 def start_notification_scheduler(check_interval_hours: int = 1, token_check_interval_hours: int = 12):
@@ -49,9 +53,7 @@ def start_notification_scheduler(check_interval_hours: int = 1, token_check_inte
                     check_and_send_token_expiration_notifications()
                     last_token_check = datetime.utcnow()
             except Exception as e:
-                print(f"Error in notification scheduler: {e}")
-                import traceback
-                print(traceback.format_exc())
+                logger.error(f"Error in notification scheduler: {e}", exc_info=True)
             
             # Sleep for check_interval_hours
             time.sleep(check_interval_hours * 3600)
@@ -93,7 +95,7 @@ def check_and_send_weekly_notifications():
                     # Get user email
                     email = get_email_by_user_id(user_id)
                     if not email:
-                        print(f"[Notifications] Skipping user {user_id}: no email found")
+                        logger.warning(f"[Notifications] Skipping user {user_id}: no email found")
                         continue
                     
                     # Get visible projects count
@@ -102,23 +104,21 @@ def check_and_send_weekly_notifications():
                     # Send email
                     try:
                         send_weekly_summary_email(email, project_count)
-                        print(f"[Notifications] Sent weekly summary to {email} ({project_count} projects)")
+                        logger.info(f"[Notifications] Sent weekly summary to {email} ({project_count} projects)")
                         
                         # Mark as sent
                         mark_weekly_notification_sent(user_id)
                     except Exception as e:
-                        print(f"[Notifications] Failed to send weekly summary to {email}: {e}")
+                        logger.error(f"[Notifications] Failed to send weekly summary to {email}: {e}", exc_info=True)
                         # Don't mark as sent if email failed
                         
             except Exception as e:
-                print(f"[Notifications] Error processing weekly notification for user {user_id}: {e}")
+                logger.error(f"[Notifications] Error processing weekly notification for user {user_id}: {e}", exc_info=True)
                 # Continue with next user
                 continue
                 
     except Exception as e:
-        print(f"[Notifications] Error checking weekly notifications: {e}")
-        import traceback
-        print(traceback.format_exc())
+        logger.error(f"[Notifications] Error checking weekly notifications: {e}", exc_info=True)
 
 
 def check_and_send_token_expiration_notifications():
@@ -153,26 +153,24 @@ def check_and_send_token_expiration_notifications():
                     # Get user email
                     email = get_email_by_user_id(user_id)
                     if not email:
-                        print(f"[Notifications] Skipping user {user_id}: no email found")
+                        logger.warning(f"[Notifications] Skipping user {user_id}: no email found")
                         continue
                     
                     # Send email
                     try:
                         send_session_token_expired_email(email)
-                        print(f"[Notifications] Sent token expiration notification to {email}")
+                        logger.info(f"[Notifications] Sent token expiration notification to {email}")
                         
                         # Mark as sent
                         mark_token_expiration_notification_sent(user_id)
                     except Exception as e:
-                        print(f"[Notifications] Failed to send token expiration notification to {email}: {e}")
+                        logger.error(f"[Notifications] Failed to send token expiration notification to {email}: {e}", exc_info=True)
                         # Don't mark as sent if email failed
                         
             except Exception as e:
-                print(f"[Notifications] Error processing token expiration notification for user {user_id}: {e}")
+                logger.error(f"[Notifications] Error processing token expiration notification for user {user_id}: {e}", exc_info=True)
                 # Continue with next user
                 continue
                 
     except Exception as e:
-        print(f"[Notifications] Error checking token expiration notifications: {e}")
-        import traceback
-        print(traceback.format_exc())
+        logger.error(f"[Notifications] Error checking token expiration notifications: {e}", exc_info=True)

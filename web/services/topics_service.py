@@ -4,9 +4,13 @@ Topics extraction and management service for Respondent.io Manager
 Firestore implementation
 """
 
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 
 def extract_topics_from_project(project: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -81,7 +85,7 @@ def store_unique_topics(collection, topics: List[Dict[str, Any]]) -> bool:
         
         return True
     except Exception as e:
-        print(f"Error storing topics: {e}")
+        logger.error(f"Error storing topics: {e}", exc_info=True)
         return False
 
 
@@ -108,6 +112,6 @@ def get_all_topics(collection) -> List[Dict[str, Any]]:
             })
         return topics
     except Exception as e:
-        print(f"Error getting all topics: {e}")
+        logger.error(f"Error getting all topics: {e}", exc_info=True)
         return []
 
