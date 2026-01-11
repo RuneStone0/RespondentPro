@@ -180,19 +180,6 @@ def respondentpro(request):
         return response
 
 
-# Import scheduled functions so Firebase can discover them
-# These functions use @scheduler_fn.on_schedule decorators which register them automatically
-try:
-    from functions.scheduled_notifications import scheduled_notifications
-except ImportError as e:
-    logger.warning(f"Could not import scheduled_notifications: {e}")
-
-try:
-    from functions.scheduled_cache_refresh import scheduled_cache_refresh
-except ImportError as e:
-    logger.warning(f"Could not import scheduled_cache_refresh: {e}")
-
-try:
-    from functions.scheduled_session_keepalive import scheduled_session_keepalive
-except ImportError as e:
-    logger.warning(f"Could not import scheduled_session_keepalive: {e}")
+# Scheduled jobs are now handled via HTTP endpoints in web/routes/scheduled_jobs_routes.py
+# They are called by Google Cloud Scheduler (configured in cloudbuild.yaml)
+# No need to import scheduled functions here anymore

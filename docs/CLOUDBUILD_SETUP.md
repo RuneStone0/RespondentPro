@@ -141,7 +141,7 @@ If builds timeout:
 ### Functions Deployment Fails
 
 If function deployment fails:
-1. Check that `functions/requirements.txt` is correct
+1. Check that `requirements.txt` is correct
 2. Verify Python 3.13 runtime is available in your region
 3. Check Cloud Build logs for specific error messages
 

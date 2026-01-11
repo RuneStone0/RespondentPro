@@ -185,10 +185,6 @@ export FUNCTION_NAME=respondentpro
 
 # Run with functions-framework (from project root)
 functions-framework --target=main.respondentpro --port=8080
-
-# Or from functions directory
-cd functions
-functions-framework --target=main.respondentpro --port=8080
 ```
 
 Then test the endpoint:

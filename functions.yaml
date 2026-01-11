@@ -5,12 +5,5 @@ endpoints:
   respondentpro:
     entryPoint: respondentpro
     httpsTrigger: {}
-  scheduled_cache_refresh:
-    entryPoint: scheduled_cache_refresh
-    httpsTrigger: {}
-  scheduled_notifications:
-    entryPoint: scheduled_notifications
-    httpsTrigger: {}
-  scheduled_session_keepalive:
-    entryPoint: scheduled_session_keepalive
-    httpsTrigger: {}
+  # Scheduled jobs are now handled via HTTP endpoints in web/routes/scheduled_jobs_routes.py
+  # They are called by Google Cloud Scheduler (configured in cloudbuild.yaml)

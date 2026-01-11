@@ -6,6 +6,63 @@ steps:
       - '--project=respondentpro-xyz'
       - '--non-interactive'
       - '--token=${_FIREBASE_TOKEN}'
+  
+  # Create or update Cloud Scheduler jobs for scheduled endpoints
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Get the function URL (Cloud Function endpoint)
+        FUNCTION_URL="https://us-central1-respondentpro-xyz.cloudfunctions.net/respondentpro"
+        
+        # Create or update cache refresh job (runs daily at 6:00 AM)
+        gcloud scheduler jobs create http scheduled-cache-refresh \
+          --project=respondentpro-xyz \
+          --location=us-central1 \
+          --schedule="0 6 * * *" \
+          --uri="${FUNCTION_URL}/scheduled/cache-refresh" \
+          --http-method=GET \
+          --time-zone="America/New_York" \
+          || gcloud scheduler jobs update http scheduled-cache-refresh \
+          --project=respondentpro-xyz \
+          --location=us-central1 \
+          --schedule="0 6 * * *" \
+          --uri="${FUNCTION_URL}/scheduled/cache-refresh" \
+          --http-method=GET \
+          --time-zone="America/New_York"
+        
+        # Create or update session keepalive job (runs every 8 hours)
+        gcloud scheduler jobs create http scheduled-session-keepalive \
+          --project=respondentpro-xyz \
+          --location=us-central1 \
+          --schedule="0 */8 * * *" \
+          --uri="${FUNCTION_URL}/scheduled/session-keepalive" \
+          --http-method=GET \
+          --time-zone="America/New_York" \
+          || gcloud scheduler jobs update http scheduled-session-keepalive \
+          --project=respondentpro-xyz \
+          --location=us-central1 \
+          --schedule="0 */8 * * *" \
+          --uri="${FUNCTION_URL}/scheduled/session-keepalive" \
+          --http-method=GET \
+          --time-zone="America/New_York"
+        
+        # Create or update notifications job (runs every Friday at 9:00 AM)
+        gcloud scheduler jobs create http scheduled-notifications \
+          --project=respondentpro-xyz \
+          --location=us-central1 \
+          --schedule="0 9 * * 5" \
+          --uri="${FUNCTION_URL}/scheduled/notifications" \
+          --http-method=GET \
+          --time-zone="America/New_York" \
+          || gcloud scheduler jobs update http scheduled-notifications \
+          --project=respondentpro-xyz \
+          --location=us-central1 \
+          --schedule="0 9 * * 5" \
+          --uri="${FUNCTION_URL}/scheduled/notifications" \
+          --http-method=GET \
+          --time-zone="America/New_York"
 
 # Substitution variables
 # _FIREBASE_TOKEN should be set as a substitution variable in Cloud Build

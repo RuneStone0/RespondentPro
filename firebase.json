@@ -27,9 +27,7 @@
         "service-account-key.json",
         "respondentpro/**",
         "venv/**",
-        ".venv/**",
-        "functions/venv",
-        "functions/.venv"
+        ".venv/**"
       ],
       "predeploy": [],
       "source": ".",

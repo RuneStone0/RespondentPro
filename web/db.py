@@ -115,20 +115,30 @@ try:
     
     # Test connection by attempting a simple operation
     try:
-        # Try to read from a collection (this will fail if permissions are wrong)
+        # Try to read from a collection (this will fail if permissions are wrong or database doesn't exist)
         logger.debug("Testing Firestore connection...")
         list(users_collection.limit(1).stream())
         logger.debug("Firestore connection test successful")
+        firestore_available = True
+        logger.info("Firestore connection established successfully")
     except Exception as perm_error:
-        logger.warning(
-            f"Firestore permissions issue during test: {perm_error}. "
-            "Please ensure your service account has proper Firestore permissions.",
-            exc_info=True
-        )
-        # Don't fail completely, but warn the user
-    
-    firestore_available = True
-    logger.info("Firestore connection established successfully")
+        error_msg = str(perm_error).lower()
+        if "does not exist" in error_msg or "404" in error_msg:
+            logger.warning(
+                f"Firestore database does not exist: {perm_error}. "
+                "This is expected in local development without Firestore emulator. "
+                "Set FIRESTORE_EMULATOR_HOST to use emulator, or ensure database exists in GCP project.",
+                exc_info=False  # Don't print full traceback for expected local dev scenario
+            )
+        else:
+            logger.warning(
+                f"Firestore permissions issue during test: {perm_error}. "
+                "Please ensure your service account has proper Firestore permissions.",
+                exc_info=True
+            )
+        # Set firestore_available to False if connection test fails
+        firestore_available = False
+        # Don't fail completely, but mark as unavailable
     
 except ValueError as e:
     # Check if Firebase Admin is already initialized (this is OK)

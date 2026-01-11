@@ -239,21 +239,25 @@ try:
     from .routes.auth_routes import bp as auth_bp
     from .routes.page_routes import bp as page_bp
     from .routes.api_routes import bp as api_bp
+    from .routes.scheduled_jobs_routes import bp as scheduled_jobs_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(page_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(scheduled_jobs_bp)
 except ImportError:
     from routes.auth_routes import bp as auth_bp
     from routes.page_routes import bp as page_bp
     from routes.api_routes import bp as api_bp
+    from routes.scheduled_jobs_routes import bp as scheduled_jobs_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(page_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(scheduled_jobs_bp)
 
 
 
-# Background threads disabled - Cloud Scheduler handles these tasks via scheduled functions:
-# - scheduled_notifications (runs every Friday at 9:00 AM)
-# - scheduled_cache_refresh (runs daily at 6:00 AM)
-# - scheduled_session_keepalive (runs every 8 hours)
-# These are configured in functions/scheduled_*.py files and managed by Firebase Function Scheduler
+# Background threads disabled - Cloud Scheduler handles these tasks via HTTP endpoints:
+# - /scheduled/notifications (runs every Friday at 9:00 AM)
+# - /scheduled/cache-refresh (runs daily at 6:00 AM)
+# - /scheduled/session-keepalive (runs every 8 hours)
+# These are configured in web/routes/scheduled_jobs_routes.py and called by Google Cloud Scheduler
