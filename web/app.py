@@ -6,115 +6,63 @@ Flask web UI for Respondent.io API management with passkey authentication
 import os
 import secrets
 import time
-import requests
 from pathlib import Path
 from flask import Flask, jsonify, send_from_directory, render_template
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
+from .services.grok_service import check_grok_health
 
 # Import database collections
-try:
-    from .db import (
-        users_collection, session_keys_collection, projects_cache_collection,
-        user_preferences_collection, hidden_projects_log_collection,
-        hide_feedback_collection, category_recommendations_collection,
-        user_profiles_collection, firestore_available, db
-    )
-except ImportError:
-    from db import (
-        users_collection, session_keys_collection, projects_cache_collection,
-        user_preferences_collection, hidden_projects_log_collection,
-        hide_feedback_collection, category_recommendations_collection,
-        user_profiles_collection, firestore_available, db
-    )
+from .db import (
+    users_collection, session_keys_collection, projects_cache_collection,
+    user_preferences_collection, hidden_projects_log_collection,
+    hide_feedback_collection, category_recommendations_collection,
+    user_profiles_collection, firestore_available, db
+)
 
 # Import user service
-try:
-    from .services.user_service import (
-        create_user,
-        load_credentials_by_user_id,
-        load_user_config, save_user_config, update_last_synced,
-        load_user_filters, save_user_filters
-    )
-except ImportError:
-    from services.user_service import (
-        create_user,
-        load_credentials_by_user_id,
-        load_user_config, save_user_config, update_last_synced,
-        load_user_filters, save_user_filters
-    )
+from .services.user_service import (
+    create_user,
+    load_credentials_by_user_id,
+    load_user_config, save_user_config, update_last_synced,
+    load_user_filters, save_user_filters
+)
 
 # Import respondent auth service
-try:
-    from .services.respondent_auth_service import (
-        create_respondent_session, verify_respondent_authentication,
-        fetch_and_store_user_profile, get_user_profile, fetch_user_profile,
-        extract_demographic_params
-    )
-except ImportError:
-    from services.respondent_auth_service import (
-        create_respondent_session, verify_respondent_authentication,
-        fetch_and_store_user_profile, get_user_profile, fetch_user_profile,
-        extract_demographic_params
-    )
+from .services.respondent_auth_service import (
+    create_respondent_session, verify_respondent_authentication,
+    fetch_and_store_user_profile, get_user_profile, fetch_user_profile,
+    extract_demographic_params
+)
 
 # Import project service
-try:
-    from .services.project_service import (
-        fetch_respondent_projects, fetch_all_respondent_projects,
-        hide_project_via_api, get_hidden_count, process_and_hide_projects,
-        get_hide_progress, hide_progress
-    )
-except ImportError:
-    from services.project_service import (
-        fetch_respondent_projects, fetch_all_respondent_projects,
-        hide_project_via_api, get_hidden_count, process_and_hide_projects,
-        get_hide_progress, hide_progress
-    )
+from .services.project_service import (
+    fetch_respondent_projects, fetch_all_respondent_projects,
+    hide_project_via_api, get_hidden_count, process_and_hide_projects,
+    get_hide_progress, hide_progress
+)
 
 # Import filter service
-try:
-    from .services.filter_service import (
-        apply_filters_to_projects, should_hide_project
-    )
-except ImportError:
-    from services.filter_service import (
-        apply_filters_to_projects, should_hide_project
-    )
+from .services.filter_service import (
+    apply_filters_to_projects, should_hide_project
+)
 
 # Import new modules
-try:
-    from .cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, get_cache_stats, mark_projects_hidden_in_cache
-    from .hidden_projects_tracker import (
-        log_hidden_project, get_hidden_projects_count, get_hidden_projects_timeline,
-        get_hidden_projects_stats, is_project_hidden
-    )
-    from .ai_analyzer import (
-        analyze_project, analyze_projects_batch, extract_metadata_with_grok,
-        analyze_hide_feedback, find_similar_projects, generate_category_recommendations,
-        get_projects_in_category, validate_category_pattern
-    )
-    from .preference_learner import (
-        record_project_hidden, record_category_hidden, record_project_kept,
-        analyze_feedback_and_learn, get_user_preferences, should_hide_project,
-        find_and_auto_hide_similar
-    )
-except ImportError:
-    from cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, get_cache_stats, mark_projects_hidden_in_cache
-    from hidden_projects_tracker import (
-        log_hidden_project, get_hidden_projects_count, get_hidden_projects_timeline,
-        get_hidden_projects_stats, is_project_hidden
-    )
-    from ai_analyzer import (
-        analyze_project, analyze_projects_batch, extract_metadata_with_grok,
-        analyze_hide_feedback, find_similar_projects, generate_category_recommendations,
-        get_projects_in_category, validate_category_pattern
-    )
-    from preference_learner import (
-        record_project_hidden, record_category_hidden, record_project_kept,
-        analyze_feedback_and_learn, get_user_preferences, should_hide_project,
-        find_and_auto_hide_similar
-    )
+from .cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, get_cache_stats, mark_projects_hidden_in_cache
+from .hidden_projects_tracker import (
+    log_hidden_project, get_hidden_projects_count, get_hidden_projects_timeline,
+    get_hidden_projects_stats, is_project_hidden
+)
+from .ai_analyzer import (
+    analyze_project, analyze_projects_batch, extract_metadata_with_grok,
+    analyze_hide_feedback, find_similar_projects, generate_category_recommendations,
+    get_projects_in_category, validate_category_pattern
+)
+from .preference_learner import (
+    record_project_hidden, record_category_hidden, record_project_kept,
+    analyze_feedback_and_learn, get_user_preferences, should_hide_project,
+    find_and_auto_hide_similar
+)
 
 # Get the directory where this file is located
 BASE_DIR = Path(__file__).parent
@@ -177,65 +125,9 @@ def health_check():
     }
     
     # Grok API health check
-    grok_status = "healthy"
-    grok_api_key_configured = False
-    grok_reachable = False
-    grok_error = None
     
-    try:
-        grok_api_key = os.environ.get('GROK_API_KEY')
-        grok_api_url = os.environ.get('GROK_API_URL', 'https://api.x.ai/v1/chat/completions')
-        
-        if grok_api_key:
-            grok_api_key_configured = True
-            
-            # Perform a lightweight connectivity test with timeout
-            # Test if we can reach the API domain (not making a full API call)
-            try:
-                from urllib.parse import urlparse
-                parsed_url = urlparse(grok_api_url)
-                base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
-                
-                # Make a simple HEAD request to check connectivity
-                test_response = requests.head(
-                    base_url,
-                    timeout=2,
-                    allow_redirects=True
-                )
-                # If we get any response (even 404/403), the service is reachable
-                grok_reachable = True
-            except requests.exceptions.Timeout:
-                grok_error = "Connection timeout"
-                grok_status = "degraded"
-                grok_reachable = False
-            except requests.exceptions.ConnectionError:
-                grok_error = "Connection error - API unreachable"
-                grok_status = "degraded"
-                grok_reachable = False
-            except Exception as e:
-                # For other errors, assume reachable if we got past connection
-                # (e.g., 403/404 means service is up but endpoint/auth issue)
-                if "timeout" in str(e).lower() or "connection" in str(e).lower():
-                    grok_reachable = False
-                    grok_error = str(e)
-                    grok_status = "degraded"
-                else:
-                    grok_reachable = True
-        else:
-            grok_error = "GROK_API_KEY not configured"
-            grok_status = "degraded"
-            # Grok is optional, so don't mark overall as unhealthy
-    except Exception as e:
-        grok_error = str(e)
-        grok_status = "degraded"
-        # Grok is optional, so don't mark overall as unhealthy
     
-    services['grok'] = {
-        'status': grok_status,
-        'api_key_configured': grok_api_key_configured,
-        'reachable': grok_reachable,
-        'error': grok_error
-    }
+    services['grok'] = check_grok_health()
     
     # SMTP health check
     smtp_status = "healthy"
@@ -313,7 +205,7 @@ def health_check():
     if db_status == "unhealthy":
         overall_status = "unhealthy"
         http_status = 503
-    elif (grok_status == "degraded" or smtp_status == "degraded") and db_status == "healthy":
+    elif (services['grok']['status'] == "degraded" or smtp_status == "degraded") and db_status == "healthy":
         overall_status = "degraded"
         # Still return 200 for degraded (non-critical service)
     

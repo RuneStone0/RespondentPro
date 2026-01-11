@@ -3,92 +3,14 @@
 Module for AI analysis using Grok API
 """
 
-import os
 import json
-import base64
-import requests
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
-from pathlib import Path
 
-# Load environment variables
-PROJECT_ROOT = Path(__file__).parent.parent
-load_dotenv(PROJECT_ROOT / '.env')
-
-GROK_API_KEY = os.environ.get('GROK_API_KEY')
-GROK_API_URL = os.environ.get('GROK_API_URL', 'https://api.x.ai/v1/chat/completions')
-
-
-def _call_grok_api(prompt: str, system_prompt: Optional[str] = None, model: str = 'grok-4-1-fast-reasoning') -> Optional[str]:
-    """
-    Make a call to Grok API
-    
-    Args:
-        prompt: User prompt
-        system_prompt: Optional system prompt
-        model: Grok model to use (default: 'grok-4-1-fast-reasoning')
-        
-    Returns:
-        Response text or None if error
-    """
-    if not GROK_API_KEY:
-        print("Warning: GROK_API_KEY not set, skipping AI analysis")
-        return None
-    
-    try:
-        headers = {
-            'Authorization': f'Bearer {GROK_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-        
-        messages = []
-        if system_prompt:
-            messages.append({'role': 'system', 'content': system_prompt})
-        messages.append({'role': 'user', 'content': prompt})
-        
-        # Use the specified Grok model
-        
-        payload = {
-            'model': model,
-            'messages': messages,
-            'temperature': 0.3
-        }
-        
-        print(f"[Grok API] POST {GROK_API_URL}")
-        print(f"[Grok API] Model: {model}, Messages: {len(messages)}")
-        
-        response = requests.post(GROK_API_URL, headers=headers, json=payload, timeout=30)
-        
-        # Log response details for debugging
-        print(f"[Grok API] Response status: {response.status_code}")
-        if not response.ok:
-            error_text = response.text[:500] if response.text else "No response body"
-            print(f"[Grok API] Error response: {error_text}")
-            print(f"[Grok API] Full URL: {GROK_API_URL}")
-            print(f"[Grok API] Request payload keys: {list(payload.keys())}")
-            
-            # If 404, suggest checking the endpoint URL
-            if response.status_code == 404:
-                print("[Grok API] 404 Error - Possible issues:")
-                print("  - Check if the API endpoint URL is correct")
-                print("  - Verify the model name is correct (try: grok-beta, grok-2, grok)")
-                print("  - Check xAI API documentation for the correct endpoint")
-                print("  - Ensure your API key has access to the Grok API")
-        
-        response.raise_for_status()
-        
-        data = response.json()
-        return data.get('choices', [{}])[0].get('message', {}).get('content', '')
-    except requests.exceptions.HTTPError as e:
-        error_msg = f"HTTP Error {e.response.status_code if e.response else 'unknown'}: {e.response.text[:500] if e.response else str(e)}"
-        print(f"[Grok API] Error: {error_msg}")
-        print(f"[Grok API] URL: {GROK_API_URL}")
-        print(f"[Grok API] Model: {payload.get('model', 'unknown')}")
-        return None
-    except Exception as e:
-        print(f"[Grok API] Error calling Grok API: {e}")
-        print(f"[Grok API] URL: {GROK_API_URL}")
-        return None
+# Import centralized Grok service
+try:
+    from .services.grok_service import call_grok_api
+except ImportError:
+    from services.grok_service import call_grok_api
 
 
 def analyze_project(project_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -135,7 +57,7 @@ Return format:
   "industries": ["industry1", "industry2"]
 }}"""
 
-    response = _call_grok_api(prompt)
+    response = call_grok_api(prompt)
     if not response:
         return {'regions': [], 'professions': [], 'industries': []}
     
@@ -213,7 +135,7 @@ Return ONLY a valid JSON object:
   }}
 }}"""
 
-    response = _call_grok_api(prompt)
+    response = call_grok_api(prompt)
     if not response:
         return {'reasons': [], 'patterns': {}}
     
@@ -348,7 +270,7 @@ Return ONLY a valid JSON array of category recommendations:
 
 Return 5-10 relevant categories."""
 
-    response = _call_grok_api(prompt)
+    response = call_grok_api(prompt)
     if not response:
         return []
     
@@ -479,7 +401,7 @@ Return ONLY a valid JSON array of exactly 3 short, precise suggestion strings, n
 
 Make each suggestion specific to this project, written in first person, short and precise (5-10 words max), expressing the user's personal reasons for hiding it based on the project content."""
 
-    response = _call_grok_api(prompt, model='grok-4-1-fast-non-reasoning')
+    response = call_grok_api(prompt, model='grok-4-1-fast-non-reasoning')
     if not response:
         # Fallback suggestions if AI fails
         return [
@@ -567,7 +489,7 @@ then projects about law firms should be hidden.
 
 Return ONLY "true" or "false" (lowercase, no quotes, no additional text)."""
 
-    response = _call_grok_api(prompt, model='grok-4-1-fast-non-reasoning')
+    response = call_grok_api(prompt, model='grok-4-1-fast-non-reasoning')
     if not response:
         return False
     
@@ -631,7 +553,7 @@ Return ONLY a valid JSON object with no additional text:
 Question types can be: "profession", "region", "industry", or "other"
 If no clear pattern is detected, return null or an empty object."""
 
-    response = _call_grok_api(prompt)
+    response = call_grok_api(prompt)
     if not response:
         return None
     
