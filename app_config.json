@@ -2,8 +2,11 @@
   "firebase": {
     "apiKey": "AIzaSyC7ErdKy3zy4DMpOxlK45fic5CG90VNaM0",
     "authDomain": "respondentpro-xyz.firebaseapp.com",
+    "projectId": "respondentpro-xyz",
     "storageBucket": "respondentpro-xyz.firebasestorage.app",
     "messagingSenderId": "969875133098",
-    "appId": "1:969875133098:web:14871bb92afd8dd39a36d3"
-  }
+    "appId": "1:969875133098:web:14871bb92afd8dd39a36d3",
+    "measurementId": "G-J2SJTR2NST"
+  },
+  "support-email": "rtk@rtk-cv.dk"
 }

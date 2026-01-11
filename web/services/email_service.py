@@ -11,6 +11,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 
+# Import config library
+from ..lib.app_config import get_config_value
+
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
@@ -341,7 +344,8 @@ def send_support_email(user_id, user_email, question, billing_info=None):
         billing_info: Optional billing information dict
     """
     config = get_smtp_config()
-    admin_email = os.environ.get('SUPPORT_EMAIL', config.get('from_email', 'rtk@rtk-cv.dk'))
+    # Get support email from app_config.json, fallback to SMTP from_email, then default
+    admin_email = get_config_value('support-email')
     
     # Build user details section
     user_details_html = f"""

@@ -16,6 +16,7 @@ try:
     )
     from ..services.email_service import send_login_email
     from ..auth.firebase_auth import require_auth, get_id_token_from_request, verify_firebase_token
+    from ..lib.app_config import get_firebase_config
 except ImportError:
     from services.user_service import (
         get_user_by_email,
@@ -24,6 +25,7 @@ except ImportError:
     )
     from services.email_service import send_login_email
     from auth.firebase_auth import require_auth, get_id_token_from_request, verify_firebase_token
+    from lib.app_config import get_firebase_config
 
 bp = Blueprint('auth', __name__)
 
@@ -46,78 +48,34 @@ def index():
 @bp.route('/api/firebase-config')
 def firebase_config():
     """Provide Firebase configuration for frontend"""
-    import os
     from flask import jsonify
-    from pathlib import Path
-    
-    # Get Firebase project ID
-    project_id = (os.environ.get('GCP_PROJECT') or 
-                 os.environ.get('GCLOUD_PROJECT') or 
-                 os.environ.get('PROJECT_ID'))
-    
-    if not project_id:
-        # Try reading from .firebaserc
-        try:
-            firebaserc_path = Path(__file__).parent.parent.parent / '.firebaserc'
-            if firebaserc_path.exists():
-                with open(firebaserc_path, 'r') as f:
-                    firebaserc = json.load(f)
-                    project_id = firebaserc.get('projects', {}).get('default')
-        except Exception:
-            pass
-    
-    # Load app config from app_config.json
-    app_config = {}
-    try:
-        app_config_path = Path(__file__).parent.parent.parent / 'app_config.json'
-        if app_config_path.exists():
-            with open(app_config_path, 'r') as f:
-                app_config = json.load(f)
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Could not load app_config.json: {e}")
+    import logging
     
     # Get Firebase config from app_config.json (not secret, safe to store in config file)
-    firebase_config_data = app_config.get('firebase', {})
+    config = get_firebase_config()
+    logger = logging.getLogger(__name__)
     
-    # IMPORTANT NOTES:
-    # - authDomain: Can be either:
-    #   * Firebase domain: {project-id}.firebaseapp.com (recommended, always works)
-    #   * Custom domain: your-domain.com (requires proper Firebase Hosting setup)
-    #   If using custom domain, ensure:
-    #   1. Domain is added to Firebase Console > Authentication > Settings > Authorized domains
-    #   2. Domain is configured in Firebase Hosting (if using Firebase Hosting)
-    #   3. DNS records are properly configured
-    # - storageBucket: This is the bucket NAME (not a domain), format: {project-id}.appspot.com
-    #   You cannot change this - it's the actual GCS bucket identifier
+    # Validate that required fields are present
+    required_fields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId']
+    missing_fields = [field for field in required_fields if not config.get(field)]
     
-    # Use values from config file, with fallbacks for computed values
-    auth_domain = firebase_config_data.get('authDomain', '')
-    if not auth_domain and project_id:
-        auth_domain = f'{project_id}.firebaseapp.com'
+    if missing_fields:
+        logger.warning(f"Firebase config missing required fields: {missing_fields}")
     
-    storage_bucket = firebase_config_data.get('storageBucket', '')
-    if not storage_bucket and project_id:
-        storage_bucket = f'{project_id}.appspot.com'
-    
-    config = {
-        'apiKey': firebase_config_data.get('apiKey', ''),
-        'authDomain': auth_domain,
-        'projectId': project_id or firebase_config_data.get('projectId', ''),
-        'storageBucket': storage_bucket,
-        'messagingSenderId': firebase_config_data.get('messagingSenderId', ''),
-        'appId': firebase_config_data.get('appId', '')
-    }
-    
-    # Validate custom domain setup if using custom domain
+    # Log custom domain usage if applicable
+    auth_domain = config.get('authDomain', '')
     if auth_domain and not auth_domain.endswith('.firebaseapp.com'):
-        # Custom domain detected - log a note (but don't fail)
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"Using custom authDomain: {auth_domain}. Ensure it's properly configured in Firebase Console.")
     
-    return jsonify(config)
+    # Return only the fields needed by Firebase client SDK
+    return jsonify({
+        'apiKey': config.get('apiKey', ''),
+        'authDomain': config.get('authDomain', ''),
+        'projectId': config.get('projectId', ''),
+        'storageBucket': config.get('storageBucket', ''),
+        'messagingSenderId': config.get('messagingSenderId', ''),
+        'appId': config.get('appId', '')
+    })
 
 
 @bp.route('/api/debug/token-check')
