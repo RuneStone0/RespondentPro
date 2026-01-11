@@ -431,7 +431,7 @@ This is an automated support request from Respondent Pro.
 def send_credits_low_email(user_email, projects_remaining, projects_limit):
     """Send email notification when user has less than 10% credits remaining"""
     config = get_smtp_config()
-    app_url = config.get('app_url', 'http://localhost:5000')
+    app_url = config['app_url']
     
     # Load HTML template
     template_path = TEMPLATES_DIR / 'credits_low.html'
@@ -485,7 +485,7 @@ Visit: {app_url}/support
 def send_credits_exhausted_email(user_email, projects_limit):
     """Send email notification when user has reached their credit limit"""
     config = get_smtp_config()
-    app_url = config.get('app_url', 'http://localhost:5000')
+    app_url = config['app_url']
     
     # Load HTML template
     template_path = TEMPLATES_DIR / 'credits_exhausted.html'
