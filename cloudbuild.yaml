@@ -1,11 +1,11 @@
 steps:
   # Deploy all Firebase services (Firestore rules/indexes, Functions, and Hosting)
+  # Uses Application Default Credentials (ADC) from Cloud Build service account
   - name: 'us-docker.pkg.dev/firebase-cli/us/firebase'
     args:
       - 'deploy'
       - '--project=respondentpro-xyz'
       - '--non-interactive'
-      - '--token=${_FIREBASE_TOKEN}'
   
   # Create or update Cloud Scheduler jobs for scheduled endpoints
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -64,11 +64,8 @@ steps:
           --http-method=GET \
           --time-zone="America/New_York"
 
-# Substitution variables
-# _FIREBASE_TOKEN should be set as a substitution variable in Cloud Build
-# You can get this token by running: firebase login:ci
-substitutions:
-  _FIREBASE_TOKEN: ''
+# No substitution variables needed - uses Cloud Build service account credentials
+# Make sure the Cloud Build service account has roles/firebase.admin permission
 
 # Build timeout (optional, adjust as needed)
 timeout: '1200s'
