@@ -14,11 +14,11 @@ from .ai_analyzer import analyze_projects_batch
 
 # Import services needed for fetching projects
 try:
-    from .services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
+    from .services.respondent_service import create_respondent_session, verify_respondent_authentication
     from .services.project_service import fetch_all_respondent_projects
     from .services.user_service import get_email_by_user_id
 except ImportError:
-    from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
+    from services.respondent_service import create_respondent_session, verify_respondent_authentication
     from services.project_service import fetch_all_respondent_projects
     from services.user_service import get_email_by_user_id
 

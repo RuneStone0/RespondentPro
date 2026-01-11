@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 # Import services
 try:
     from ..services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
-    from ..services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
+    from ..services.respondent_service import create_respondent_session, verify_respondent_authentication
     from ..services.project_service import fetch_all_respondent_projects, get_hidden_count
     from ..cache_manager import get_cache_stats, get_cached_projects, is_cache_fresh
     from ..db import projects_cache_collection, users_collection
     from ..auth.firebase_auth import require_verified, get_id_token_from_request, verify_firebase_token
 except ImportError:
     from services.user_service import load_user_config, load_user_filters, save_user_config, get_user_onboarding_status, is_user_verified, get_user_billing_info, is_admin, get_email_by_user_id, update_user_billing_limit
-    from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication
+    from services.respondent_service import create_respondent_session, verify_respondent_authentication
     from services.project_service import fetch_all_respondent_projects, get_hidden_count
     from cache_manager import get_cache_stats, get_cached_projects, is_cache_fresh
     from db import projects_cache_collection, users_collection

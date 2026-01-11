@@ -25,7 +25,7 @@ except ImportError:
 # Import services
 try:
     from ..services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_last_synced, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
-    from ..services.respondent_auth_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile
+    from ..services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile
     from ..services.project_service import (
         fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
         get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
@@ -51,7 +51,7 @@ try:
     from ..services.email_service import send_support_email
 except ImportError:
     from services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_last_synced, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
-    from services.respondent_auth_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile
+    from services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile
     from services.project_service import (
         fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
         get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress

@@ -415,4 +415,3 @@ def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
     except Exception as e:
         logger.error(f"[Profile] Error fetching/storing profile for user {mongo_user_id}: {e}", exc_info=True)
         return None
-

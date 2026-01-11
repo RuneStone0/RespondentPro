@@ -39,11 +39,11 @@ except ImportError:
 
 # Import respondent auth service
 try:
-    from .respondent_auth_service import (
+    from .respondent_service import (
         verify_respondent_authentication, get_user_profile, extract_demographic_params_from_mongodb
     )
 except ImportError:
-    from services.respondent_auth_service import (
+    from services.respondent_service import (
         verify_respondent_authentication, get_user_profile, extract_demographic_params_from_mongodb
     )
 

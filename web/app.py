@@ -29,7 +29,7 @@ from .services.user_service import (
 )
 
 # Import respondent auth service
-from .services.respondent_auth_service import (
+from .services.respondent_service import (
     create_respondent_session, verify_respondent_authentication,
     fetch_and_store_user_profile, get_user_profile, fetch_user_profile,
     extract_demographic_params

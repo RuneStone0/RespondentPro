@@ -20,13 +20,13 @@ except ImportError:
 # Import services
 try:
     from .user_service import load_user_config, get_email_by_user_id
-    from .respondent_auth_service import verify_respondent_authentication, create_respondent_session
+    from .respondent_service import verify_respondent_authentication, create_respondent_session
     from .project_service import fetch_all_respondent_projects
     from ..cache_manager import get_cached_projects, is_cache_fresh
     from ..hidden_projects_tracker import is_project_hidden
 except ImportError:
     from services.user_service import load_user_config, get_email_by_user_id
-    from services.respondent_auth_service import verify_respondent_authentication, create_respondent_session
+    from services.respondent_service import verify_respondent_authentication, create_respondent_session
     from services.project_service import fetch_all_respondent_projects
     from cache_manager import get_cached_projects, is_cache_fresh
     from hidden_projects_tracker import is_project_hidden
