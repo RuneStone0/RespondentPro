@@ -384,8 +384,7 @@ def load_user_config(user_id):
             config_doc = docs[0].to_dict()
             return {
                 'cookies': config_doc.get('cookies', {}),
-                'profile_id': config_doc.get('profile_id'),
-                'last_synced': config_doc.get('last_synced')
+                'profile_id': config_doc.get('profile_id')
             }
         
         # If not found, try to find user by firebase_uid in users collection
@@ -409,8 +408,7 @@ def load_user_config(user_id):
                         config_doc = docs[0].to_dict()
                         return {
                             'cookies': config_doc.get('cookies', {}),
-                            'profile_id': config_doc.get('profile_id'),
-                            'last_synced': config_doc.get('last_synced')
+                            'profile_id': config_doc.get('profile_id')
                         }
     except Exception as e:
         logger.error(f"Error loading user config: {e}", exc_info=True)
@@ -418,7 +416,7 @@ def load_user_config(user_id):
 
 
 def update_last_synced(user_id):
-    """Update the last synced timestamp for a user"""
+    """Update the updated_at timestamp for a user (backward compatibility - now uses updated_at instead of last_synced)"""
     if session_keys_collection is None:
         return
     try:
@@ -426,7 +424,7 @@ def update_last_synced(user_id):
         docs = list(query)
         if docs:
             docs[0].reference.update({
-                'last_synced': datetime.utcnow()
+                'updated_at': datetime.utcnow()
             })
     except Exception as e:
         logger.error(f"Error updating last synced time: {e}", exc_info=True)
@@ -469,12 +467,9 @@ def update_session_key_status(user_id, is_valid, profile_id=None):
             'updated_at': datetime.utcnow()
         }
         
-        # Only update last_checked if verification succeeded
-        if is_valid:
-            update_data['last_checked'] = datetime.utcnow()
-            # Optionally update profile_id if provided
-            if profile_id:
-                update_data['profile_id'] = profile_id
+        # Optionally update profile_id if verification succeeded
+        if is_valid and profile_id:
+            update_data['profile_id'] = profile_id
         
         # Update the document
         docs[0].reference.update(update_data)

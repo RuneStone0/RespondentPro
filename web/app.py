@@ -24,7 +24,7 @@ from .db import (
 from .services.user_service import (
     create_user,
     load_credentials_by_user_id,
-    load_user_config, save_user_config, update_last_synced,
+    load_user_config, save_user_config,
     load_user_filters, save_user_filters
 )
 
