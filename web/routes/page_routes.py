@@ -192,7 +192,14 @@ def admin():
                 try:
                     user_data = user_doc.to_dict()
                     user_id_str = user_doc.id
-                    billing_info = get_user_billing_info(user_id_str)
+                    
+                    # Get Firebase Auth UID - for new users, document ID is the firebase_uid
+                    # For old users, firebase_uid is stored in the document
+                    firebase_uid = user_data.get('firebase_uid') or user_id_str
+                    
+                    # Use the same method as account page - get_user_billing_info calls get_projects_processed_count internally
+                    # Pass the Firebase Auth UID (not the document ID) to get correct projects processed count
+                    billing_info = get_user_billing_info(firebase_uid)
                     users_data.append({
                         'user_id': user_id_str,
                         'email': user_data.get('username', 'Unknown'),
@@ -200,7 +207,7 @@ def admin():
                     })
                 except Exception as e:
                     logger.error(f"Error getting billing info for user {user_id_str}: {e}", exc_info=True)
-                    # Still add user with default billing info
+                    # Still add user with default billing info (same pattern as account page)
                     users_data.append({
                         'user_id': user_id_str,
                         'email': user_data.get('username', 'Unknown'),
