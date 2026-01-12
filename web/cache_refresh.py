@@ -25,23 +25,6 @@ except ImportError:
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
-# Ensure logger is configured properly for Cloud Functions
-# If no handlers exist, configure basic logging to stderr
-if not logger.handlers and not logging.getLogger().handlers:
-    import sys
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    ))
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-else:
-    # Ensure logger propagates to root logger
-    logger.propagate = True
-    # Set level to INFO to ensure messages are visible
-    if logger.level == logging.NOTSET:
-        logger.setLevel(logging.INFO)
-
 
 def start_background_refresh(
     check_interval_hours: int = 1,

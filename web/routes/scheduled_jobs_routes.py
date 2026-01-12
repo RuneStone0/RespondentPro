@@ -11,19 +11,6 @@ from flask import Blueprint, jsonify
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
-# Ensure logger is configured properly for Cloud Functions
-# If no handlers exist, configure basic logging to stderr
-if not logger.handlers and not logging.getLogger().handlers:
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    ))
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-else:
-    # Ensure logger propagates to root logger
-    logger.propagate = True
-
 # Import the functions that will be called
 try:
     from ..cache_refresh import refresh_stale_caches, keep_sessions_alive

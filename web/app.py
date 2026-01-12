@@ -71,6 +71,10 @@ PROJECT_ROOT = BASE_DIR.parent
 # Load environment variables from .env file
 load_dotenv(PROJECT_ROOT / '.env')
 
+# Configure logging early, before Flask app creation
+from .lib.logging_config import setup_logging
+setup_logging()
+
 app = Flask(__name__, 
             template_folder=str(BASE_DIR / 'templates'),
             static_folder=str(BASE_DIR / 'static'),

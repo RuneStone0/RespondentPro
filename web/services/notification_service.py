@@ -26,19 +26,6 @@ except ImportError:
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
-# Ensure logger is configured properly for Cloud Functions
-# If no handlers exist, configure basic logging to stderr
-if not logger.handlers and not logging.getLogger().handlers:
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    ))
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-else:
-    # Ensure logger propagates to root logger
-    logger.propagate = True
-
 # Import database collections
 try:
     from ..db import user_notifications_collection, projects_cache_collection, hidden_projects_log_collection, session_keys_collection

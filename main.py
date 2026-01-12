@@ -9,14 +9,18 @@ import sys
 import logging
 from pathlib import Path
 
-# Create logger for this module
-logger = logging.getLogger(__name__)
-
 # Since we're deploying from project root, web module is directly accessible
 # But we still need to add the project root to path for imports
 PROJECT_ROOT = Path(__file__).parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+# Configure logging early, before any modules create loggers
+from web.lib.logging_config import setup_logging
+setup_logging()
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Set environment variables for Firebase
 # GCP_PROJECT or GCLOUD_PROJECT is automatically set by Cloud Functions
