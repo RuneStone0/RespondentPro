@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Background notification scheduler for sending email notifications
+Notification functions for sending email notifications.
+These functions are called by Cloud Scheduler via HTTP endpoints.
 """
 
-import threading
-import time
 import logging
-from datetime import datetime
+import sys
 
 # Import services
 try:
@@ -29,44 +28,25 @@ except ImportError:
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
-
-def start_notification_scheduler(check_interval_hours: int = 1, token_check_interval_hours: int = 12):
-    """
-    Start background thread to send notifications
-    
-    Args:
-        check_interval_hours: How often to check for weekly notifications (default: 1 hour)
-        token_check_interval_hours: How often to check for token expiration (default: 12 hours)
-    """
-    last_token_check = datetime.utcnow()
-    
-    def notification_loop():
-        nonlocal last_token_check
-        while True:
-            try:
-                # Always check weekly notifications
-                check_and_send_weekly_notifications()
-                
-                # Check token expiration only if enough time has passed
-                time_since_last_token_check = (datetime.utcnow() - last_token_check).total_seconds() / 3600
-                if time_since_last_token_check >= token_check_interval_hours:
-                    check_and_send_token_expiration_notifications()
-                    last_token_check = datetime.utcnow()
-            except Exception as e:
-                logger.error(f"Error in notification scheduler: {e}", exc_info=True)
-            
-            # Sleep for check_interval_hours
-            time.sleep(check_interval_hours * 3600)
-    
-    thread = threading.Thread(target=notification_loop, daemon=True)
-    thread.start()
-    return thread
+# Ensure logger is configured properly for Cloud Functions
+# If no handlers exist, configure basic logging to stderr
+if not logger.handlers and not logging.getLogger().handlers:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+else:
+    # Ensure logger propagates to root logger
+    logger.propagate = True
 
 
 def check_and_send_weekly_notifications():
     """
     Check and send weekly project summary notifications
     """
+    logger.info("[Notifications] Starting weekly notifications check")
     try:
         # Import collections from db module
         try:
@@ -75,17 +55,30 @@ def check_and_send_weekly_notifications():
             from db import users_collection
         
         if users_collection is None:
+            logger.warning("[Notifications] users_collection is None, skipping weekly notifications")
             return
         
         # Get all users (not just those with notification preferences)
         # This ensures new users get default preferences created
         users = users_collection.stream()
+        users_list = list(users)
+        user_count = len(users_list)
+        logger.info(f"[Notifications] Found {user_count} user(s) to check for weekly notifications")
         
-        for user_doc in users:
+        if user_count == 0:
+            logger.info("[Notifications] No users found, skipping weekly notifications")
+            return
+        
+        processed_count = 0
+        sent_count = 0
+        
+        for user_doc in users_list:
             user_id = user_doc.id
             if not user_id:
+                logger.warning("[Notifications] Found user document without ID, skipping")
                 continue
             
+            processed_count += 1
             try:
                 # Load preferences (this will auto-create defaults if they don't exist)
                 load_notification_preferences(user_id, auto_create=True)
@@ -105,17 +98,22 @@ def check_and_send_weekly_notifications():
                     try:
                         send_weekly_summary_email(email, project_count)
                         logger.info(f"[Notifications] Sent weekly summary to {email} ({project_count} projects)")
+                        sent_count += 1
                         
                         # Mark as sent
                         mark_weekly_notification_sent(user_id)
                     except Exception as e:
                         logger.error(f"[Notifications] Failed to send weekly summary to {email}: {e}", exc_info=True)
                         # Don't mark as sent if email failed
+                else:
+                    logger.debug(f"[Notifications] Weekly notification not needed for user {user_id}")
                         
             except Exception as e:
                 logger.error(f"[Notifications] Error processing weekly notification for user {user_id}: {e}", exc_info=True)
                 # Continue with next user
                 continue
+        
+        logger.info(f"[Notifications] Weekly notifications check completed: {processed_count} users processed, {sent_count} notifications sent")
                 
     except Exception as e:
         logger.error(f"[Notifications] Error checking weekly notifications: {e}", exc_info=True)
@@ -125,6 +123,7 @@ def check_and_send_token_expiration_notifications():
     """
     Check and send session token expiration notifications
     """
+    logger.info("[Notifications] Starting token expiration notifications check")
     try:
         # Import collections from db module
         try:
@@ -133,17 +132,30 @@ def check_and_send_token_expiration_notifications():
             from db import users_collection
         
         if users_collection is None:
+            logger.warning("[Notifications] users_collection is None, skipping token expiration notifications")
             return
         
         # Get all users (not just those with notification preferences)
         # This ensures new users get default preferences created
         users = users_collection.stream()
+        users_list = list(users)
+        user_count = len(users_list)
+        logger.info(f"[Notifications] Found {user_count} user(s) to check for token expiration notifications")
         
-        for user_doc in users:
+        if user_count == 0:
+            logger.info("[Notifications] No users found, skipping token expiration notifications")
+            return
+        
+        processed_count = 0
+        sent_count = 0
+        
+        for user_doc in users_list:
             user_id = user_doc.id
             if not user_id:
+                logger.warning("[Notifications] Found user document without ID, skipping")
                 continue
             
+            processed_count += 1
             try:
                 # Load preferences (this will auto-create defaults if they don't exist)
                 load_notification_preferences(user_id, auto_create=True)
@@ -160,17 +172,22 @@ def check_and_send_token_expiration_notifications():
                     try:
                         send_session_token_expired_email(email)
                         logger.info(f"[Notifications] Sent token expiration notification to {email}")
+                        sent_count += 1
                         
                         # Mark as sent
                         mark_token_expiration_notification_sent(user_id)
                     except Exception as e:
                         logger.error(f"[Notifications] Failed to send token expiration notification to {email}: {e}", exc_info=True)
                         # Don't mark as sent if email failed
+                else:
+                    logger.debug(f"[Notifications] Token expiration notification not needed for user {user_id}")
                         
             except Exception as e:
                 logger.error(f"[Notifications] Error processing token expiration notification for user {user_id}: {e}", exc_info=True)
                 # Continue with next user
                 continue
+        
+        logger.info(f"[Notifications] Token expiration notifications check completed: {processed_count} users processed, {sent_count} notifications sent")
                 
     except Exception as e:
         logger.error(f"[Notifications] Error checking token expiration notifications: {e}", exc_info=True)

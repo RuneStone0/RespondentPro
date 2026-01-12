@@ -5,10 +5,24 @@ These endpoints are called by Google Cloud Scheduler to run periodic tasks.
 """
 
 import logging
+import sys
 from flask import Blueprint, jsonify
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
+
+# Ensure logger is configured properly for Cloud Functions
+# If no handlers exist, configure basic logging to stderr
+if not logger.handlers and not logging.getLogger().handlers:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+else:
+    # Ensure logger propagates to root logger
+    logger.propagate = True
 
 # Import the functions that will be called
 try:
@@ -80,11 +94,14 @@ def scheduled_notifications():
     Check and send weekly project summary notifications and token expiration notifications.
     Called by Cloud Scheduler every Friday morning at 9:00 AM.
     """
+    logger.info("[Notifications] /scheduled/notifications endpoint called")
     try:
         # Check weekly notifications
+        logger.info("[Notifications] Calling check_and_send_weekly_notifications()")
         check_and_send_weekly_notifications()
         
         # Check token expiration notifications
+        logger.info("[Notifications] Calling check_and_send_token_expiration_notifications()")
         check_and_send_token_expiration_notifications()
         
         logger.info("[Notifications] Scheduled task completed successfully")

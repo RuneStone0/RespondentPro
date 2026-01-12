@@ -4,12 +4,40 @@ Notification service for managing user notification preferences and sending noti
 """
 
 import logging
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+# Try to import zoneinfo (Python 3.9+), fallback to pytz if needed
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    try:
+        from backports.zoneinfo import ZoneInfo
+    except ImportError:
+        try:
+            import pytz
+            ZoneInfo = None  # Will use pytz instead
+        except ImportError:
+            ZoneInfo = None
+            pytz = None
+
 # Create logger for this module
 logger = logging.getLogger(__name__)
+
+# Ensure logger is configured properly for Cloud Functions
+# If no handlers exist, configure basic logging to stderr
+if not logger.handlers and not logging.getLogger().handlers:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+else:
+    # Ensure logger propagates to root logger
+    logger.propagate = True
 
 # Import database collections
 try:
@@ -267,12 +295,24 @@ def should_send_weekly_notification(user_id: str) -> bool:
         weekly_prefs = prefs.get('weekly_project_summary', {})
         
         if not weekly_prefs.get('enabled', True):
+            logger.info(f"[Notifications] Weekly notifications disabled for user {user_id}")
             return False
         
         # Check if today matches the selected day of week
+        # Use US Central Time for day-of-week calculation
         # weekday() returns Monday=0, Sunday=6
         # Our day_of_week uses Sunday=0, Monday=1, ..., Saturday=6
-        today_weekday = datetime.now(timezone.utc).weekday()  # Monday=0, Sunday=6
+        if ZoneInfo:
+            central_tz = ZoneInfo('America/Chicago')
+        elif pytz:
+            central_tz = pytz.timezone('America/Chicago')
+        else:
+            # Fallback to UTC-6 (CST) or UTC-5 (CDT) - approximate
+            # This is not perfect but better than UTC
+            central_tz = timezone(timedelta(hours=-6))  # CST approximation
+        
+        now_central = datetime.now(central_tz)
+        today_weekday = now_central.weekday()  # Monday=0, Sunday=6
         selected_day = weekly_prefs.get('day_of_week', 0)
         
         # Convert selected_day (Sunday=0) to weekday format (Monday=0, Sunday=6)
@@ -283,7 +323,11 @@ def should_send_weekly_notification(user_id: str) -> bool:
         else:  # Monday=1 -> weekday()=0, Tuesday=2 -> weekday()=1, etc.
             selected_weekday = selected_day - 1
         
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        logger.info(f"[Notifications] User {user_id}: today is {day_names[today_weekday]} (weekday={today_weekday}), selected day is {day_names[selected_weekday]} (selected_day={selected_day})")
+        
         if today_weekday != selected_weekday:
+            logger.info(f"[Notifications] User {user_id}: Not the selected day for weekly notification (today={day_names[today_weekday]}, selected={day_names[selected_weekday]})")
             return False
         
         # Check if notification was already sent this week
@@ -298,15 +342,34 @@ def should_send_weekly_notification(user_id: str) -> bool:
             
             if last_sent and isinstance(last_sent, datetime):
                 # Check if last_sent was within the last 7 days
-                # Ensure both datetimes are timezone-aware
-                now = datetime.now(timezone.utc)
+                # Use US Central Time for comparison
+                if ZoneInfo:
+                    central_tz = ZoneInfo('America/Chicago')
+                elif pytz:
+                    central_tz = pytz.timezone('America/Chicago')
+                else:
+                    central_tz = timezone(timedelta(hours=-6))  # CST approximation
+                
+                now_central = datetime.now(central_tz)
+                
+                # Convert last_sent to Central time for comparison
                 if last_sent.tzinfo is None:
-                    # If last_sent is naive, assume it's UTC
-                    last_sent = last_sent.replace(tzinfo=timezone.utc)
-                days_since_sent = (now - last_sent).days
+                    # If last_sent is naive, assume it's UTC and convert to Central
+                    last_sent_utc = last_sent.replace(tzinfo=timezone.utc)
+                    last_sent_central = last_sent_utc.astimezone(central_tz)
+                else:
+                    # Convert to Central time
+                    last_sent_central = last_sent.astimezone(central_tz)
+                
+                days_since_sent = (now_central - last_sent_central).days
+                logger.info(f"[Notifications] User {user_id}: Last notification sent {days_since_sent} days ago (last_sent={last_sent})")
                 if days_since_sent < 7:
+                    logger.info(f"[Notifications] User {user_id}: Notification already sent within last 7 days, skipping")
                     return False
+        else:
+            logger.info(f"[Notifications] User {user_id}: No previous notification found, will send")
         
+        logger.info(f"[Notifications] User {user_id}: Weekly notification should be sent")
         return True
     except Exception as e:
         logger.error(f"Error checking if weekly notification should be sent: {e}", exc_info=True)
