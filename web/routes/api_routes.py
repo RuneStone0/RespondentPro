@@ -17,64 +17,34 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 logger = logging.getLogger(__name__)
 
 # Import Firebase Auth decorators
-try:
-    from ..auth.firebase_auth import require_auth, get_user_id_from_token
-except ImportError:
-    from auth.firebase_auth import require_auth, get_user_id_from_token
+from ..auth.firebase_auth import require_auth, get_user_id_from_token
 
 # Import services
-try:
-    from ..services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
-    from ..services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile, get_profile_id_from_user_profiles
-    from ..services.project_service import (
-        fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
-        get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
-    )
-    from ..cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
-    from ..hidden_projects_tracker import (
-        get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
-        get_all_hidden_projects, get_last_sync_time
-    )
-    from ..ai_analyzer import (
-        generate_question_from_project, find_similar_projects, generate_hide_suggestions
-    )
-    from ..preference_learner import (
-        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences,
-        analyze_feedback_and_learn
-    )
-    from ..services.filter_service import should_hide_project, get_project_is_remote
-    from ..db import (
-        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection,
-        project_details_collection, ai_analysis_cache_collection
-    )
-    from ..services.topics_service import get_all_topics
-    from ..services.email_service import send_support_email
-except ImportError:
-    from services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
-    from services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile, get_profile_id_from_user_profiles
-    from services.project_service import (
-        fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
-        get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
-    )
-    from cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
-    from hidden_projects_tracker import (
-        get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
-        get_all_hidden_projects, get_last_sync_time
-    )
-    from ai_analyzer import (
-        generate_question_from_project, find_similar_projects, generate_hide_suggestions
-    )
-    from preference_learner import (
-        record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences,
-        analyze_feedback_and_learn
-    )
-    from services.filter_service import should_hide_project, get_project_is_remote
-    from db import (
-        projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection,
-        project_details_collection, ai_analysis_cache_collection
-    )
-    from services.topics_service import get_all_topics
-    from services.email_service import send_support_email
+from ..services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
+from ..services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile, get_profile_id_from_user_profiles
+from ..services.project_service import (
+    fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
+    get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
+)
+from ..cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
+from ..hidden_projects_tracker import (
+    get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
+    get_all_hidden_projects, get_last_sync_time
+)
+from ..ai_analyzer import (
+    generate_question_from_project, find_similar_projects, generate_hide_suggestions
+)
+from ..preference_learner import (
+    record_project_hidden, store_question_answer, get_user_preferences, should_hide_based_on_ai_preferences,
+    analyze_feedback_and_learn
+)
+from ..services.filter_service import should_hide_project, get_project_is_remote
+from ..db import (
+    projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, topics_collection,
+    project_details_collection, ai_analysis_cache_collection
+)
+from ..services.topics_service import get_all_topics
+from ..services.email_service import send_support_email
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -1220,10 +1190,7 @@ def refresh_cache():
             return jsonify({'error': 'Session keys are invalid or expired'}), 400
         
         # Import refresh_user_cache function
-        try:
-            from ..cache_refresh import refresh_user_cache
-        except ImportError:
-            from cache_refresh import refresh_user_cache
+        from ..cache_refresh import refresh_user_cache
         
         # Define background refresh function
         def refresh_cache_background():
@@ -1263,10 +1230,7 @@ def get_notification_preferences():
         user_id = request.auth['uid']
         
         # Import notification service
-        try:
-            from ..services.notification_service import load_notification_preferences
-        except ImportError:
-            from services.notification_service import load_notification_preferences
+        from ..services.notification_service import load_notification_preferences
         
         preferences = load_notification_preferences(user_id)
         
@@ -1301,10 +1265,7 @@ def save_notification_preferences():
             return jsonify({'error': 'No data provided'}), 400
         
         # Import notification service
-        try:
-            from ..services.notification_service import save_notification_preferences
-        except ImportError:
-            from services.notification_service import save_notification_preferences
+        from ..services.notification_service import save_notification_preferences
         
         # Validate and prepare preferences
         preferences = {
@@ -1375,14 +1336,7 @@ def get_history():
         # Calculate method counts from the paginated results we already fetched
         # For accurate counts, we still need the full scan, but we can optimize it
         method_counts = {}
-        try:
-            from ..cache_manager import resolve_user_id_for_query
-        except ImportError:
-            try:
-                from web.cache_manager import resolve_user_id_for_query
-            except ImportError:
-                def resolve_user_id_for_query(user_id: str):
-                    return str(user_id), None
+        from ..cache_manager import resolve_user_id_for_query
         
         current_user_id, old_user_id = resolve_user_id_for_query(user_id)
         
@@ -1525,10 +1479,7 @@ def submit_support():
             return jsonify({'error': 'Question is required'}), 400
         
         # Get user billing info to include in email
-        try:
-            from ..services.user_service import get_user_billing_info
-        except ImportError:
-            from services.user_service import get_user_billing_info
+        from ..services.user_service import get_user_billing_info
         
         billing_info = get_user_billing_info(user_id)
         

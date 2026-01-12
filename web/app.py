@@ -144,12 +144,8 @@ def health_check():
         import smtplib
         from .services.email_service import get_smtp_config
     except ImportError:
-        try:
-            import smtplib
-            from services.email_service import get_smtp_config
-        except ImportError:
-            smtp_error = "Email service not available"
-            smtp_status = "degraded"
+        smtp_error = "Email service not available"
+        smtp_status = "degraded"
     
     if smtp_error is None:
         try:
@@ -239,24 +235,14 @@ def page_not_found(e):
 
 
 # Register blueprints
-try:
-    from .routes.auth_routes import bp as auth_bp
-    from .routes.page_routes import bp as page_bp
-    from .routes.api_routes import bp as api_bp
-    from .routes.scheduled_jobs_routes import bp as scheduled_jobs_bp
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(page_bp)
-    app.register_blueprint(api_bp)
-    app.register_blueprint(scheduled_jobs_bp)
-except ImportError:
-    from routes.auth_routes import bp as auth_bp
-    from routes.page_routes import bp as page_bp
-    from routes.api_routes import bp as api_bp
-    from routes.scheduled_jobs_routes import bp as scheduled_jobs_bp
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(page_bp)
-    app.register_blueprint(api_bp)
-    app.register_blueprint(scheduled_jobs_bp)
+from .routes.auth_routes import bp as auth_bp
+from .routes.page_routes import bp as page_bp
+from .routes.api_routes import bp as api_bp
+from .routes.scheduled_jobs_routes import bp as scheduled_jobs_bp
+app.register_blueprint(auth_bp)
+app.register_blueprint(page_bp)
+app.register_blueprint(api_bp)
+app.register_blueprint(scheduled_jobs_bp)
 
 
 

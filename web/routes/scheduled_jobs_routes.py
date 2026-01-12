@@ -14,22 +14,13 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 logger = logging.getLogger(__name__)
 
 # Import the functions that will be called
-try:
-    from ..cache_refresh import refresh_stale_caches, keep_sessions_alive, refresh_user_cache
-    from ..notification_scheduler import (
-        check_and_send_weekly_notifications,
-        check_and_send_token_expiration_notifications
-    )
-    from ..db import users_collection, session_keys_collection
-    from ..services.user_service import get_email_by_user_id
-except ImportError:
-    from cache_refresh import refresh_stale_caches, keep_sessions_alive, refresh_user_cache
-    from notification_scheduler import (
-        check_and_send_weekly_notifications,
-        check_and_send_token_expiration_notifications
-    )
-    from db import users_collection, session_keys_collection
-    from services.user_service import get_email_by_user_id
+from ..cache_refresh import refresh_stale_caches, keep_sessions_alive, refresh_user_cache
+from ..notification_scheduler import (
+    check_and_send_weekly_notifications,
+    check_and_send_token_expiration_notifications
+)
+from ..db import users_collection, session_keys_collection
+from ..services.user_service import get_email_by_user_id
 
 bp = Blueprint('scheduled_jobs', __name__)
 

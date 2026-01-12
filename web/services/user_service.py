@@ -12,10 +12,7 @@ from google.cloud.firestore import DELETE_FIELD
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 # Import database collections
-try:
-    from ..db import users_collection, session_keys_collection, user_preferences_collection, projects_cache_collection, hidden_projects_log_collection
-except ImportError:
-    from web.db import users_collection, session_keys_collection, user_preferences_collection, projects_cache_collection, hidden_projects_log_collection
+from ..db import users_collection, session_keys_collection, user_preferences_collection, projects_cache_collection, hidden_projects_log_collection
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -519,14 +516,7 @@ def load_user_filters(user_id):
         }
     try:
         # Import resolve helper
-        try:
-            from ..cache_manager import resolve_user_id_for_query
-        except ImportError:
-            try:
-                from web.cache_manager import resolve_user_id_for_query
-            except ImportError:
-                def resolve_user_id_for_query(user_id: str):
-                    return str(user_id), None
+        from ..cache_manager import resolve_user_id_for_query
         
         current_user_id, old_user_id = resolve_user_id_for_query(user_id)
         
@@ -660,14 +650,7 @@ def save_user_filters(user_id, filters):
         }
         
         # Resolve user_id to ensure we use the correct format
-        try:
-            from ..cache_manager import resolve_user_id_for_query
-        except ImportError:
-            try:
-                from web.cache_manager import resolve_user_id_for_query
-            except ImportError:
-                def resolve_user_id_for_query(user_id: str):
-                    return str(user_id), None
+        from ..cache_manager import resolve_user_id_for_query
         
         current_user_id, old_user_id = resolve_user_id_for_query(user_id)
         
@@ -827,14 +810,7 @@ def get_projects_processed_count(user_id):
         return 0
     try:
         # Import resolve helper
-        try:
-            from ..cache_manager import resolve_user_id_for_query
-        except ImportError:
-            try:
-                from web.cache_manager import resolve_user_id_for_query
-            except ImportError:
-                def resolve_user_id_for_query(user_id: str):
-                    return str(user_id), None
+        from ..cache_manager import resolve_user_id_for_query
         
         current_user_id, old_user_id = resolve_user_id_for_query(user_id)
         
@@ -849,13 +825,7 @@ def get_projects_processed_count(user_id):
             if docs:
                 # Migrate all documents to use new user_id
                 # Get the database client from the collection
-                try:
-                    from ..db import db
-                except ImportError:
-                    try:
-                        from web.db import db
-                    except ImportError:
-                        db = None
+                from ..db import db
                 
                 if db:
                     batch = db.batch()
@@ -1067,10 +1037,7 @@ def check_and_send_credit_notifications(user_id):
             return
         
         # Import email service here to avoid circular imports
-        try:
-            from ..services.email_service import send_credits_low_email, send_credits_exhausted_email
-        except ImportError:
-            from services.email_service import send_credits_low_email, send_credits_exhausted_email
+        from ..services.email_service import send_credits_low_email, send_credits_exhausted_email
         
         # Check if limit reached
         if processed >= limit:

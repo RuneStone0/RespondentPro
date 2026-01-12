@@ -8,24 +8,14 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 # Import user service
-try:
-    from ..services.user_service import (
-        get_user_by_email,
-        is_user_verified,
-        generate_login_token, verify_login_token
-    )
-    from ..services.email_service import send_login_email
-    from ..auth.firebase_auth import require_auth, get_id_token_from_request, verify_firebase_token
-    from ..lib.app_config import get_firebase_config
-except ImportError:
-    from services.user_service import (
-        get_user_by_email,
-        is_user_verified,
-        generate_login_token, verify_login_token
-    )
-    from services.email_service import send_login_email
-    from auth.firebase_auth import require_auth, get_id_token_from_request, verify_firebase_token
-    from lib.app_config import get_firebase_config
+from ..services.user_service import (
+    get_user_by_email,
+    is_user_verified,
+    generate_login_token, verify_login_token
+)
+from ..services.email_service import send_login_email
+from ..auth.firebase_auth import require_auth, get_id_token_from_request, verify_firebase_token
+from ..lib.app_config import get_firebase_config
 
 bp = Blueprint('auth', __name__)
 
@@ -554,10 +544,7 @@ def verify_email_token(token):
     # Legacy email verification - Firebase Auth handles this natively
     # This endpoint is kept for backward compatibility with old verification emails
     try:
-        try:
-            from ..db import users_collection
-        except ImportError:
-            from db import users_collection
+        from ..db import users_collection
         
         if users_collection:
             query = users_collection.where(filter=FieldFilter('verification_token', '==', token)).limit(1).stream()
@@ -567,10 +554,7 @@ def verify_email_token(token):
                 user_data = user_doc.to_dict()
                 user_id = user_doc.id
                 # Import verify_user_email if needed
-                try:
-                    from ..services.user_service import verify_user_email
-                except ImportError:
-                    from services.user_service import verify_user_email
+                from ..services.user_service import verify_user_email
                 
                 if verify_user_email(user_id, token):
                     # Redirect to dashboard - user will need to sign in with Firebase Auth
@@ -595,10 +579,7 @@ def verify_email_api():
     
     try:
         # Import verify_user_email if needed
-        try:
-            from ..services.user_service import verify_user_email
-        except ImportError:
-            from services.user_service import verify_user_email
+        from ..services.user_service import verify_user_email
         
         user_id = request.auth['uid']
         if verify_user_email(user_id, token):

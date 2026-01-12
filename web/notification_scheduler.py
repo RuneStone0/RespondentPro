@@ -8,22 +8,13 @@ import logging
 import sys
 
 # Import services
-try:
-    from .services.notification_service import (
-        load_notification_preferences, should_send_weekly_notification,
-        should_send_token_expiration_notification, get_visible_projects_count,
-        mark_weekly_notification_sent, mark_token_expiration_notification_sent
-    )
-    from .services.email_service import send_weekly_summary_email, send_session_token_expired_email
-    from .services.user_service import get_email_by_user_id
-except ImportError:
-    from services.notification_service import (
-        load_notification_preferences, should_send_weekly_notification,
-        should_send_token_expiration_notification, get_visible_projects_count,
-        mark_weekly_notification_sent, mark_token_expiration_notification_sent
-    )
-    from services.email_service import send_weekly_summary_email, send_session_token_expired_email
-    from services.user_service import get_email_by_user_id
+from .services.notification_service import (
+    load_notification_preferences, should_send_weekly_notification,
+    should_send_token_expiration_notification, get_visible_projects_count,
+    mark_weekly_notification_sent, mark_token_expiration_notification_sent
+)
+from .services.email_service import send_weekly_summary_email, send_session_token_expired_email
+from .services.user_service import get_email_by_user_id
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -36,10 +27,7 @@ def check_and_send_weekly_notifications():
     logger.info("[Notifications] Starting weekly notifications check")
     try:
         # Import collections from db module
-        try:
-            from .db import users_collection
-        except ImportError:
-            from db import users_collection
+        from .db import users_collection
         
         if users_collection is None:
             logger.warning("[Notifications] users_collection is None, skipping weekly notifications")
@@ -113,10 +101,7 @@ def check_and_send_token_expiration_notifications():
     logger.info("[Notifications] Starting token expiration notifications check")
     try:
         # Import collections from db module
-        try:
-            from .db import users_collection
-        except ImportError:
-            from db import users_collection
+        from .db import users_collection
         
         if users_collection is None:
             logger.warning("[Notifications] users_collection is None, skipping token expiration notifications")

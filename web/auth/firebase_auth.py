@@ -252,14 +252,9 @@ def ensure_firestore_user_exists(firebase_uid, email, email_verified=False):
     Returns:
         str: Firestore user document ID
     """
-    try:
-        from ..db import users_collection
-        from ..services.user_service import get_user_by_email, create_user
-        from datetime import datetime
-    except ImportError:
-        from db import users_collection
-        from services.user_service import get_user_by_email, create_user
-        from datetime import datetime
+    from ..db import users_collection
+    from ..services.user_service import get_user_by_email, create_user
+    from datetime import datetime
     
     if users_collection is None:
         raise Exception("Firestore connection not available")

@@ -12,46 +12,25 @@ import requests
 logger = logging.getLogger(__name__)
 
 # Import database collections
-try:
-    from ..db import projects_cache_collection, hidden_projects_log_collection, project_details_collection, topics_collection, user_preferences_collection, ai_analysis_cache_collection
-    from ..services.user_service import check_user_has_credits, get_user_billing_info, check_and_send_credit_notifications
-except ImportError:
-    from web.db import projects_cache_collection, hidden_projects_log_collection, project_details_collection, topics_collection, user_preferences_collection, ai_analysis_cache_collection
-    from services.user_service import check_user_has_credits, get_user_billing_info, check_and_send_credit_notifications
+from ..db import projects_cache_collection, hidden_projects_log_collection, project_details_collection, topics_collection, user_preferences_collection, ai_analysis_cache_collection
+from ..services.user_service import check_user_has_credits, get_user_billing_info, check_and_send_credit_notifications
 
 # Import cache manager
-try:
-    from ..cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, mark_projects_hidden_in_cache, get_cached_project_details, cache_project_details
-except ImportError:
-    from cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, mark_projects_hidden_in_cache, get_cached_project_details, cache_project_details
+from ..cache_manager import is_cache_fresh, get_cached_projects, refresh_project_cache, mark_projects_hidden_in_cache, get_cached_project_details, cache_project_details
 
 # Import topics service
-try:
-    from .topics_service import extract_topics_from_project, store_unique_topics
-except ImportError:
-    from services.topics_service import extract_topics_from_project, store_unique_topics
+from .topics_service import extract_topics_from_project, store_unique_topics
 
 # Import hidden projects tracker
-try:
-    from ..hidden_projects_tracker import log_hidden_project, get_hidden_projects_count
-except ImportError:
-    from hidden_projects_tracker import log_hidden_project, get_hidden_projects_count
+from ..hidden_projects_tracker import log_hidden_project, get_hidden_projects_count
 
 # Import respondent auth service
-try:
-    from .respondent_service import (
-        verify_respondent_authentication, get_user_profile, extract_demographic_params_from_mongodb
-    )
-except ImportError:
-    from services.respondent_service import (
-        verify_respondent_authentication, get_user_profile, extract_demographic_params_from_mongodb
-    )
+from .respondent_service import (
+    verify_respondent_authentication, get_user_profile, extract_demographic_params_from_mongodb
+)
 
 # Import filter service
-try:
-    from .filter_service import should_hide_project
-except ImportError:
-    from services.filter_service import should_hide_project
+from .filter_service import should_hide_project
 
 # Store progress for each user (in-memory, could be moved to Redis/MongoDB for persistence)
 hide_progress = {}

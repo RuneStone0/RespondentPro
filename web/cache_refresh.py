@@ -12,18 +12,11 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from .cache_manager import is_cache_fresh, refresh_project_cache, mark_projects_hidden_in_cache
 
 # Import services needed for fetching projects
-try:
-    from .services.respondent_service import create_respondent_session, verify_respondent_authentication, get_profile_id_from_user_profiles
-    from .services.project_service import fetch_all_respondent_projects, hide_project_via_api
-    from .services.user_service import get_email_by_user_id, update_session_key_status, load_user_config, load_user_filters
-    from .services.filter_service import should_hide_project
-    from .preference_learner import record_project_hidden
-except ImportError:
-    from services.respondent_service import create_respondent_session, verify_respondent_authentication, get_profile_id_from_user_profiles
-    from services.project_service import fetch_all_respondent_projects, hide_project_via_api
-    from services.user_service import get_email_by_user_id, update_session_key_status, load_user_config, load_user_filters
-    from services.filter_service import should_hide_project
-    from preference_learner import record_project_hidden
+from .services.respondent_service import create_respondent_session, verify_respondent_authentication, get_profile_id_from_user_profiles
+from .services.project_service import fetch_all_respondent_projects, hide_project_via_api
+from .services.user_service import get_email_by_user_id, update_session_key_status, load_user_config, load_user_filters
+from .services.filter_service import should_hide_project
+from .preference_learner import record_project_hidden
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -64,10 +57,7 @@ def refresh_stale_caches(max_age_hours: int = 24):
     """
     try:
         # Import collections from db module
-        try:
-            from .db import projects_cache_collection, session_keys_collection
-        except ImportError:
-            from db import projects_cache_collection, session_keys_collection
+        from .db import projects_cache_collection, session_keys_collection
         
         if projects_cache_collection is None or session_keys_collection is None:
             return
@@ -197,10 +187,7 @@ def keep_sessions_alive():
         logger.info("[Session Keep-Alive] Starting session keep-alive process...")
         
         # Import collections from db module
-        try:
-            from .db import session_keys_collection
-        except ImportError:
-            from db import session_keys_collection
+        from .db import session_keys_collection
         
         if session_keys_collection is None:
             logger.warning("[Session Keep-Alive] session_keys_collection not available, skipping")
@@ -290,10 +277,7 @@ def refresh_user_cache(user_id: str) -> Dict[str, Any]:
     """
     try:
         # Import collections from db module
-        try:
-            from .db import session_keys_collection, projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, project_details_collection, ai_analysis_cache_collection
-        except ImportError:
-            from db import session_keys_collection, projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, project_details_collection, ai_analysis_cache_collection
+        from .db import session_keys_collection, projects_cache_collection, hidden_projects_log_collection, user_preferences_collection, project_details_collection, ai_analysis_cache_collection
         
         if session_keys_collection is None:
             return {'success': False, 'error': 'session_keys_collection not available'}

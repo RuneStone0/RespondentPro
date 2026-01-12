@@ -11,14 +11,7 @@ from collections import defaultdict
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 # Import helper for user_id resolution
-try:
-    from .cache_manager import resolve_user_id_for_query
-except ImportError:
-    try:
-        from web.cache_manager import resolve_user_id_for_query
-    except ImportError:
-        def resolve_user_id_for_query(user_id: str):
-            return str(user_id), None
+from .cache_manager import resolve_user_id_for_query
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -51,14 +44,7 @@ def log_hidden_project(
     """
     try:
         # Import resolve helper
-        try:
-            from .cache_manager import resolve_user_id_for_query
-        except ImportError:
-            try:
-                from web.cache_manager import resolve_user_id_for_query
-            except ImportError:
-                def resolve_user_id_for_query(user_id: str):
-                    return str(user_id), None
+        from .cache_manager import resolve_user_id_for_query
         
         current_user_id, old_user_id = resolve_user_id_for_query(user_id)
         
@@ -97,14 +83,7 @@ def log_hidden_project(
         # OPTIMIZATION: Update cached count in user document to avoid full scans
         # This makes get_projects_processed_count() much faster
         if is_new:
-            try:
-                from ..db import users_collection, db
-            except ImportError:
-                try:
-                    from web.db import users_collection, db
-                except ImportError:
-                    users_collection = None
-                    db = None
+            from ..db import users_collection, db
             
             if users_collection and db:
                 try:
@@ -152,13 +131,7 @@ def get_hidden_projects_count(collection, user_id: str) -> int:
             if docs:
                 # Migrate all documents to use new user_id
                 # Get the database client from the collection
-                try:
-                    from ..db import db
-                except ImportError:
-                    try:
-                        from web.db import db
-                    except ImportError:
-                        db = None
+                from ..db import db
                 
                 if db:
                     batch = db.batch()
@@ -278,13 +251,7 @@ def get_hidden_projects_stats(collection, user_id: str) -> Dict[str, Any]:
             if docs:
                 # Migrate all documents to use new user_id
                 # Get the database client from the collection
-                try:
-                    from ..db import db
-                except ImportError:
-                    try:
-                        from web.db import db
-                    except ImportError:
-                        db = None
+                from ..db import db
                 
                 if db:
                     batch = db.batch()
@@ -548,13 +515,7 @@ def get_all_hidden_projects(
             
             if old_results:
                 # Migrate these documents
-                try:
-                    from ..db import db
-                except ImportError:
-                    try:
-                        from web.db import db
-                    except ImportError:
-                        db = None
+                from ..db import db
                 
                 if db:
                     batch = db.batch()

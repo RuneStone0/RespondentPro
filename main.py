@@ -72,16 +72,6 @@ else:
 try:
     from web.firebase_init import initialize_firebase_admin
     initialize_firebase_admin(project_id=project_id, project_root=PROJECT_ROOT)
-except ImportError as e:
-    logger.warning(f"Could not import firebase_init: {e}")
-    # Fallback to basic initialization
-    try:
-        import firebase_admin
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app()
-            logger.info("Firebase Admin initialized (fallback)")
-    except Exception as fallback_error:
-        logger.warning(f"Firebase Admin initialization failed: {fallback_error}", exc_info=True)
 except Exception as e:
     logger.warning(f"Firebase Admin initialization error: {e}", exc_info=True)
 

@@ -12,13 +12,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 logger = logging.getLogger(__name__)
 
 # Import users_collection for user_id resolution
-try:
-    from .db import users_collection
-except ImportError:
-    try:
-        from web.db import users_collection
-    except ImportError:
-        users_collection = None
+from .db import users_collection
 
 
 def resolve_user_id_for_query(user_id: str) -> tuple[str, Optional[str]]:

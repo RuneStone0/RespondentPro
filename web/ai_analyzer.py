@@ -8,10 +8,7 @@ import logging
 from typing import Dict, Any, List, Optional
 
 # Import centralized Grok service
-try:
-    from .services.grok_service import call_grok_api
-except ImportError:
-    from services.grok_service import call_grok_api
+from .services.grok_service import call_grok_api
 
 # Create logger for this module
 logger = logging.getLogger(__name__)

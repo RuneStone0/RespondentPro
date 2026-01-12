@@ -27,24 +27,14 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Import database collections
-try:
-    from ..db import user_notifications_collection, projects_cache_collection, hidden_projects_log_collection, session_keys_collection
-except ImportError:
-    from web.db import user_notifications_collection, projects_cache_collection, hidden_projects_log_collection, session_keys_collection
+from ..db import user_notifications_collection, projects_cache_collection, hidden_projects_log_collection, session_keys_collection
 
 # Import services
-try:
-    from .user_service import load_user_config, get_email_by_user_id
-    from .respondent_service import verify_respondent_authentication, create_respondent_session, get_profile_id_from_user_profiles
-    from .project_service import fetch_all_respondent_projects
-    from ..cache_manager import get_cached_projects, is_cache_fresh
-    from ..hidden_projects_tracker import is_project_hidden
-except ImportError:
-    from services.user_service import load_user_config, get_email_by_user_id
-    from services.respondent_service import verify_respondent_authentication, create_respondent_session, get_profile_id_from_user_profiles
-    from services.project_service import fetch_all_respondent_projects
-    from cache_manager import get_cached_projects, is_cache_fresh
-    from hidden_projects_tracker import is_project_hidden
+from .user_service import load_user_config, get_email_by_user_id
+from .respondent_service import verify_respondent_authentication, create_respondent_session, get_profile_id_from_user_profiles
+from .project_service import fetch_all_respondent_projects
+from ..cache_manager import get_cached_projects, is_cache_fresh
+from ..hidden_projects_tracker import is_project_hidden
 
 
 def get_default_notification_preferences() -> Dict[str, Any]:

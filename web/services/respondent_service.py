@@ -14,16 +14,10 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 logger = logging.getLogger(__name__)
 
 # Import database collections
-try:
-    from ..db import user_profiles_collection
-except ImportError:
-    from web.db import user_profiles_collection
+from ..db import user_profiles_collection
 
 # Import user service for config loading
-try:
-    from .user_service import load_user_config
-except ImportError:
-    from services.user_service import load_user_config
+from .user_service import load_user_config
 
 
 def create_respondent_session(cookies):

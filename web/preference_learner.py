@@ -14,12 +14,8 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
-try:
-    from .hidden_projects_tracker import log_hidden_project, is_project_hidden
-    from .ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
-except ImportError:
-    from hidden_projects_tracker import log_hidden_project, is_project_hidden
-    from ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
+from .hidden_projects_tracker import log_hidden_project, is_project_hidden
+from .ai_analyzer import analyze_hide_feedback, extract_similarity_patterns, find_similar_projects, should_hide_project_based_on_feedback
 
 
 def _get_or_create_user_prefs(collection, user_id: str) -> tuple:

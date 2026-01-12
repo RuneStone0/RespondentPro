@@ -5,12 +5,8 @@ Filtering service for Respondent.io Manager
 
 import logging
 
-try:
-    from ..cache_manager import get_cached_project_details
-    from ..db import project_details_collection
-except ImportError:
-    from cache_manager import get_cached_project_details
-    from db import project_details_collection
+from ..cache_manager import get_cached_project_details
+from ..db import project_details_collection
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -113,10 +109,7 @@ def should_hide_project(project, filters, project_details_collection=None, user_
     # Only check if hide_using_ai flag is enabled
     hide_using_ai = filters.get('hide_using_ai', False)
     if hide_using_ai and user_id and user_preferences_collection is not None:
-        try:
-            from ..preference_learner import should_hide_based_on_ai_preferences
-        except ImportError:
-            from preference_learner import should_hide_based_on_ai_preferences
+        from ..preference_learner import should_hide_based_on_ai_preferences
         
         if should_hide_based_on_ai_preferences(user_preferences_collection, user_id, project, ai_analysis_cache_collection):
             return True
@@ -203,10 +196,7 @@ def apply_filters_to_projects(projects_data, filters, project_details_collection
         
         # Check AI preferences if hide_using_ai is enabled
         if hide_using_ai and not should_hide and user_id and user_preferences_collection is not None:
-            try:
-                from ..preference_learner import should_hide_based_on_ai_preferences
-            except ImportError:
-                from preference_learner import should_hide_based_on_ai_preferences
+            from ..preference_learner import should_hide_based_on_ai_preferences
             
             if should_hide_based_on_ai_preferences(user_preferences_collection, user_id, project, ai_analysis_cache_collection):
                 should_hide = True
