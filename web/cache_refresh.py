@@ -16,14 +16,31 @@ from .ai_analyzer import analyze_projects_batch
 try:
     from .services.respondent_service import create_respondent_session, verify_respondent_authentication
     from .services.project_service import fetch_all_respondent_projects
-    from .services.user_service import get_email_by_user_id
+    from .services.user_service import get_email_by_user_id, update_session_key_status
 except ImportError:
     from services.respondent_service import create_respondent_session, verify_respondent_authentication
     from services.project_service import fetch_all_respondent_projects
-    from services.user_service import get_email_by_user_id
+    from services.user_service import get_email_by_user_id, update_session_key_status
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
+
+# Ensure logger is configured properly for Cloud Functions
+# If no handlers exist, configure basic logging to stderr
+if not logger.handlers and not logging.getLogger().handlers:
+    import sys
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+else:
+    # Ensure logger propagates to root logger
+    logger.propagate = True
+    # Set level to INFO to ensure messages are visible
+    if logger.level == logging.NOTSET:
+        logger.setLevel(logging.INFO)
 
 
 def start_background_refresh(
@@ -178,14 +195,15 @@ def refresh_stale_caches(max_age_hours: int = 24):
 
 def keep_sessions_alive():
     """
-    Keep all user sessions alive by making periodic API requests to Respondent.io
+    Keep all user sessions alive by verifying authentication with Respondent.io API.
     This prevents session cookies from expiring due to inactivity.
     
-    Uses create_respondent_session() to create authenticated sessions and makes requests
-    to /v2/respondents/me to verify and keep sessions alive, matching the authentication
-    pattern used throughout the app.
+    Runs verify_respondent_authentication() for each user in background threads,
+    allowing the endpoint to return immediately while verifications run asynchronously.
     """
     try:
+        logger.info("[Session Keep-Alive] Starting session keep-alive process...")
+        
         # Import collections from db module
         try:
             from .db import session_keys_collection
@@ -197,56 +215,70 @@ def keep_sessions_alive():
             return
         
         # Get all users with session keys
+        logger.info("[Session Keep-Alive] Fetching all user sessions from database...")
         all_sessions = session_keys_collection.stream()
         
-        kept_alive_count = 0
-        expired_count = 0
-        error_count = 0
+        started_count = 0
         skipped_count = 0
+        
+        def verify_user_background(user_id, cookies):
+            """Background task to verify a single user's authentication"""
+            try:
+                logger.info(f"[Session Keep-Alive] [Background] Starting verification for user {user_id}...")
+                verification = verify_respondent_authentication(cookies)
+                
+                if verification.get('success'):
+                    logger.info(f"[Session Keep-Alive] [Background] ✓ Session alive for user {user_id}")
+                    # Update session key status - valid, with profile_id if available
+                    update_session_key_status(
+                        user_id, 
+                        True, 
+                        profile_id=verification.get('profile_id')
+                    )
+                else:
+                    error_msg = verification.get('message', 'Unknown error')
+                    logger.warning(f"[Session Keep-Alive] [Background] ✗ Session expired for user {user_id}: {error_msg}")
+                    # Update session key status - invalid
+                    update_session_key_status(user_id, False)
+                    
+            except Exception as e:
+                logger.error(f"[Session Keep-Alive] [Background] Error verifying user {user_id}: {e}", exc_info=True)
+                # Mark as invalid if there was an error
+                try:
+                    update_session_key_status(user_id, False)
+                except Exception as update_error:
+                    logger.error(f"[Session Keep-Alive] [Background] Error updating status for user {user_id}: {update_error}", exc_info=True)
         
         for session_doc in all_sessions:
             session_data = session_doc.to_dict()
             user_id = session_data.get('user_id')
             cookies = session_data.get('cookies', {})
             
+            # Skip if missing required fields
             if not user_id or not cookies.get('respondent.session.sid'):
                 skipped_count += 1
+                logger.debug(f"[Session Keep-Alive] Skipping session for user {user_id} (missing user_id or session cookie)")
                 continue
             
-            try:
-                # Create authenticated session using the same method as the rest of the app
-                # This ensures we're using the exact same authentication pattern
-                logger.debug(f"[Session Keep-Alive] Checking session for user {user_id}...")
-                req_session = create_respondent_session(cookies=cookies)
-                
-                # Make verification request to keep session alive
-                auth_url = "https://app.respondent.io/v2/respondents/me"
-                start_time = time.time()
-                logger.debug(f"[Respondent.io API] GET {auth_url} (verify_authentication)")
-                response = req_session.get(auth_url, timeout=30)
-                elapsed_time = time.time() - start_time
-                logger.debug(f"[Respondent.io API] Response: {response.status_code} ({elapsed_time:.2f}s)")
-                
-                if response.status_code == 200:
-                    kept_alive_count += 1
-                    logger.info(f"[Session Keep-Alive] ✓ Session alive for user {user_id}")
-                else:
-                    expired_count += 1
-                    error_msg = f"Authentication failed: {response.status_code}"
-                    if response.status_code == 401:
-                        error_msg = "Authentication failed: Unauthorized (401)"
-                    elif response.status_code == 403:
-                        error_msg = "Authentication failed: Forbidden (403)"
-                    logger.warning(f"[Session Keep-Alive] ✗ Session expired for user {user_id}: {error_msg}")
-                    
-            except Exception as e:
-                error_count += 1
-                logger.error(f"[Session Keep-Alive] Error for user {user_id}: {e}", exc_info=True)
+            # Skip invalid sessions (only skip if explicitly False, not if None/unknown)
+            if session_data.get('is_valid') is False:
+                skipped_count += 1
+                logger.debug(f"[Session Keep-Alive] Skipping invalid session for user {user_id}")
+                continue
+            
+            # Start background thread for this user's verification
+            thread = threading.Thread(target=verify_user_background, args=(user_id, cookies))
+            thread.daemon = True
+            thread.start()
+            started_count += 1
+            logger.info(f"[Session Keep-Alive] Started background verification task for user {user_id} (task {started_count})")
         
-        # Log summary
-        total = kept_alive_count + expired_count + error_count + skipped_count
+        # Log summary of started tasks
+        total = started_count + skipped_count
         if total > 0:
-            logger.info(f"[Session Keep-Alive] Completed: {kept_alive_count} kept alive, {expired_count} expired, {error_count} errors, {skipped_count} skipped (total: {total})")
+            logger.info(f"[Session Keep-Alive] Summary: Started {started_count} background verification task(s), {skipped_count} skipped (total: {total} sessions found)")
+        else:
+            logger.info("[Session Keep-Alive] No user sessions found in database")
                 
     except Exception as e:
         logger.error(f"[Session Keep-Alive] Error in keep_sessions_alive: {e}", exc_info=True)

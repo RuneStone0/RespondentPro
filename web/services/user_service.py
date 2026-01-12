@@ -432,6 +432,58 @@ def update_last_synced(user_id):
         logger.error(f"Error updating last synced time: {e}", exc_info=True)
 
 
+def update_session_key_status(user_id, is_valid, profile_id=None):
+    """
+    Update session key health status after verification in keepalive endpoint
+    
+    Args:
+        user_id: User ID (may be firebase_uid)
+        is_valid: Boolean indicating if session is valid
+        profile_id: Optional profile_id to update if verification succeeded
+    """
+    if session_keys_collection is None:
+        return
+    try:
+        # Resolve user_id - if it's a firebase_uid, find the actual user_id
+        actual_user_id = str(user_id)
+        if users_collection:
+            # Check if user_id is a firebase_uid by looking for document with that ID
+            user_doc = users_collection.document(str(user_id)).get()
+            if not user_doc.exists:
+                # Try to find user by firebase_uid field
+                firebase_uid_query = users_collection.where(filter=FieldFilter('firebase_uid', '==', str(user_id))).limit(1).stream()
+                firebase_uid_docs = list(firebase_uid_query)
+                if firebase_uid_docs:
+                    actual_user_id = firebase_uid_docs[0].id
+        
+        # Find session key document
+        query = session_keys_collection.where(filter=FieldFilter('user_id', '==', actual_user_id)).limit(1).stream()
+        docs = list(query)
+        if not docs:
+            logger.debug(f"[Session Key Status] No session key document found for user {user_id}")
+            return
+        
+        # Prepare update data
+        update_data = {
+            'is_valid': is_valid,
+            'updated_at': datetime.utcnow()
+        }
+        
+        # Only update last_checked if verification succeeded
+        if is_valid:
+            update_data['last_checked'] = datetime.utcnow()
+            # Optionally update profile_id if provided
+            if profile_id:
+                update_data['profile_id'] = profile_id
+        
+        # Update the document
+        docs[0].reference.update(update_data)
+        logger.debug(f"[Session Key Status] Updated status for user {user_id}: is_valid={is_valid}")
+        
+    except Exception as e:
+        logger.error(f"[Session Key Status] Error updating session key status for user {user_id}: {e}", exc_info=True)
+
+
 def save_user_config(user_id, config, profile_id=None):
     """Save user's Respondent.io config to Firestore by user_id or firebase_uid"""
     if session_keys_collection is None:

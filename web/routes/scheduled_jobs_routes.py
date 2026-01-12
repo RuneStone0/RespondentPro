@@ -52,16 +52,19 @@ def scheduled_cache_refresh():
 @bp.route('/scheduled/session-keepalive', methods=['GET'])
 def scheduled_session_keepalive():
     """
-    Keep all user sessions alive by checking Respondent.io profile endpoints.
+    Keep all user sessions alive by verifying authentication with Respondent.io API.
     Called by Cloud Scheduler every 8 hours to prevent session expiration.
+    
+    Runs verify_respondent_authentication() for each user in background threads,
+    allowing the endpoint to return immediately while verifications run asynchronously.
     """
     try:
-        # Keep all sessions alive by checking profile endpoints
+        # Keep all sessions alive by verifying authentication (runs in background threads)
         keep_sessions_alive()
-        logger.info("[Session Keep-Alive] Scheduled task completed successfully")
+        logger.info("[Session Keep-Alive] Scheduled task started - background verifications running")
         return jsonify({
             'status': 'success',
-            'message': 'Session keep-alive completed successfully'
+            'message': 'Session keep-alive tasks started in background'
         }), 200
     except Exception as e:
         logger.error(f"[Session Keep-Alive] Error in scheduled task: {e}", exc_info=True)
