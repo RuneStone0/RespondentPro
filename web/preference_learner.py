@@ -39,6 +39,7 @@ def _get_or_create_user_prefs(collection, user_id: str) -> tuple:
             'question_answers': [],
             'learned_exclusions': [],
             'hide_feedback': [],
+            'hide_feedback_updated': datetime.utcnow(),
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         }
@@ -228,6 +229,7 @@ def analyze_feedback_and_learn(
         
         doc_ref.update({
             'hide_feedback': hide_feedback,
+            'hide_feedback_updated': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         })
         
@@ -411,7 +413,7 @@ def should_hide_based_on_ai_preferences(
     
     This function uses AI to analyze the project against all stored raw feedback
     to determine if it should be hidden based on the user's previous reasons.
-    Uses caching to avoid expensive AI calls when hide_feedback hasn't changed.
+    Uses timestamp-based caching to avoid expensive AI calls when hide_feedback hasn't changed.
     
     Args:
         user_preferences_collection: Collection for user_preferences
@@ -427,25 +429,32 @@ def should_hide_based_on_ai_preferences(
         if not project_id:
             return False
         
-        prefs = get_user_preferences(user_preferences_collection, user_id)
+        # Get user preferences to check hide_feedback_updated timestamp
+        query = user_preferences_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
+        docs = list(query)
+        if not docs:
+            return False
+        
+        prefs = docs[0].to_dict()
         
         # Get all stored raw feedback
         hide_feedback = prefs.get('hide_feedback', [])
         if not hide_feedback:
             return False
         
-        # Compute hash of current feedback to check if cache is still valid
-        feedback_hash = _compute_feedback_hash(hide_feedback)
+        # Get current hide_feedback_updated timestamp
+        current_feedback_timestamp = prefs.get('hide_feedback_updated')
         
         # Check cache if available
-        if ai_analysis_cache_collection is not None:
-            query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
-            docs = list(query)
-            if docs:
-                cache_entry = docs[0].to_dict()
-                cached_hash = cache_entry.get('hide_feedback_hash')
-                # If feedback hasn't changed, return cached result
-                if cached_hash == feedback_hash:
+        if ai_analysis_cache_collection is not None and current_feedback_timestamp is not None:
+            cache_query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+            cache_docs = list(cache_query)
+            if cache_docs:
+                cache_entry = cache_docs[0].to_dict()
+                cached_timestamp = cache_entry.get('hide_feedback_updated')
+                
+                # If timestamps match (no changes to hide_feedback), return cached result
+                if cached_timestamp == current_feedback_timestamp:
                     return cache_entry.get('should_hide', False)
         
         # Cache miss or feedback changed - run AI analysis
@@ -456,15 +465,15 @@ def should_hide_based_on_ai_preferences(
             cache_data = {
                 'user_id': str(user_id),
                 'project_id': str(project_id),
-                'hide_feedback_hash': feedback_hash,
+                'hide_feedback_updated': current_feedback_timestamp,
                 'should_hide': should_hide,
                 'cached_at': datetime.utcnow()
             }
             
-            query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
-            docs = list(query)
-            if docs:
-                docs[0].reference.update(cache_data)
+            cache_query = ai_analysis_cache_collection.where(filter=FieldFilter('user_id', '==', str(user_id))).where(filter=FieldFilter('project_id', '==', str(project_id))).limit(1).stream()
+            cache_docs = list(cache_query)
+            if cache_docs:
+                cache_docs[0].reference.update(cache_data)
             else:
                 ai_analysis_cache_collection.add(cache_data)
         

@@ -949,6 +949,7 @@ def update_hide_feedback(feedback_id):
         # Update the document
         docs[0].reference.update({
             'hide_feedback': feedback_list,
+            'hide_feedback_updated': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         })
         
@@ -997,6 +998,7 @@ def delete_hide_feedback(feedback_id):
         # Update the document
         docs[0].reference.update({
             'hide_feedback': feedback_list,
+            'hide_feedback_updated': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         })
         
@@ -1217,101 +1219,21 @@ def refresh_cache():
         if not verification.get('success'):
             return jsonify({'error': 'Session keys are invalid or expired'}), 400
         
+        # Import refresh_user_cache function
+        try:
+            from ..cache_refresh import refresh_user_cache
+        except ImportError:
+            from cache_refresh import refresh_user_cache
+        
         # Define background refresh function
         def refresh_cache_background():
             try:
-                logger.info(f"[Cache Refresh] Starting background refresh for user {user_id}")
-                req_session = create_respondent_session(
-                    cookies=config.get('cookies', {})
-                )
-                
-                all_projects, total_count = fetch_all_respondent_projects(
-                    session=req_session,
-                    profile_id=profile_id,
-                    page_size=50,
-                    user_id=user_id,
-                    use_cache=False,
-                    cookies=config.get('cookies', {})
-                )
-                
-                # Check if AI-based hiding is enabled and hide matching projects
-                filters = load_user_filters(user_id)
-                hide_using_ai = filters.get('hide_using_ai', False)
-                hidden_count = 0
-                hidden_project_ids = []
-                errors = []
-                
-                if hide_using_ai:
-                    logger.info(f"[Cache Refresh] AI-based hiding is enabled, checking {len(all_projects)} projects")
-                    
-                    # Find projects that should be hidden based on AI preferences
-                    projects_to_hide = []
-                    for project in all_projects:
-                        if should_hide_project(
-                            project,
-                            filters,
-                            project_details_collection=project_details_collection,
-                            user_id=user_id,
-                            user_preferences_collection=user_preferences_collection,
-                            ai_analysis_cache_collection=ai_analysis_cache_collection
-                        ):
-                            projects_to_hide.append(project)
-                    
-                    logger.info(f"[Cache Refresh] Found {len(projects_to_hide)} projects to hide based on AI preferences")
-                    
-                    # Hide each project via API
-                    for project in projects_to_hide:
-                        project_id = project.get('id')
-                        if project_id:
-                            try:
-                                success = hide_project_via_api(req_session, project_id)
-                                if success:
-                                    hidden_count += 1
-                                    hidden_project_ids.append(project_id)
-                                    
-                                    # Log the hidden project
-                                    if hidden_projects_log_collection is not None and user_preferences_collection is not None:
-                                        record_project_hidden(
-                                            hidden_projects_log_collection,
-                                            user_preferences_collection,
-                                            user_id,
-                                            project_id,
-                                            feedback_text=None,
-                                            hidden_method='ai_auto'
-                                        )
-                                else:
-                                    errors.append(project_id)
-                                    logger.warning(f"[Cache Refresh] Failed to hide project {project_id}")
-                            except Exception as e:
-                                errors.append(project_id)
-                                logger.error(f"[Cache Refresh] Error hiding project {project_id}: {e}", exc_info=True)
-                            
-                            # Small delay to avoid rate limiting
-                            time.sleep(0.1)
-                    
-                    # Update cache to mark projects as hidden
-                    if projects_cache_collection is not None and hidden_project_ids:
-                        mark_projects_hidden_in_cache(projects_cache_collection, user_id, hidden_project_ids)
-                        logger.info(f"[Cache Refresh] Marked {len(hidden_project_ids)} projects as hidden in cache")
-                    
-                    # Refresh cache from API to get updated project list after hiding
-                    if projects_cache_collection is not None and hidden_project_ids:
-                        try:
-                            logger.info(f"[Cache Refresh] Refreshing cache after hiding {len(hidden_project_ids)} projects")
-                            all_projects, total_count = fetch_all_respondent_projects(
-                                session=req_session,
-                                profile_id=profile_id,
-                                page_size=50,
-                                user_id=user_id,
-                                use_cache=False,
-                                cookies=config.get('cookies', {})
-                            )
-                            logger.info(f"[Cache Refresh] Cache refreshed: {len(all_projects)} projects now in cache")
-                        except Exception as e:
-                            logger.error(f"[Cache Refresh] Error refreshing cache after hiding: {e}", exc_info=True)
-                            # Don't fail the whole operation if cache refresh fails
-                
-                logger.info(f"[Cache Refresh] Background refresh completed for user {user_id}")
+                result = refresh_user_cache(user_id)
+                if result.get('success'):
+                    logger.info(f"[Cache Refresh] Background refresh completed for user {user_id}")
+                else:
+                    error_msg = result.get('error', 'Unknown error')
+                    logger.error(f"[Cache Refresh] Error in background refresh for user {user_id}: {error_msg}")
             except Exception as e:
                 import traceback
                 logger.error(f"[Cache Refresh] Error in background refresh: {e}", exc_info=True)
