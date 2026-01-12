@@ -346,6 +346,35 @@ def get_user_profile(mongo_user_id):
         return None
 
 
+def get_profile_id_from_user_profiles(mongo_user_id):
+    """
+    Get profile_id from user_profiles collection to avoid extra API calls
+    
+    Args:
+        mongo_user_id: Our internal user_id (string)
+        
+    Returns:
+        profile_id (string) if found, None otherwise
+    """
+    if user_profiles_collection is None:
+        return None
+    
+    try:
+        query = user_profiles_collection.where(filter=FieldFilter('user_id', '==', str(mongo_user_id))).limit(1).stream()
+        docs = list(query)
+        if docs:
+            profile_doc = docs[0].to_dict()
+            profile = profile_doc.get('profile')
+            if profile and isinstance(profile, dict):
+                # Try profile.profile_id first (as specified by user), then profile.id as fallback
+                profile_id = profile.get('profile_id') or profile.get('id')
+                return profile_id
+        return None
+    except Exception as e:
+        logger.error(f"[Profile] Error retrieving profile_id for user {mongo_user_id}: {e}", exc_info=True)
+        return None
+
+
 def fetch_and_store_user_profile(mongo_user_id, respondent_user_id=None):
     """
     Fetch user profile data from Respondent.io API and store it in Firestore

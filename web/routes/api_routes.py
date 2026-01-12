@@ -25,7 +25,7 @@ except ImportError:
 # Import services
 try:
     from ..services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
-    from ..services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile
+    from ..services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile, get_profile_id_from_user_profiles
     from ..services.project_service import (
         fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
         get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
@@ -51,7 +51,7 @@ try:
     from ..services.email_service import send_support_email
 except ImportError:
     from services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
-    from services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile
+    from services.respondent_service import create_respondent_session, verify_respondent_authentication, fetch_and_store_user_profile, get_profile_id_from_user_profiles
     from services.project_service import (
         fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
         get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
@@ -138,14 +138,12 @@ def save_session_keys():
             cookies=config['cookies']
         )
         
-        # Save the config with profile_id if verification succeeded
-        profile_id = None
+        # Save the config (profile_id is no longer stored, get it from verification when needed)
         respondent_user_id = None
-        if verification_result.get('success') and verification_result.get('profile_id'):
-            profile_id = verification_result.get('profile_id')
+        if verification_result.get('success'):
             respondent_user_id = verification_result.get('user_id')
         
-        save_user_config(user_id, config, profile_id=profile_id)
+        save_user_config(user_id, config)
         
         # Fetch and store user profile if verification succeeded
         if verification_result.get('success') and respondent_user_id:
@@ -298,29 +296,33 @@ def save_filters():
         if has_active_filters:
             config = load_user_config(user_id)
             if config and config.get('cookies', {}).get('respondent.session.sid'):
-                profile_id = config.get('profile_id')
+                # Get profile_id from user_profiles collection (avoid extra API call)
+                profile_id = get_profile_id_from_user_profiles(user_id)
                 if profile_id:
-                    req_session = create_respondent_session(
-                        cookies=config.get('cookies', {})
-                    )
-                    
-                    def hide_in_background():
-                        try:
-                            process_and_hide_projects(
-                                user_id, req_session, profile_id, saved_filters,
-                                cookies=config.get('cookies', {})
-                            )
-                        except Exception as e:
-                            import traceback
-                            logger.error(f"Error in background hide process", exc_info=True)
-                            user_id_str = str(user_id)
-                            if user_id_str in hide_progress:
-                                hide_progress[user_id_str]['status'] = 'error'
-                                hide_progress[user_id_str]['error'] = str(e)
-                    
-                    thread = threading.Thread(target=hide_in_background)
-                    thread.daemon = True
-                    thread.start()
+                    # Verify session is still valid before making API calls
+                    verification = verify_respondent_authentication(config.get('cookies', {}))
+                    if verification.get('success'):
+                        req_session = create_respondent_session(
+                            cookies=config.get('cookies', {})
+                        )
+                        
+                        def hide_in_background():
+                            try:
+                                process_and_hide_projects(
+                                    user_id, req_session, profile_id, saved_filters,
+                                    cookies=config.get('cookies', {})
+                                )
+                            except Exception as e:
+                                import traceback
+                                logger.error(f"Error in background hide process", exc_info=True)
+                                user_id_str = str(user_id)
+                                if user_id_str in hide_progress:
+                                    hide_progress[user_id_str]['status'] = 'error'
+                                    hide_progress[user_id_str]['error'] = str(e)
+                        
+                        thread = threading.Thread(target=hide_in_background)
+                        thread.daemon = True
+                        thread.start()
         
         return jsonify({
             'success': True,
@@ -363,9 +365,15 @@ def hide_projects():
         if not config or not config.get('cookies', {}).get('respondent.session.sid'):
             return jsonify({'error': 'Session keys not configured'}), 400
         
-        profile_id = config.get('profile_id')
+        # Get profile_id from user_profiles collection (avoid extra API call)
+        profile_id = get_profile_id_from_user_profiles(user_id)
         if not profile_id:
-            return jsonify({'error': 'Profile ID not found'}), 400
+            return jsonify({'error': 'Profile ID not found. Please ensure your profile is set up.'}), 400
+        
+        # Verify session is still valid before making API calls
+        verification = verify_respondent_authentication(config.get('cookies', {}))
+        if not verification.get('success'):
+            return jsonify({'error': 'Session keys are invalid or expired'}), 400
         
         req_session = create_respondent_session(
             cookies=config.get('cookies', {})
@@ -457,10 +465,17 @@ def preview_hide():
             preview_hide_progress[user_id_str]['status'] = 'error'
             return jsonify({'error': 'Session keys not configured'}), 400
         
-        profile_id = config.get('profile_id')
+        # Get profile_id from user_profiles collection (avoid extra API call)
+        profile_id = get_profile_id_from_user_profiles(user_id)
         if not profile_id:
             preview_hide_progress[user_id_str]['status'] = 'error'
-            return jsonify({'error': 'Profile ID not found'}), 400
+            return jsonify({'error': 'Profile ID not found. Please ensure your profile is set up.'}), 400
+        
+        # Verify session is still valid before making API calls
+        verification = verify_respondent_authentication(config.get('cookies', {}))
+        if not verification.get('success'):
+            preview_hide_progress[user_id_str]['status'] = 'error'
+            return jsonify({'error': 'Session keys are invalid or expired'}), 400
         
         # Try to get from cache first, otherwise fetch projects
         req_session = create_respondent_session(
@@ -788,15 +803,19 @@ def answer_question():
         if not answer:  # User said "no" - they don't match the requirement
             config = load_user_config(user_id)
             if config and config.get('cookies', {}).get('respondent.session.sid'):
-                profile_id = config.get('profile_id')
+                # Get profile_id from user_profiles collection (avoid extra API call)
+                profile_id = get_profile_id_from_user_profiles(user_id)
                 if profile_id:
-                    # Get all projects
-                    cached = None
-                    if projects_cache_collection is not None:
-                        cached = get_cached_projects(projects_cache_collection, user_id)
-                    
-                    if cached and cached.get('projects'):
-                        all_projects = cached.get('projects', [])
+                    # Verify session is still valid before making API calls
+                    verification = verify_respondent_authentication(config.get('cookies', {}))
+                    if verification.get('success'):
+                        # Get all projects
+                        cached = None
+                        if projects_cache_collection is not None:
+                            cached = get_cached_projects(projects_cache_collection, user_id)
+                        
+                        if cached and cached.get('projects'):
+                            all_projects = cached.get('projects', [])
                         
                         # Find similar projects using the pattern
                         similar_projects = find_similar_projects(
@@ -1188,9 +1207,15 @@ def refresh_cache():
         if not config or not config.get('cookies', {}).get('respondent.session.sid'):
             return jsonify({'error': 'Session keys not configured'}), 400
         
-        profile_id = config.get('profile_id')
+        # Get profile_id from user_profiles collection (avoid extra API call)
+        profile_id = get_profile_id_from_user_profiles(user_id)
         if not profile_id:
-            return jsonify({'error': 'Profile ID not found'}), 400
+            return jsonify({'error': 'Profile ID not found. Please ensure your profile is set up.'}), 400
+        
+        # Verify session is still valid before making API calls
+        verification = verify_respondent_authentication(config.get('cookies', {}))
+        if not verification.get('success'):
+            return jsonify({'error': 'Session keys are invalid or expired'}), 400
         
         # Define background refresh function
         def refresh_cache_background():

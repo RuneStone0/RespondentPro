@@ -14,11 +14,11 @@ from .ai_analyzer import analyze_projects_batch
 
 # Import services needed for fetching projects
 try:
-    from .services.respondent_service import create_respondent_session, verify_respondent_authentication
+    from .services.respondent_service import create_respondent_session, verify_respondent_authentication, get_profile_id_from_user_profiles
     from .services.project_service import fetch_all_respondent_projects
     from .services.user_service import get_email_by_user_id, update_session_key_status
 except ImportError:
-    from services.respondent_service import create_respondent_session, verify_respondent_authentication
+    from services.respondent_service import create_respondent_session, verify_respondent_authentication, get_profile_id_from_user_profiles
     from services.project_service import fetch_all_respondent_projects
     from services.user_service import get_email_by_user_id, update_session_key_status
 
@@ -135,13 +135,19 @@ def refresh_stale_caches(max_age_hours: int = 24):
                 
                 config_doc = docs[0].to_dict()
                 cookies = config_doc.get('cookies', {})
-                profile_id = config_doc.get('profile_id')
                 
-                if not cookies.get('respondent.session.sid') or not profile_id:
-                    logger.warning(f"[Background Refresh] Missing session keys or profile_id for user {user_id}{email_str}, skipping")
+                if not cookies.get('respondent.session.sid'):
+                    logger.warning(f"[Background Refresh] Missing session keys for user {user_id}{email_str}, skipping")
                     continue
                 
-                # Verify session is still valid
+                # Get profile_id from user_profiles collection (avoid extra API call)
+                profile_id = get_profile_id_from_user_profiles(str(user_id))
+                if not profile_id:
+                    logger.warning(f"[Background Refresh] No profile_id found in user_profiles for user {user_id}{email_str}, skipping")
+                    error_count += 1
+                    continue
+                
+                # Verify session is still valid before fetching projects
                 logger.debug(f"[Background Refresh] Verifying session for user {user_id}{email_str} before refresh...")
                 verification = verify_respondent_authentication(cookies)
                 if not verification.get('success'):
@@ -229,12 +235,8 @@ def keep_sessions_alive():
                 
                 if verification.get('success'):
                     logger.info(f"[Session Keep-Alive] [Background] ✓ Session alive for user {user_id}")
-                    # Update session key status - valid, with profile_id if available
-                    update_session_key_status(
-                        user_id, 
-                        True, 
-                        profile_id=verification.get('profile_id')
-                    )
+                    # Update session key status - valid
+                    update_session_key_status(user_id, True)
                 else:
                     error_msg = verification.get('message', 'Unknown error')
                     logger.warning(f"[Session Keep-Alive] [Background] ✗ Session expired for user {user_id}: {error_msg}")

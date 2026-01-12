@@ -383,8 +383,7 @@ def load_user_config(user_id):
         if docs:
             config_doc = docs[0].to_dict()
             return {
-                'cookies': config_doc.get('cookies', {}),
-                'profile_id': config_doc.get('profile_id')
+                'cookies': config_doc.get('cookies', {})
             }
         
         # If not found, try to find user by firebase_uid in users collection
@@ -407,8 +406,7 @@ def load_user_config(user_id):
                     if docs:
                         config_doc = docs[0].to_dict()
                         return {
-                            'cookies': config_doc.get('cookies', {}),
-                            'profile_id': config_doc.get('profile_id')
+                            'cookies': config_doc.get('cookies', {})
                         }
     except Exception as e:
         logger.error(f"Error loading user config: {e}", exc_info=True)
@@ -430,14 +428,13 @@ def update_last_synced(user_id):
         logger.error(f"Error updating last synced time: {e}", exc_info=True)
 
 
-def update_session_key_status(user_id, is_valid, profile_id=None):
+def update_session_key_status(user_id, is_valid):
     """
     Update session key health status after verification in keepalive endpoint
     
     Args:
         user_id: User ID (may be firebase_uid)
         is_valid: Boolean indicating if session is valid
-        profile_id: Optional profile_id to update if verification succeeded
     """
     if session_keys_collection is None:
         return
@@ -467,10 +464,6 @@ def update_session_key_status(user_id, is_valid, profile_id=None):
             'updated_at': datetime.utcnow()
         }
         
-        # Optionally update profile_id if verification succeeded
-        if is_valid and profile_id:
-            update_data['profile_id'] = profile_id
-        
         # Update the document
         docs[0].reference.update(update_data)
         logger.debug(f"[Session Key Status] Updated status for user {user_id}: is_valid={is_valid}")
@@ -479,7 +472,7 @@ def update_session_key_status(user_id, is_valid, profile_id=None):
         logger.error(f"[Session Key Status] Error updating session key status for user {user_id}: {e}", exc_info=True)
 
 
-def save_user_config(user_id, config, profile_id=None):
+def save_user_config(user_id, config):
     """Save user's Respondent.io config to Firestore by user_id or firebase_uid"""
     if session_keys_collection is None:
         raise Exception("Firestore connection not available. Please ensure Firestore is configured.")
@@ -501,8 +494,6 @@ def save_user_config(user_id, config, profile_id=None):
             'cookies': config.get('cookies', {}),
             'updated_at': datetime.utcnow()
         }
-        if profile_id:
-            update_data['profile_id'] = profile_id
         
         # Find existing document or create new one
         query = session_keys_collection.where(filter=FieldFilter('user_id', '==', actual_user_id)).limit(1).stream()

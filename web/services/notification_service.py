@@ -20,13 +20,13 @@ except ImportError:
 # Import services
 try:
     from .user_service import load_user_config, get_email_by_user_id
-    from .respondent_service import verify_respondent_authentication, create_respondent_session
+    from .respondent_service import verify_respondent_authentication, create_respondent_session, get_profile_id_from_user_profiles
     from .project_service import fetch_all_respondent_projects
     from ..cache_manager import get_cached_projects, is_cache_fresh
     from ..hidden_projects_tracker import is_project_hidden
 except ImportError:
     from services.user_service import load_user_config, get_email_by_user_id
-    from services.respondent_service import verify_respondent_authentication, create_respondent_session
+    from services.respondent_service import verify_respondent_authentication, create_respondent_session, get_profile_id_from_user_profiles
     from services.project_service import fetch_all_respondent_projects
     from cache_manager import get_cached_projects, is_cache_fresh
     from hidden_projects_tracker import is_project_hidden
@@ -172,17 +172,18 @@ def get_visible_projects_count(user_id: str) -> int:
         # If no cache or cache is stale, try to fetch from API
         if not all_projects:
             try:
-                # Verify authentication first
+                # Get profile_id from user_profiles collection (avoid extra API call)
+                profile_id = get_profile_id_from_user_profiles(user_id)
+                if not profile_id:
+                    return 0
+                
+                # Verify authentication before making API calls
                 verification = verify_respondent_authentication(
                     cookies=config.get('cookies', {})
                 )
                 
                 if not verification.get('success'):
                     # Can't authenticate, return 0
-                    return 0
-                
-                profile_id = verification.get('profile_id')
-                if not profile_id:
                     return 0
                 
                 # Create session and fetch projects
