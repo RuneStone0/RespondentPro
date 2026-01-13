@@ -11,8 +11,8 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
-# Import users_collection for user_id resolution
-from .db import users_collection
+# Import users_collection and db for user_id resolution and batch operations
+from .db import users_collection, db
 
 
 def resolve_user_id_for_query(user_id: str) -> tuple[str, Optional[str]]:
@@ -101,11 +101,11 @@ def is_cache_fresh(
     max_age_hours: int = 24
 ) -> bool:
     """
-    Check if cache needs refresh, handling migration from old user_id to Firebase Auth UID
+    Check if cache needs refresh using new sub-collection structure.
     
     Args:
         collection: Firestore collection for projects_cache
-        user_id: User ID (Firebase Auth UID for new users)
+        user_id: User ID (Firebase Auth UID)
         max_age_hours: Maximum age of cache in hours before refresh needed
         
     Returns:
@@ -113,21 +113,16 @@ def is_cache_fresh(
     """
     try:
         # Resolve user_id
-        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        current_user_id, _ = resolve_user_id_for_query(user_id)
         
-        # Try with current user_id first
-        query = collection.where(filter=FieldFilter('user_id', '==', current_user_id)).limit(1).stream()
-        docs = list(query)
+        # Get parent document directly by user_id (document ID)
+        parent_ref = collection.document(current_user_id)
+        parent_doc = parent_ref.get()
         
-        # If not found and we have old_user_id, try that
-        if not docs and old_user_id:
-            query = collection.where(filter=FieldFilter('user_id', '==', old_user_id)).limit(1).stream()
-            docs = list(query)
-        
-        if not docs:
+        if not parent_doc.exists:
             return False
         
-        cache_doc = docs[0].to_dict()
+        cache_doc = parent_doc.to_dict()
         cached_at = cache_doc.get('cached_at')
         if not cached_at:
             return False
@@ -155,51 +150,81 @@ def is_cache_fresh(
 
 def get_cached_projects(collection, user_id: str) -> Optional[Dict[str, Any]]:
     """
-    Retrieve cached projects, handling migration from old user_id to Firebase Auth UID
+    Retrieve cached projects using new sub-collection structure.
     
     Args:
         collection: Firestore collection for projects_cache
-        user_id: User ID (Firebase Auth UID for new users)
+        user_id: User ID (Firebase Auth UID)
     
     Returns:
         Dictionary with cached projects data, or None if not found
     """
     try:
-        # Resolve user_id - get both new and old user_id if available
-        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        # Resolve user_id
+        current_user_id, _ = resolve_user_id_for_query(user_id)
+        logger.debug(f"[Cache] Getting cached projects for user_id={user_id}, resolved to current_user_id={current_user_id}")
         
-        # First try with current user_id (Firebase Auth UID)
-        query = collection.where(filter=FieldFilter('user_id', '==', current_user_id)).limit(1).stream()
-        docs = list(query)
-        if docs:
-            cache_doc = docs[0].to_dict()
-            if 'projects' in cache_doc:
-                return {
-                    'projects': cache_doc['projects'],
-                    'cached_at': cache_doc.get('cached_at'),
-                    'total_count': cache_doc.get('total_count', 0)
-                }
+        # Get parent document directly by user_id (document ID)
+        parent_ref = collection.document(current_user_id)
+        parent_doc = parent_ref.get()
         
-        # If not found and we have an old_user_id, try with that
-        if old_user_id:
-            query = collection.where(filter=FieldFilter('user_id', '==', old_user_id)).limit(1).stream()
-            docs = list(query)
-            if docs:
-                cache_doc = docs[0].to_dict()
-                if 'projects' in cache_doc:
-                    # Migrate cache to use new user_id
-                    cache_doc['user_id'] = current_user_id
-                    docs[0].reference.update({'user_id': current_user_id})
-                    logger.info(f"[Cache Migration] Migrated projects cache from old user_id {old_user_id} to {current_user_id}")
-                    return {
-                        'projects': cache_doc['projects'],
-                        'cached_at': cache_doc.get('cached_at'),
-                        'total_count': cache_doc.get('total_count', 0)
-                    }
+        if not parent_doc.exists:
+            logger.debug(f"[Cache] Parent document does NOT exist for user_id={current_user_id}")
+            return None
+        
+        parent_data = parent_doc.to_dict()
+        
+        # Get all projects from sub-collection
+        projects_ref = parent_ref.collection('projects')
+        project_docs = list(projects_ref.stream())
+        
+        # Convert documents to project dictionaries
+        projects = [doc.to_dict() for doc in project_docs]
+        
+        if len(projects) == 0:
+            logger.warning(f"[Cache] No projects found in sub-collection for user_id={current_user_id}, but parent document exists.")
+        
+        logger.debug(f"[Cache] Returning {len(projects)} projects for user_id={current_user_id}")
+        
+        return {
+            'projects': projects,
+            'cached_at': parent_data.get('cached_at'),
+            'total_count': len(projects)
+        }
+    except Exception as e:
+        logger.error(f"Error getting cached projects for user_id={user_id}: {e}", exc_info=True)
+        return None
+
+
+def get_cached_project(collection, user_id: str, project_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a single cached project by ID using new sub-collection structure.
+    
+    Args:
+        collection: Firestore collection for projects_cache
+        user_id: User ID (Firebase Auth UID)
+        project_id: Project ID to retrieve
+    
+    Returns:
+        Project dictionary, or None if not found
+    """
+    try:
+        # Resolve user_id
+        current_user_id, _ = resolve_user_id_for_query(user_id)
+        
+        # Get parent document reference
+        parent_ref = collection.document(current_user_id)
+        
+        # Get project document from sub-collection
+        project_ref = parent_ref.collection('projects').document(str(project_id))
+        project_doc = project_ref.get()
+        
+        if project_doc.exists:
+            return project_doc.to_dict()
         
         return None
     except Exception as e:
-        logger.error(f"Error getting cached projects: {e}", exc_info=True)
+        logger.error(f"Error getting cached project: {e}", exc_info=True)
         return None
 
 
@@ -210,35 +235,79 @@ def refresh_project_cache(
     total_count: int
 ) -> bool:
     """
-    Store projects in cache
+    Store projects in cache using new sub-collection structure.
     
     Args:
         collection: Firestore collection for projects_cache
         user_id: User ID
         projects: List of project dictionaries
         total_count: Total number of projects
-        
+    
     Returns:
         True if successful, False otherwise
     """
     try:
-        cache_doc = {
-            'user_id': str(user_id),
-            'projects': projects,
-            'total_count': total_count,
-            'cached_at': datetime.now(timezone.utc),
-            'last_updated': datetime.now(timezone.utc)
+        # Resolve user_id
+        current_user_id, _ = resolve_user_id_for_query(user_id)
+        
+        now = datetime.now(timezone.utc)
+        
+        # Get parent document reference (document ID is user_id)
+        parent_ref = collection.document(current_user_id)
+        
+        # Create/update parent document with metadata
+        parent_data = {
+            'user_id': current_user_id,
+            'total_count': len(projects),
+            'cached_at': now,
+            'last_updated': now
         }
+        parent_ref.set(parent_data)
         
-        # Find existing document or create new one
-        query = collection.where(filter=FieldFilter('user_id', '==', str(user_id))).limit(1).stream()
-        docs = list(query)
+        # Get projects sub-collection reference
+        projects_ref = parent_ref.collection('projects')
         
-        if docs:
-            docs[0].reference.update(cache_doc)
-        else:
-            collection.add(cache_doc)
+        # Use batch writes for efficiency (Firestore batch limit is 500)
+        if db is None:
+            logger.error("Firestore db not available")
+            return False
         
+        batch = db.batch()
+        batch_count = 0
+        
+        # Delete all existing projects first (to handle removed projects)
+        existing_projects = list(projects_ref.stream())
+        for existing_doc in existing_projects:
+            batch.delete(existing_doc.reference)
+            batch_count += 1
+            
+            if batch_count >= 500:
+                batch.commit()
+                batch = db.batch()
+                batch_count = 0
+        
+        # Write new projects
+        for project in projects:
+            project_id = str(project.get('id'))
+            if not project_id:
+                logger.warning(f"Skipping project without ID: {project}")
+                continue
+            
+            project_doc_ref = projects_ref.document(project_id)
+            batch.set(project_doc_ref, project)
+            batch_count += 1
+            
+            # Firestore batch limit is 500 operations
+            if batch_count >= 500:
+                batch.commit()
+                batch = db.batch()
+                batch_count = 0
+        
+        # Commit remaining batch
+        if batch_count > 0:
+            batch.commit()
+        
+        logger.info(f"[Cache] Refreshed cache for user {current_user_id}: {len(projects)} projects")
         return True
     except Exception as e:
         logger.error(f"Error refreshing project cache: {e}", exc_info=True)
@@ -247,29 +316,24 @@ def refresh_project_cache(
 
 def get_cache_stats(collection, user_id: str) -> Dict[str, Any]:
     """
-    Return cache statistics, handling migration from old user_id to Firebase Auth UID
+    Return cache statistics using new sub-collection structure.
     
     Args:
         collection: Firestore collection for projects_cache
-        user_id: User ID (Firebase Auth UID for new users)
+        user_id: User ID (Firebase Auth UID)
     
     Returns:
         Dictionary with cache statistics
     """
     try:
         # Resolve user_id
-        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        current_user_id, _ = resolve_user_id_for_query(user_id)
         
-        # Try with current user_id first
-        query = collection.where(filter=FieldFilter('user_id', '==', current_user_id)).limit(1).stream()
-        docs = list(query)
+        # Get parent document directly by user_id (document ID)
+        parent_ref = collection.document(current_user_id)
+        parent_doc = parent_ref.get()
         
-        # If not found and we have old_user_id, try that
-        if not docs and old_user_id:
-            query = collection.where(filter=FieldFilter('user_id', '==', old_user_id)).limit(1).stream()
-            docs = list(query)
-        
-        if not docs:
+        if not parent_doc.exists:
             return {
                 'exists': False,
                 'cached_at': None,
@@ -277,12 +341,17 @@ def get_cache_stats(collection, user_id: str) -> Dict[str, Any]:
                 'total_count': 0
             }
         
-        cache_doc = docs[0].to_dict()
+        cache_doc = parent_doc.to_dict()
+        
+        # Count actual projects in sub-collection for accuracy
+        projects_ref = parent_ref.collection('projects')
+        actual_count = len(list(projects_ref.stream()))
+        
         return {
             'exists': True,
             'cached_at': cache_doc.get('cached_at'),
             'last_updated': cache_doc.get('last_updated'),
-            'total_count': cache_doc.get('total_count', 0)
+            'total_count': actual_count
         }
     except Exception as e:
         logger.error(f"Error getting cache stats: {e}", exc_info=True)
@@ -300,12 +369,12 @@ def mark_projects_hidden_in_cache(
     project_ids: List[str]
 ) -> bool:
     """
-    Mark projects as hidden in the cache by removing them from the cached projects list
-    Handles migration from old user_id to Firebase Auth UID
+    Mark projects as hidden in the cache by deleting them from sub-collection.
+    Uses transaction to update parent document count atomically.
     
     Args:
         collection: Firestore collection for projects_cache
-        user_id: User ID (Firebase Auth UID for new users)
+        user_id: User ID (Firebase Auth UID)
         project_ids: List of project IDs to mark as hidden
     
     Returns:
@@ -316,46 +385,65 @@ def mark_projects_hidden_in_cache(
             return True
         
         # Resolve user_id
-        current_user_id, old_user_id = resolve_user_id_for_query(user_id)
+        current_user_id, _ = resolve_user_id_for_query(user_id)
         
-        # Try with current user_id first
-        query = collection.where(filter=FieldFilter('user_id', '==', current_user_id)).limit(1).stream()
-        docs = list(query)
+        # Get parent document reference
+        parent_ref = collection.document(current_user_id)
+        parent_doc = parent_ref.get()
         
-        # If not found and we have old_user_id, try that
-        if not docs and old_user_id:
-            query = collection.where(filter=FieldFilter('user_id', '==', old_user_id)).limit(1).stream()
-            docs = list(query)
-        
-        if not docs:
+        if not parent_doc.exists:
+            logger.warning(f"Cache not found for user {current_user_id}")
             return False
         
-        cache_doc = docs[0].to_dict()
-        if 'projects' not in cache_doc:
+        # Get projects sub-collection reference
+        projects_ref = parent_ref.collection('projects')
+        
+        # Get current count from parent document before deletion
+        parent_data = parent_doc.to_dict()
+        current_count = parent_data.get('total_count', 0)
+        
+        # Use batch deletes for efficiency (Firestore batch limit is 500)
+        if db is None:
+            logger.error("Firestore db not available")
             return False
         
-        # If we found cache with old_user_id, migrate it first
-        if old_user_id and cache_doc.get('user_id') == old_user_id:
-            docs[0].reference.update({'user_id': current_user_id})
-            logger.info(f"[Cache Migration] Migrated projects cache from old user_id {old_user_id} to {current_user_id}")
+        batch = db.batch()
+        batch_count = 0
+        total_to_delete = len(project_ids)
         
-        projects = cache_doc.get('projects', [])
-        project_ids_set = set(str(pid) for pid in project_ids)
+        # Delete each project document using batch operations (no existence check needed - delete is idempotent)
+        for project_id in project_ids:
+            project_ref = projects_ref.document(str(project_id))
+            batch.delete(project_ref)
+            batch_count += 1
+            
+            # Firestore batch limit is 500 operations
+            if batch_count >= 500:
+                batch.commit()
+                logger.debug(f"[Cache] Committed batch delete: {batch_count} operations")
+                batch = db.batch()
+                batch_count = 0
         
-        # Filter out hidden projects
-        filtered_projects = [
-            p for p in projects 
-            if str(p.get('id')) not in project_ids_set
-        ]
+        # Commit remaining batch
+        if batch_count > 0:
+            batch.commit()
         
-        # Update cache with filtered projects
-        docs[0].reference.update({
-            'projects': filtered_projects,
-            'total_count': len(filtered_projects),
+        if total_to_delete == 0:
+            logger.info(f"[Cache] No projects to delete for user {current_user_id}")
+            return True
+        
+        # Calculate new count (current - deleted) instead of counting all remaining projects
+        # Note: We use total_to_delete instead of actual deleted count since delete is idempotent
+        # and we don't want to count all remaining projects (which would be slow)
+        new_count = max(0, current_count - total_to_delete)
+        
+        # Update parent document with new count
+        parent_ref.update({
+            'total_count': new_count,
             'last_updated': datetime.now(timezone.utc)
         })
         
-        logger.info(f"[Cache] Marked {len(project_ids)} project(s) as hidden in cache for user {current_user_id}")
+        logger.info(f"[Cache] Marked {total_to_delete} project(s) as hidden in cache for user {current_user_id} (count: {current_count} -> {new_count})")
         return True
     except Exception as e:
         logger.error(f"Error marking projects as hidden in cache: {e}", exc_info=True)

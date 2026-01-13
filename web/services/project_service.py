@@ -571,20 +571,12 @@ def process_and_hide_projects(user_id, session, profile_id, filters, page_size=5
         # Update cache to remove hidden projects
         if projects_cache_collection is not None and hidden_project_ids:
             mark_projects_hidden_in_cache(projects_cache_collection, user_id_str, hidden_project_ids)
+            logger.info(f"[Project Service] Updated cache: removed {len(hidden_project_ids)} hidden projects from cache")
         
-        # Refresh cache from API to get updated project list after hiding
-        if projects_cache_collection is not None and hidden_project_ids:
-            try:
-                logger.info(f"[Project Service] Refreshing cache after hiding {len(hidden_project_ids)} projects")
-                # Fetch fresh data from API (bypassing cache)
-                all_projects_refreshed, total_count_refreshed = fetch_all_respondent_projects(
-                    session, profile_id, page_size, user_id=user_id, use_cache=False, 
-                    cookies=cookies
-                )
-                logger.info(f"[Project Service] Cache refreshed: {len(all_projects_refreshed)} projects now in cache")
-            except Exception as e:
-                logger.error(f"[Project Service] Error refreshing cache after hiding: {e}", exc_info=True)
-                # Don't fail the whole operation if cache refresh fails
+        # Note: We don't refresh cache from API here because:
+        # 1. We've already updated the cache by deleting hidden projects
+        # 2. Fetching all projects from API would take 4-5 seconds
+        # 3. Cache will be refreshed naturally on next scheduled refresh or manual refresh
         
         # Update progress to completed
         hide_progress[user_id_str]['status'] = 'completed'

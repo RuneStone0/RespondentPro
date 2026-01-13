@@ -297,7 +297,8 @@ def projects():
         except Exception as e:
             # If error occurs, just log it - don't block page load
             import traceback
-            logger.error(f"Error getting cached projects", exc_info=True)
+            logger.error(f"Error getting cached projects for user {user_id}: {e}", exc_info=True)
+            logger.error(f"Traceback: {traceback.format_exc()}")
     
     # Get cache refresh time and total count
     cache_refreshed_utc = None

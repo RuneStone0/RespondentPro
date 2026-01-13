@@ -13,6 +13,14 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 # Import helper for user_id resolution
 from .cache_manager import resolve_user_id_for_query
 
+# Import db collections (lazy import to avoid circular dependencies)
+# These will be imported at module level but may be None if db not initialized
+try:
+    from .db import users_collection, db
+except ImportError:
+    users_collection = None
+    db = None
+
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
@@ -83,7 +91,7 @@ def log_hidden_project(
         # OPTIMIZATION: Update cached count in user document to avoid full scans
         # This makes get_projects_processed_count() much faster
         if is_new:
-            from ..db import users_collection, db
+            # Use module-level imports (already imported at top)
             
             if users_collection and db:
                 try:
@@ -130,8 +138,7 @@ def get_hidden_projects_count(collection, user_id: str) -> int:
             docs = list(query_old)
             if docs:
                 # Migrate all documents to use new user_id
-                # Get the database client from the collection
-                from ..db import db
+                # Use module-level db import
                 
                 if db:
                     batch = db.batch()
@@ -250,8 +257,7 @@ def get_hidden_projects_stats(collection, user_id: str) -> Dict[str, Any]:
             docs = list(query_old)
             if docs:
                 # Migrate all documents to use new user_id
-                # Get the database client from the collection
-                from ..db import db
+                # Use module-level db import
                 
                 if db:
                     batch = db.batch()

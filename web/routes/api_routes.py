@@ -26,7 +26,7 @@ from ..services.project_service import (
     fetch_respondent_projects, fetch_all_respondent_projects, hide_project_via_api,
     get_hidden_count, process_and_hide_projects, get_hide_progress, hide_progress
 )
-from ..cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh
+from ..cache_manager import get_cached_projects, get_cache_stats, mark_projects_hidden_in_cache, get_cached_project_details, is_cache_fresh, get_cached_project
 from ..hidden_projects_tracker import (
     get_hidden_projects_count, get_hidden_projects_timeline, get_hidden_projects_stats,
     get_all_hidden_projects, get_last_sync_time
@@ -610,6 +610,7 @@ def hide_project():
         if not success:
             return jsonify({'error': 'Failed to hide project'}), 500
         
+        # Update cache immediately (fast operation)
         if projects_cache_collection is not None:
             mark_projects_hidden_in_cache(projects_cache_collection, user_id, [project_id])
         
@@ -621,66 +622,76 @@ def hide_project():
         else:
             hidden_method = 'manual'
         
-        # Get project data for AI analysis
-        project_data = None
-        if projects_cache_collection is not None:
-            cached = get_cached_projects(projects_cache_collection, user_id)
-            if cached and cached.get('projects'):
-                for proj in cached.get('projects', []):
-                    if proj.get('id') == project_id:
-                        project_data = proj
-                        break
-        
-        # If not in cache, try to fetch it (simplified - just use basic data)
-        if not project_data:
-            project_data = {'id': project_id, 'name': '', 'description': ''}
-        
-        if user_preferences_collection is not None and hidden_projects_log_collection is not None:
-            record_project_hidden(
-                hidden_projects_log_collection,
-                user_preferences_collection,
-                user_id,
-                project_id,
-                feedback_text=feedback_text,
-                hidden_method=hidden_method
-            )
-            
-            # Analyze feedback and learn patterns if feedback was provided
-            if feedback_text and project_data:
-                analyze_feedback_and_learn(
-                    user_preferences_collection,
-                    user_id,
-                    project_id,
-                    feedback_text,
-                    project_data,
-                    ai_analysis_cache_collection
-                )
-        
-        # Generate AI question if no feedback provided (feedback means user already explained)
-        # Skip question generation for 'applied' method
-        question = None
-        if not feedback_text and project_data and hidden_method != 'applied':
-            # Check if we've already asked this type of question before
-            prefs = get_user_preferences(user_preferences_collection, user_id) if user_preferences_collection is not None else {}
-            existing_question_ids = {qa.get('question_id') for qa in prefs.get('question_answers', [])}
-            
-            question_data = generate_question_from_project(project_data)
-            if question_data and question_data.get('id') not in existing_question_ids:
-                question = question_data
-        
-        # Check and send credit notifications after hiding project
-        try:
-            check_and_send_credit_notifications(user_id)
-        except Exception as e:
-            logger.error(f"Error checking credit notifications: {e}", exc_info=True)
-            # Don't fail the operation if notification check fails
-        
-        return jsonify({
+        # Return success immediately, do heavy operations in background
+        response_data = {
             'success': True,
             'auto_hidden_count': 0,
             'auto_hidden_ids': [],
-            'question': question
-        })
+            'question': None  # Will be set in background if needed
+        }
+        
+        # Do heavy operations in background thread to avoid blocking response
+        def do_background_work():
+            try:
+                # Get project data for AI analysis
+                project_data = None
+                if projects_cache_collection is not None:
+                    project_data = get_cached_project(projects_cache_collection, user_id, project_id)
+                
+                # If not in cache, use basic data
+                if not project_data:
+                    project_data = {'id': project_id, 'name': '', 'description': ''}
+                
+                # Record project hidden (database operations)
+                if user_preferences_collection is not None and hidden_projects_log_collection is not None:
+                    record_project_hidden(
+                        hidden_projects_log_collection,
+                        user_preferences_collection,
+                        user_id,
+                        project_id,
+                        feedback_text=feedback_text,
+                        hidden_method=hidden_method
+                    )
+                    
+                    # Analyze feedback and learn patterns if feedback was provided
+                    if feedback_text and project_data:
+                        analyze_feedback_and_learn(
+                            user_preferences_collection,
+                            user_id,
+                            project_id,
+                            feedback_text,
+                            project_data,
+                            ai_analysis_cache_collection
+                        )
+                
+                # Generate AI question if no feedback provided (feedback means user already explained)
+                # Skip question generation for 'applied' method
+                if not feedback_text and project_data and hidden_method != 'applied':
+                    # Check if we've already asked this type of question before
+                    prefs = get_user_preferences(user_preferences_collection, user_id) if user_preferences_collection is not None else {}
+                    existing_question_ids = {qa.get('question_id') for qa in prefs.get('question_answers', [])}
+                    
+                    question_data = generate_question_from_project(project_data)
+                    if question_data and question_data.get('id') not in existing_question_ids:
+                        # Question generated but user already got response, so we can't update it
+                        # This is fine - question will be available next time
+                        pass
+                
+                # Check and send credit notifications after hiding project
+                try:
+                    check_and_send_credit_notifications(user_id)
+                except Exception as e:
+                    logger.error(f"Error checking credit notifications: {e}", exc_info=True)
+            except Exception as e:
+                logger.error(f"Error in background work for hide-project: {e}", exc_info=True)
+        
+        # Start background thread for heavy operations
+        import threading
+        thread = threading.Thread(target=do_background_work)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify(response_data)
         
     except Exception as e:
         import traceback
@@ -702,12 +713,7 @@ def get_hide_suggestions():
         # Get project data from cache
         project_data = None
         if projects_cache_collection is not None:
-            cached = get_cached_projects(projects_cache_collection, user_id)
-            if cached and cached.get('projects'):
-                for proj in cached.get('projects', []):
-                    if proj.get('id') == project_id:
-                        project_data = proj
-                        break
+            project_data = get_cached_project(projects_cache_collection, user_id, project_id)
         
         if not project_data:
             return jsonify({'error': 'Project not found'}), 404
