@@ -1223,9 +1223,15 @@
     let currentHideProjectId = null;
     let currentHideProjectName = null;
     
-    async function openHideModal(projectId, projectName) {
+    async function openHideModal(projectId) {
         currentHideProjectId = projectId;
+        
+        // Get project name from DOM as fallback
+        const projectCard = document.querySelector(`.project-card[data-project-id="${projectId}"]`);
+        const projectNameEl = projectCard ? projectCard.querySelector('.project-title') : null;
+        const projectName = projectNameEl ? projectNameEl.textContent.trim() : 'Untitled Project';
         currentHideProjectName = projectName;
+        
         document.getElementById('hideModal').style.display = 'flex';
         document.getElementById('hideFeedbackText').value = '';
         
@@ -1864,7 +1870,16 @@
         const timeMinutes = project.timeMinutesRequired || 0;
         const hourlyRate = timeMinutes > 0 ? (remuneration / timeMinutes) * 60 : 0;
         const projectName = project.name || 'Untitled Project';
-        const escapedName = projectName.replace(/'/g, "\\'");
+        // Properly escape the string for use in single-quoted JavaScript strings
+        // Must escape backslashes first, then single quotes, then handle newlines and other control chars
+        const escapedName = projectName
+            .replace(/\\/g, '\\\\')  // Escape backslashes first
+            .replace(/'/g, "\\'")     // Escape single quotes
+            .replace(/\n/g, '\\n')    // Escape newlines
+            .replace(/\r/g, '\\r')    // Escape carriage returns
+            .replace(/\t/g, '\\t')    // Escape tabs
+            .replace(/\f/g, '\\f')    // Escape form feeds
+            .replace(/\v/g, '\\v');   // Escape vertical tabs
         
         const projectIsRemote = project.isRemote !== undefined ? project.isRemote : (project.project ? project.project.isRemote : null);
         const kindOfResearchFormatted = project.kindOfResearchFormatted || (project.project ? project.project.kindOfResearchFormatted : null);
@@ -1930,7 +1945,7 @@
                         <div class="project-id">ID: ${project.id}</div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn btn-sm btn-outline whitespace-nowrap flex items-center gap-1.5" onclick="openHideModal('${project.id}', '${escapedName}')" title="Hide this project">
+                        <button class="btn btn-sm btn-outline whitespace-nowrap flex items-center gap-1.5" onclick="openHideModal('${project.id}')" title="Hide this project">
                             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A20.932 20.932 0 0018.928 10c-1.137-4.5-4.663-7.857-8.928-9.5a19.04 19.04 0 00-2.348.637L3.707 2.293zM5.865 4.637A18.97 18.97 0 0010 3.5c2.209 0 4.154.89 5.635 2.363A18.97 18.97 0 0116.5 10c0 .695-.08 1.37-.23 2.02l-1.523-1.523A10.945 10.945 0 0015 10a8 8 0 00-8-8c-.695 0-1.37.08-2.02.23L2.293 2.293zm8.293 8.293l-1.586-1.586A4 4 0 0110 6a4 4 0 00-4 4c0 .695.08 1.37.23 2.02l1.523 1.523A10.945 10.945 0 005 10a8 8 0 018-8c.695 0 1.37.08 2.02.23l-1.523 1.523z" clip-rule="evenodd"/>
                                 <path d="M13.586 13.586L2.293 2.293a1 1 0 011.414-1.414l11.293 11.293a1 1 0 01-1.414 1.414z"/>
