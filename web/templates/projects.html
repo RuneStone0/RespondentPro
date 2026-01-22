@@ -167,11 +167,12 @@
             
             <!-- Empty state (shown when no projects) -->
             <div id="projectsEmpty" class="flex flex-col items-center justify-center py-16 text-center" style="display: none;">
-                <svg class="w-16 h-16 text-base-content/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                <svg class="w-16 h-16 text-success mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <h3 class="text-xl font-semibold text-base-content mb-2">No projects match your criteria</h3>
-                <p class="text-base-content/70">Try changing your Target Hourly Rate or targeting profile.</p>
+                <h3 class="text-xl font-semibold text-base-content mb-2">Great job! 🎉</h3>
+                <p class="text-base-content/70 mb-2">You've reviewed all available projects.</p>
+                <p class="text-base-content/70">Check back later for new opportunities or adjust your filters to see more projects.</p>
             </div>
             {% endif %}
         </div>
@@ -1858,20 +1859,16 @@
                 card.remove();
                 
                 // Check if project list is now empty
-                const projectList = document.querySelector('.project-list');
+                const projectList = document.getElementById('projectsContainer');
                 if (projectList && projectList.children.length === 0) {
                     // Show empty state if no projects left
-                    const projectsContainer = document.querySelector('.projects-container');
+                    const projectsContainer = document.getElementById('projectsContainer');
+                    const emptyEl = document.getElementById('projectsEmpty');
                     if (projectsContainer) {
-                        projectsContainer.innerHTML = `
-                            <div class="flex flex-col items-center justify-center py-16 text-center">
-                                <svg class="w-16 h-16 text-base-content/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                                <h3 class="text-xl font-semibold text-base-content mb-2">No projects available</h3>
-                                <p class="text-base-content/70">All projects have been hidden or there are no matching projects.</p>
-                            </div>
-                        `;
+                        projectsContainer.style.display = 'none';
+                    }
+                    if (emptyEl) {
+                        emptyEl.style.display = 'flex';
                     }
                 }
             }
