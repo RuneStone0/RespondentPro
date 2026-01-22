@@ -17,7 +17,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 logger = logging.getLogger(__name__)
 
 # Import Firebase Auth decorators
-from ..auth.firebase_auth import require_auth, get_user_id_from_token
+from ..auth.firebase_auth import require_auth, require_account_limit, get_user_id_from_token
 
 # Import services
 from ..services.user_service import load_user_config, save_user_config, load_user_filters, save_user_filters, update_user_onboarding_status, get_user_onboarding_status, get_projects_processed_count, get_user_billing_info, check_user_has_credits, is_admin, update_user_billing_limit, check_and_send_credit_notifications
@@ -307,6 +307,7 @@ def save_filters():
 
 @bp.route('/hide-projects', methods=['POST'])
 @require_auth
+@require_account_limit
 def hide_projects():
     """Start the process of hiding projects based on filters"""
     try:
@@ -568,6 +569,7 @@ def get_hide_progress_route():
 
 @bp.route('/hide-project', methods=['POST'])
 @require_auth
+@require_account_limit
 def hide_project():
     """Hide a single project with optional feedback and generate AI question"""
     try:

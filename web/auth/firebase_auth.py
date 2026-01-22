@@ -5,7 +5,7 @@ Firebase Auth token verification utilities
 
 import logging
 from functools import wraps
-from flask import request, jsonify, abort
+from flask import request, jsonify, abort, redirect, url_for
 import firebase_admin
 from firebase_admin import auth
 
@@ -193,6 +193,66 @@ def require_verified(f):
         
         # Attach decoded token to request
         request.auth = decoded_token
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+
+def require_account_limit(f):
+    """
+    Decorator to check if user has reached their account limit.
+    Must be applied after @require_auth or @require_verified.
+    
+    For page routes: Redirects to /account if limit is reached.
+    For API routes: Returns 403 JSON with redirect field if limit is reached.
+    
+    Usage:
+        @bp.route('/protected')
+        @require_verified
+        @require_account_limit
+        def protected_route():
+            ...
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Ensure request.auth is available (requires @require_auth or @require_verified)
+        if not hasattr(request, 'auth') or not request.auth:
+            logger.warning("require_account_limit: request.auth not available. Ensure @require_auth or @require_verified is applied first.")
+            # If auth is missing, let the route handler deal with it
+            return f(*args, **kwargs)
+        
+        user_id = request.auth.get('uid')
+        if not user_id:
+            # No user ID, allow access (auth decorator should have handled this)
+            return f(*args, **kwargs)
+        
+        # Check user billing info
+        try:
+            from ..services.user_service import get_user_billing_info
+            billing_info = get_user_billing_info(user_id)
+            limit = billing_info.get('projects_processed_limit', 500)
+            processed = billing_info.get('projects_processed_count', 0)
+            
+            # If limit is None or very large (effectively unlimited), skip check
+            if limit is not None and limit < 999999999:
+                if processed >= limit:
+                    # User has reached their limit
+                    error_message = f'You have reached your project processing limit ({limit} projects). Please contact support to upgrade.'
+                    
+                    # For API routes, return 403 JSON with redirect
+                    if request.is_json or request.path.startswith('/api/'):
+                        return jsonify({
+                            'error': error_message,
+                            'redirect': '/account'
+                        }), 403
+                    # For page routes, redirect to account page
+                    else:
+                        return redirect(url_for('page.account'))
+        except Exception as e:
+            # Log warning but allow access - don't block if billing check fails
+            logger.warning(f"Warning: Could not check account limit for user {user_id}: {e}")
+            # Continue anyway - don't block on billing info errors
         
         return f(*args, **kwargs)
     

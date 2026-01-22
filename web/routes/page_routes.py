@@ -17,13 +17,14 @@ from ..services.respondent_service import create_respondent_session, verify_resp
 from ..services.project_service import fetch_all_respondent_projects, get_hidden_count
 from ..cache_manager import get_cache_stats, get_cached_projects, is_cache_fresh
 from ..db import projects_cache_collection, users_collection
-from ..auth.firebase_auth import require_verified, get_id_token_from_request, verify_firebase_token
+from ..auth.firebase_auth import require_verified, require_account_limit, get_id_token_from_request, verify_firebase_token
 
 bp = Blueprint('page', __name__)
 
 
 @bp.route('/dashboard')
 @require_verified
+@require_account_limit
 def dashboard():
     """Dashboard - redirect to projects page if credentials valid, otherwise onboarding"""
     import logging
@@ -104,6 +105,7 @@ def account():
 
 @bp.route('/notifications')
 @require_verified
+@require_account_limit
 def notifications():
     """Notifications page - configure email notification preferences"""
     user_id = request.auth['uid']
@@ -114,6 +116,7 @@ def notifications():
 
 @bp.route('/history')
 @require_verified
+@require_account_limit
 def history():
     """History page - view hidden projects log"""
     user_id = request.auth['uid']
@@ -151,6 +154,7 @@ def about():
 
 @bp.route('/support')
 @require_verified
+@require_account_limit
 def support():
     """Support page - contact form for authenticated users"""
     user_id = request.auth['uid']
@@ -160,6 +164,7 @@ def support():
 
 @bp.route('/admin')
 @require_verified
+@require_account_limit
 def admin():
     """Admin page - manage user billing limits"""
     user_id = request.auth['uid']
@@ -223,6 +228,7 @@ def admin():
 
 @bp.route('/projects')
 @require_verified
+@require_account_limit
 def projects():
     """Projects page - list all available projects"""
     user_id = request.auth['uid']

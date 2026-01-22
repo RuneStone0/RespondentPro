@@ -28,12 +28,6 @@ service-account-key.json
 # Environment variables
 .env
 
-# SSL certificates (local development only)
-certs/
-*.crt
-*.key
-*.csr
-
 # IDE
 .vscode/
 .idea/
@@ -46,8 +40,6 @@ certs/
 Thumbs.db
 
 # Logs
-firebase-debug.log
-functions/firebase-debug.log
 *.log
 
 # Other

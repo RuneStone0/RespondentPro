@@ -1410,6 +1410,11 @@
                 if (card) {
                     card.style.opacity = '1';
                 }
+                // Check for redirect in 403 responses (account limit reached)
+                if (response.status === 403 && error.redirect) {
+                    window.location.href = error.redirect;
+                    return;
+                }
                 throw new Error(error.error || 'Failed to mark project as applied');
             }
             
@@ -1492,6 +1497,11 @@
                 // Restore card visibility on error
                 if (card) {
                     card.style.opacity = '1';
+                }
+                // Check for redirect in 403 responses (account limit reached)
+                if (response.status === 403 && error.redirect) {
+                    window.location.href = error.redirect;
+                    return;
                 }
                 throw new Error(error.error || 'Failed to hide project');
             }
