@@ -10,7 +10,7 @@ import threading
 import time
 import traceback
 from flask import Blueprint, request, jsonify, session
-from datetime import datetime
+from datetime import datetime, timezone
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 # Create logger for this module
@@ -694,60 +694,6 @@ def hide_project():
         thread.start()
         
         return jsonify(response_data)
-        
-    except Exception as e:
-        import traceback
-        return jsonify({'error': str(e) + '\n' + traceback.format_exc()}), 500
-
-
-@bp.route('/hide-suggestions', methods=['POST'])
-@require_auth
-def get_hide_suggestions():
-    """Get AI-generated suggestions for why a user might hide a project"""
-    try:
-        user_id = str(request.auth['uid'])
-        data = request.json
-        project_id = data.get('project_id')
-        project_data_provided = data.get('project_data')  # Optional: project data from frontend cache
-        
-        if not project_id:
-            return jsonify({'error': 'project_id is required'}), 400
-        
-        # Use provided project data if available, otherwise fetch from Firestore cache
-        project_data = None
-        if project_data_provided:
-            # Use provided project data (from frontend cache) - avoids Firestore fetch
-            project_data = {
-                'id': project_data_provided.get('id', project_id),
-                'name': project_data_provided.get('name', ''),
-                'description': project_data_provided.get('description', ''),
-                'respondentRemuneration': project_data_provided.get('remuneration', 0),
-                'timeMinutesRequired': project_data_provided.get('time_minutes', 0),
-                'topics': project_data_provided.get('topics', [])
-            }
-        else:
-            # Fallback: Get project data from Firestore cache
-            if projects_cache_collection is not None:
-                project_data = get_cached_project(projects_cache_collection, user_id, project_id)
-        
-        if not project_data:
-            return jsonify({'error': 'Project not found'}), 404
-        
-        # Generate suggestions
-        suggestions = generate_hide_suggestions(project_data)
-        
-        return jsonify({
-            'success': True,
-            'suggestions': suggestions,
-            'project': {
-                'id': project_data.get('id'),
-                'name': project_data.get('name', 'Untitled Project'),
-                'description': project_data.get('description', ''),
-                'remuneration': project_data.get('respondentRemuneration', 0),
-                'time_minutes': project_data.get('timeMinutesRequired', 0),
-                'topics': project_data.get('topics', [])
-            }
-        })
         
     except Exception as e:
         import traceback

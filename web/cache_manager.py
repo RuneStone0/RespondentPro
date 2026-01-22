@@ -4,6 +4,7 @@ Module for managing project cache in Firestore
 """
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -308,6 +309,11 @@ def refresh_project_cache(
             batch.commit()
         
         logger.info(f"[Cache] Refreshed cache for user {current_user_id}: {len(projects)} projects")
+        
+        # Trigger background generation of hide suggestions for projects that don't have them
+        if projects and len(projects) > 0:
+            generate_and_store_suggestions(collection, current_user_id, projects)
+        
         return True
     except Exception as e:
         logger.error(f"Error refreshing project cache: {e}", exc_info=True)
@@ -511,3 +517,90 @@ def cache_project_details(collection, project_id: str, details: Dict[str, Any]) 
     except Exception as e:
         logger.error(f"Error caching project details: {e}", exc_info=True)
         return False
+
+
+def generate_and_store_suggestions(
+    collection,
+    user_id: str,
+    projects: List[Dict[str, Any]]
+) -> None:
+    """
+    Generate and store AI hide suggestions for projects in the background.
+    Only generates suggestions for projects that don't already have them (one-time per project).
+    
+    This function runs in a background thread to avoid blocking the cache refresh operation.
+    
+    Args:
+        collection: Firestore collection for projects_cache
+        user_id: User ID (Firebase Auth UID)
+        projects: List of project dictionaries
+    """
+    def _generate_in_background():
+        try:
+            # Resolve user_id
+            current_user_id, _ = resolve_user_id_for_query(user_id)
+            
+            # Get parent document reference
+            parent_ref = collection.document(current_user_id)
+            projects_ref = parent_ref.collection('projects')
+            
+            # Import here to avoid circular imports
+            from .ai_analyzer import generate_hide_suggestions
+            
+            generated_count = 0
+            skipped_count = 0
+            error_count = 0
+            
+            for project in projects:
+                project_id = str(project.get('id'))
+                if not project_id:
+                    continue
+                
+                try:
+                    # Check if project already has suggestions
+                    project_ref = projects_ref.document(project_id)
+                    project_doc = project_ref.get()
+                    
+                    if project_doc.exists:
+                        project_data = project_doc.to_dict()
+                        if project_data and project_data.get('hide_suggestions'):
+                            # Project already has suggestions, skip
+                            skipped_count += 1
+                            continue
+                    
+                    # Generate suggestions for this project
+                    suggestions = generate_hide_suggestions(project)
+                    
+                    if suggestions and len(suggestions) > 0:
+                        # Store suggestions in Firestore
+                        hide_suggestions_data = {
+                            'suggestions': suggestions,
+                            'generated_at': datetime.now(timezone.utc)
+                        }
+                        
+                        # Use set() with merge=True to handle both create and update cases
+                        # This ensures the document exists before we try to update it
+                        project_ref.set({'hide_suggestions': hide_suggestions_data}, merge=True)
+                        generated_count += 1
+                        logger.debug(f"[Suggestions] Generated and stored suggestions for project {project_id}")
+                    else:
+                        logger.warning(f"[Suggestions] Failed to generate suggestions for project {project_id}")
+                        error_count += 1
+                        
+                except Exception as e:
+                    logger.error(f"[Suggestions] Error generating suggestions for project {project_id}: {e}", exc_info=True)
+                    error_count += 1
+                    continue
+            
+            logger.info(
+                f"[Suggestions] Background generation completed for user {current_user_id}: "
+                f"{generated_count} generated, {skipped_count} skipped (already exist), {error_count} errors"
+            )
+            
+        except Exception as e:
+            logger.error(f"[Suggestions] Error in background suggestion generation: {e}", exc_info=True)
+    
+    # Start background thread
+    thread = threading.Thread(target=_generate_in_background)
+    thread.daemon = True
+    thread.start()

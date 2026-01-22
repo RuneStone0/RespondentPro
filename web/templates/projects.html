@@ -1251,15 +1251,16 @@
         // Show loading state
         document.getElementById('hideProjectPreviewLoading').style.display = 'block';
         document.getElementById('hideProjectPreviewContent').style.display = 'none';
-        document.getElementById('hideSuggestions').innerHTML = '';
+        document.getElementById('hideSuggestions').innerHTML = '<p style="color: var(--text-secondary); font-size: 14px;">Loading suggestions...</p>';
         
-        // Show button, hide suggestions
-        document.getElementById('getSuggestionsBtn').style.display = 'block';
+        // Hide button initially (will show if suggestions need to be generated)
+        document.getElementById('getSuggestionsBtn').style.display = 'none';
         document.getElementById('getSuggestionsBtn').disabled = false;
         document.getElementById('getSuggestionsBtn').textContent = 'Get AI Suggestions';
         
-        // Try to use cached project data first (avoid Firestore fetch)
+        // Get project data from cache (should always be available since projects are loaded on page load)
         const cachedProject = projectsCache.get(projectId);
+        
         if (cachedProject) {
             // Use cached data - no API call needed
             const projectData = {
@@ -1271,43 +1272,24 @@
                 topics: cachedProject.topics || []
             };
             displayProjectPreview(projectData);
-        } else {
-            // Fallback: fetch from API if not in cache
-            try {
-                const response = await fetch('/api/hide-suggestions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: projectId })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.success) {
-                        displayProjectPreview(data.project);
-                        // Cache the project for future use
-                        if (data.project) {
-                            projectsCache.set(projectId, {
-                                id: data.project.id,
-                                name: data.project.name,
-                                description: data.project.description,
-                                respondentRemuneration: data.project.remuneration,
-                                timeMinutesRequired: data.project.time_minutes,
-                                topics: data.project.topics
-                            });
-                        }
-                    }
-                } else {
-                    // If API fails, show basic info
-                    displayBasicProjectInfo(projectName);
-                }
-            } catch (error) {
-                console.error('Error fetching project details:', error);
-                displayBasicProjectInfo(projectName);
+            
+            // Extract and display hide suggestions from cache
+            const hideSuggestions = cachedProject.hide_suggestions;
+            if (hideSuggestions && hideSuggestions.suggestions && Array.isArray(hideSuggestions.suggestions)) {
+                displayHideSuggestions(hideSuggestions.suggestions);
+            } else {
+                console.error('Hide suggestions not found in cache for project:', projectId);
+                document.getElementById('hideSuggestions').innerHTML = '<p style="color: var(--error-text); font-size: 14px;">Error: Suggestions not available</p>';
             }
+        } else {
+            // Project not in cache (should not happen, but handle gracefully)
+            console.error('Project not found in cache:', projectId);
+            displayBasicProjectInfo(projectName);
+            document.getElementById('hideSuggestions').innerHTML = '<p style="color: var(--error-text); font-size: 14px;">Error: Project data not available</p>';
         }
     }
     
-    async function fetchHideSuggestions() {
+    function fetchHideSuggestions() {
         const button = document.getElementById('getSuggestionsBtn');
         const suggestionsEl = document.getElementById('hideSuggestions');
         
@@ -1316,53 +1298,26 @@
             return;
         }
         
-        // Show loading state
-        button.disabled = true;
-        button.textContent = 'Generating suggestions...';
-        suggestionsEl.innerHTML = '<p style="color: var(--text-secondary); font-size: 14px;">Loading suggestions...</p>';
-        
-        // Try to use cached project data to avoid Firestore fetch
+        // Get cached project data
         const cachedProject = projectsCache.get(currentHideProjectId);
-        const requestBody = { project_id: currentHideProjectId };
         
-        if (cachedProject) {
-            // Include project data in request to avoid Firestore fetch
-            requestBody.project_data = {
-                id: cachedProject.id,
-                name: cachedProject.name || 'Untitled Project',
-                description: cachedProject.description || '',
-                remuneration: cachedProject.respondentRemuneration || 0,
-                time_minutes: cachedProject.timeMinutesRequired || 0,
-                topics: cachedProject.topics || []
-            };
+        if (!cachedProject) {
+            console.error('Project not found in cache:', currentHideProjectId);
+            suggestionsEl.innerHTML = '<p style="color: var(--error-text); font-size: 14px;">Error: Project data not available</p>';
+            return;
         }
         
-        try {
-            const response = await fetch('/api/hide-suggestions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.suggestions) {
-                    displayHideSuggestions(data.suggestions);
-                    // Hide button after suggestions are loaded
-                    button.style.display = 'none';
-                } else {
-                    throw new Error('Failed to get suggestions');
-                }
-            } else {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Failed to fetch suggestions');
+        // Extract hide suggestions from cache
+        const hideSuggestions = cachedProject.hide_suggestions;
+        if (hideSuggestions && hideSuggestions.suggestions && Array.isArray(hideSuggestions.suggestions)) {
+            displayHideSuggestions(hideSuggestions.suggestions);
+            // Hide button after suggestions are displayed
+            if (button) {
+                button.style.display = 'none';
             }
-        } catch (error) {
-            console.error('Error fetching suggestions:', error);
-            suggestionsEl.innerHTML = `<p style="color: var(--error-text); font-size: 14px;">Failed to load suggestions. Please try again.</p>`;
-            // Re-enable button for retry
-            button.disabled = false;
-            button.textContent = 'Get AI Suggestions';
+        } else {
+            console.error('Hide suggestions not found in cache for project:', currentHideProjectId);
+            suggestionsEl.innerHTML = '<p style="color: var(--error-text); font-size: 14px;">Error: Suggestions not available</p>';
         }
     }
     
@@ -1433,7 +1388,7 @@
         
         if (!suggestions || suggestions.length === 0) {
             suggestionsEl.innerHTML = '<p style="color: var(--text-secondary); font-size: 14px;">No suggestions available</p>';
-            // Keep button visible if no suggestions, allow retry
+            // Show button as fallback if no suggestions
             if (button) {
                 button.style.display = 'block';
                 button.disabled = false;
@@ -1442,18 +1397,35 @@
             return;
         }
         
-        suggestionsEl.innerHTML = suggestions.map(suggestion => `
+        suggestionsEl.innerHTML = suggestions.map(suggestion => {
+            // Escape HTML for display
+            const escapedSuggestion = suggestion
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            // Escape for JavaScript: replace single quotes and escape backslashes
+            // Use single quotes in onclick to avoid conflict with double quotes in HTML attribute
+            const jsEscapedSuggestion = suggestion
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t');
+            return `
             <button 
                 type="button" 
                 class="suggestion-chip" 
-                onclick="selectSuggestion('${suggestion.replace(/'/g, "\\'")}')"
+                onclick="selectSuggestion('${jsEscapedSuggestion}')"
                 style="padding: 6px 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; color: var(--text-primary);"
                 onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'; this.style.borderColor='var(--primary-color)'"
                 onmouseout="this.style.background='var(--bg-tertiary)'; this.style.color='var(--text-primary)'; this.style.borderColor='var(--border-color)'"
             >
-                ${suggestion}
+                ${escapedSuggestion}
             </button>
-        `).join('');
+        `;
+        }).join('');
         
         // Hide button after suggestions are successfully displayed
         if (button) {
