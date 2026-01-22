@@ -914,7 +914,7 @@ def get_user_billing_info(user_id):
     """Get user billing information
     
     Args:
-        user_id: User ID
+        user_id: User ID (can be document ID or firebase_uid)
         
     Returns:
         Dictionary with billing info:
@@ -937,7 +937,18 @@ def get_user_billing_info(user_id):
             'projects_remaining': max(0, 500 - processed)
         }
     try:
+        # Resolve user_id to actual document ID
+        # First try direct lookup (user_id might be document ID or firebase_uid for new users)
         user_doc = users_collection.document(str(user_id)).get()
+        
+        # If not found and user_id might be a firebase_uid, try to find by firebase_uid field
+        if not user_doc.exists:
+            firebase_uid_query = users_collection.where(filter=FieldFilter('firebase_uid', '==', str(user_id))).limit(1).stream()
+            firebase_uid_docs = list(firebase_uid_query)
+            if firebase_uid_docs:
+                # Found user with this firebase_uid, use the document ID
+                user_doc = firebase_uid_docs[0].reference.get()
+        
         if not user_doc.exists:
             # User document doesn't exist, but we still have the processed count
             return {
@@ -974,7 +985,7 @@ def update_user_billing_limit(user_id, new_limit):
     """Update user's projects_processed_limit (admin function)
     
     Args:
-        user_id: User ID
+        user_id: User ID (can be document ID or firebase_uid)
         new_limit: New limit value (can be very large for lifetime users)
         
     Returns:
@@ -987,6 +998,19 @@ def update_user_billing_limit(user_id, new_limit):
         if new_limit is not None and (not isinstance(new_limit, int) or new_limit < 0):
             raise ValueError("Invalid limit value. Must be a positive integer or None.")
         
+        # Resolve user_id to actual document ID
+        # First try direct lookup (user_id might be document ID or firebase_uid for new users)
+        user_doc = users_collection.document(str(user_id)).get()
+        document_id = str(user_id)
+        
+        # If not found and user_id might be a firebase_uid, try to find by firebase_uid field
+        if not user_doc.exists:
+            firebase_uid_query = users_collection.where(filter=FieldFilter('firebase_uid', '==', str(user_id))).limit(1).stream()
+            firebase_uid_docs = list(firebase_uid_query)
+            if firebase_uid_docs:
+                # Found user with this firebase_uid, use the document ID
+                document_id = firebase_uid_docs[0].id
+        
         update_data = {
             'projects_processed_limit': new_limit,
             'updated_at': datetime.utcnow()
@@ -996,7 +1020,8 @@ def update_user_billing_limit(user_id, new_limit):
         update_data['credits_low_email_sent'] = False
         update_data['credits_exhausted_email_sent'] = False
         
-        users_collection.document(str(user_id)).update(update_data)
+        # Use set() with merge=True to handle both existing and non-existing documents
+        users_collection.document(document_id).set(update_data, merge=True)
         return True
     except Exception as e:
         raise Exception(f"Failed to update user billing limit: {e}")

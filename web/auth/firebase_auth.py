@@ -227,6 +227,16 @@ def require_account_limit(f):
             # No user ID, allow access (auth decorator should have handled this)
             return f(*args, **kwargs)
         
+        # Check if user is admin - admins bypass limit checks
+        try:
+            from ..services.user_service import is_admin
+            if is_admin(user_id):
+                # Admin users can always access, regardless of limit
+                return f(*args, **kwargs)
+        except Exception as e:
+            # Log warning but continue with limit check if admin check fails
+            logger.warning(f"Warning: Could not check admin status for user {user_id}: {e}")
+        
         # Check user billing info
         try:
             from ..services.user_service import get_user_billing_info
