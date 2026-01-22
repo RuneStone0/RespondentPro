@@ -255,6 +255,17 @@
         <div id="hideSuggestions" style="display: flex; flex-wrap: wrap; gap: 8px;">
             <!-- Suggestions will be populated here -->
         </div>
+        <div id="hideSuggestionsButtonContainer" style="margin-top: 8px;">
+            <button 
+                type="button" 
+                id="getSuggestionsBtn" 
+                onclick="fetchHideSuggestions()" 
+                class="btn-secondary"
+                style="padding: 8px 16px; font-size: 14px;"
+            >
+                Get AI Suggestions
+            </button>
+        </div>
     </div>
     
     <!-- Feedback Textarea -->
@@ -1222,6 +1233,8 @@
     // Hide project modal functions
     let currentHideProjectId = null;
     let currentHideProjectName = null;
+    // Cache for loaded projects to avoid re-fetching from Firestore
+    const projectsCache = new Map();
     
     async function openHideModal(projectId) {
         currentHideProjectId = projectId;
@@ -1240,27 +1253,116 @@
         document.getElementById('hideProjectPreviewContent').style.display = 'none';
         document.getElementById('hideSuggestions').innerHTML = '';
         
-        // Fetch project details and suggestions
+        // Show button, hide suggestions
+        document.getElementById('getSuggestionsBtn').style.display = 'block';
+        document.getElementById('getSuggestionsBtn').disabled = false;
+        document.getElementById('getSuggestionsBtn').textContent = 'Get AI Suggestions';
+        
+        // Try to use cached project data first (avoid Firestore fetch)
+        const cachedProject = projectsCache.get(projectId);
+        if (cachedProject) {
+            // Use cached data - no API call needed
+            const projectData = {
+                id: cachedProject.id,
+                name: cachedProject.name || 'Untitled Project',
+                description: cachedProject.description || '',
+                remuneration: cachedProject.respondentRemuneration || 0,
+                time_minutes: cachedProject.timeMinutesRequired || 0,
+                topics: cachedProject.topics || []
+            };
+            displayProjectPreview(projectData);
+        } else {
+            // Fallback: fetch from API if not in cache
+            try {
+                const response = await fetch('/api/hide-suggestions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: projectId })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        displayProjectPreview(data.project);
+                        // Cache the project for future use
+                        if (data.project) {
+                            projectsCache.set(projectId, {
+                                id: data.project.id,
+                                name: data.project.name,
+                                description: data.project.description,
+                                respondentRemuneration: data.project.remuneration,
+                                timeMinutesRequired: data.project.time_minutes,
+                                topics: data.project.topics
+                            });
+                        }
+                    }
+                } else {
+                    // If API fails, show basic info
+                    displayBasicProjectInfo(projectName);
+                }
+            } catch (error) {
+                console.error('Error fetching project details:', error);
+                displayBasicProjectInfo(projectName);
+            }
+        }
+    }
+    
+    async function fetchHideSuggestions() {
+        const button = document.getElementById('getSuggestionsBtn');
+        const suggestionsEl = document.getElementById('hideSuggestions');
+        
+        if (!currentHideProjectId) {
+            console.error('No project ID available');
+            return;
+        }
+        
+        // Show loading state
+        button.disabled = true;
+        button.textContent = 'Generating suggestions...';
+        suggestionsEl.innerHTML = '<p style="color: var(--text-secondary); font-size: 14px;">Loading suggestions...</p>';
+        
+        // Try to use cached project data to avoid Firestore fetch
+        const cachedProject = projectsCache.get(currentHideProjectId);
+        const requestBody = { project_id: currentHideProjectId };
+        
+        if (cachedProject) {
+            // Include project data in request to avoid Firestore fetch
+            requestBody.project_data = {
+                id: cachedProject.id,
+                name: cachedProject.name || 'Untitled Project',
+                description: cachedProject.description || '',
+                remuneration: cachedProject.respondentRemuneration || 0,
+                time_minutes: cachedProject.timeMinutesRequired || 0,
+                topics: cachedProject.topics || []
+            };
+        }
+        
         try {
             const response = await fetch('/api/hide-suggestions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ project_id: projectId })
+                body: JSON.stringify(requestBody)
             });
             
             if (response.ok) {
                 const data = await response.json();
-                if (data.success) {
-                    displayProjectPreview(data.project);
+                if (data.success && data.suggestions) {
                     displayHideSuggestions(data.suggestions);
+                    // Hide button after suggestions are loaded
+                    button.style.display = 'none';
+                } else {
+                    throw new Error('Failed to get suggestions');
                 }
             } else {
-                // If API fails, show basic info
-                displayBasicProjectInfo(projectName);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Failed to fetch suggestions');
             }
         } catch (error) {
-            console.error('Error fetching project details:', error);
-            displayBasicProjectInfo(projectName);
+            console.error('Error fetching suggestions:', error);
+            suggestionsEl.innerHTML = `<p style="color: var(--error-text); font-size: 14px;">Failed to load suggestions. Please try again.</p>`;
+            // Re-enable button for retry
+            button.disabled = false;
+            button.textContent = 'Get AI Suggestions';
         }
     }
     
@@ -1327,8 +1429,16 @@
     
     function displayHideSuggestions(suggestions) {
         const suggestionsEl = document.getElementById('hideSuggestions');
+        const button = document.getElementById('getSuggestionsBtn');
+        
         if (!suggestions || suggestions.length === 0) {
             suggestionsEl.innerHTML = '<p style="color: var(--text-secondary); font-size: 14px;">No suggestions available</p>';
+            // Keep button visible if no suggestions, allow retry
+            if (button) {
+                button.style.display = 'block';
+                button.disabled = false;
+                button.textContent = 'Get AI Suggestions';
+            }
             return;
         }
         
@@ -1344,6 +1454,11 @@
                 ${suggestion}
             </button>
         `).join('');
+        
+        // Hide button after suggestions are successfully displayed
+        if (button) {
+            button.style.display = 'none';
+        }
     }
     
     function selectSuggestion(suggestion) {
@@ -1475,29 +1590,34 @@
         // Store the project ID before making the request
         const projectIdToHide = currentHideProjectId;
         
-        // Start visual feedback immediately - find and fade the card
+        // Find the card and store its position before closing modal
         const card = findProjectCard(projectIdToHide);
+        let cardParent = null;
+        let cardNextSibling = null;
         if (card) {
-            card.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-            card.style.opacity = '0.5';
+            cardParent = card.parentNode;
+            cardNextSibling = card.nextSibling;
         }
         
-        try {
-            const response = await fetch('/api/hide-project', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    project_id: projectIdToHide,
-                    feedback_text: feedbackText || null
-                })
-            });
-            
+        // Optimistic UI update: close modal and hide card immediately
+        closeHideModal();
+        removeProjectCard(projectIdToHide);
+        
+        // Update hidden count optimistically (don't wait)
+        updateHiddenCount().catch(err => console.error('Error updating hidden count:', err));
+        
+        // Make HTTP request in background (don't await)
+        fetch('/api/hide-project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: projectIdToHide,
+                feedback_text: feedbackText || null
+            })
+        })
+        .then(async (response) => {
             if (!response.ok) {
                 const error = await response.json();
-                // Restore card visibility on error
-                if (card) {
-                    card.style.opacity = '1';
-                }
                 // Check for redirect in 403 responses (account limit reached)
                 if (response.status === 403 && error.redirect) {
                     window.location.href = error.redirect;
@@ -1507,12 +1627,8 @@
             }
             
             const result = await response.json();
-            closeHideModal();
             
-            // Remove project card from DOM without page reload
-            removeProjectCard(projectIdToHide);
-            
-            // Update hidden count
+            // Update hidden count again with actual server value
             await updateHiddenCount();
             
             // If there's a question, show the question modal
@@ -1526,10 +1642,26 @@
                     showToast('Project hidden successfully!', 'success');
                 }
             }
-        } catch (error) {
+        })
+        .catch((error) => {
             console.error('Error hiding project:', error);
-            showToast('Error hiding project: ' + error.message, 'error');
-        }
+            
+            // Restore card on error - re-insert it at its original position
+            if (card && cardParent && card.parentNode === null) {
+                // Re-insert at original position
+                if (cardNextSibling) {
+                    cardParent.insertBefore(card, cardNextSibling);
+                } else {
+                    cardParent.appendChild(card);
+                }
+                // Reset card styles
+                card.style.transition = '';
+                card.style.opacity = '1';
+                card.style.transform = 'none';
+            }
+            
+            showToast('Error hiding project: ' + error.message + '. Please try again.', 'error');
+        });
     }
     
     // Helper function to find project card by ID
@@ -2022,6 +2154,11 @@
             if (loadingEl) loadingEl.style.display = 'none';
             
             if (data.projects && data.projects.results && data.projects.results.length > 0) {
+                // Cache projects for later use (to avoid re-fetching from Firestore)
+                data.projects.results.forEach(project => {
+                    projectsCache.set(project.id, project);
+                });
+                
                 // Render projects
                 if (containerEl) {
                     containerEl.innerHTML = data.projects.results.map(project => renderProjectCard(project)).join('');
