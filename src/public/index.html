@@ -1,0 +1,2112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Respondent Projects</title>
+  <style>
+    :root {
+      --bg:           #0b0c10;
+      --bg-2:         #13141a;
+      --bg-3:         #1a1c24;
+      --panel:        #161821;
+      --card:         #1c1f2a;
+      --card-hover:   #232735;
+      --border:       #2a2d3a;
+      --border-2:     #383b4a;
+      --text:         #e6e8ef;
+      --text-2:       #aab0bf;
+      --text-3:       #6c7280;
+      --accent:       #818cf8;
+      --accent-2:     #a78bfa;
+      --accent-soft:  #2a2455;
+      --danger:       #f87171;
+      --danger-soft:  #3a1f1f;
+      --success:      #4ade80;
+      --success-soft: #1f3a25;
+      --warning:      #fbbf24;
+      --shadow:       0 4px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 14px;
+    }
+
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+
+    header {
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .badge {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 99px;
+    }
+
+    .header-spacer { flex: 1; }
+
+    .header-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      padding: 6px 12px;
+      border-radius: 7px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .header-btn:hover { background: var(--card); color: var(--text); border-color: var(--border-2); }
+    .header-btn.danger { color: var(--danger); border-color: var(--danger-soft); }
+    .header-btn.danger:hover { background: var(--danger-soft); }
+
+    .auto-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--success);
+      padding: 3px 9px;
+      background: var(--success-soft);
+      border: 1px solid var(--success);
+      border-radius: 99px;
+    }
+    .auto-indicator .pulse {
+      width: 7px; height: 7px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Projects */
+    .projects-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .panel-header {
+      padding: 14px 20px 12px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .panel-header h2 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-3);
+    }
+
+    .project-count { font-size: 12px; color: var(--text-2); }
+
+    .projects-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .project-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .project-card:hover { background: var(--card-hover); border-color: var(--border-2); }
+    .project-card.hidden-card { opacity: 0.45; }
+    .project-card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent) inset;
+      background: var(--card-hover);
+    }
+    .project-card.selected.hidden-card { opacity: 0.7; }
+
+    .project-card .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .project-card .title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-2);
+      align-items: center;
+    }
+
+    .meta span { display: flex; align-items: center; gap: 3px; }
+
+    .tag {
+      display: inline-block;
+      background: var(--bg-3);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+      color: var(--text-2);
+    }
+    .tag.accent { background: var(--accent-soft); color: var(--accent); }
+
+    .hidden-label {
+      display: inline-block;
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .description {
+      margin-top: 10px;
+      font-size: 14px;
+      color: var(--text-2);
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      line-height: 1.55;
+    }
+
+    .description mark {
+      background: rgba(251, 191, 36, 0.22);   /* warm amber */
+      color: var(--warning);
+      font-weight: 600;
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+
+    .title mark {
+      background: rgba(251, 191, 36, 0.25);
+      color: var(--warning);
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-3);
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+      font-size: 14px;
+    }
+    .icon-btn:hover { background: var(--bg-3); color: var(--text); border-color: var(--border-2); }
+    .icon-btn.danger:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+
+    .status-bar {
+      padding: 8px 16px;
+      font-size: 12px;
+      color: var(--text-3);
+      background: var(--bg-2);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Config panel */
+    .config-panel {
+      width: 370px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .config-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 18px 32px;
+    }
+
+    .config-section {
+      margin-bottom: 22px;
+    }
+
+    .config-section h3 {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-3);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .config-section h3 .right { margin-left: auto; font-weight: 500; color: var(--text-2); text-transform: none; letter-spacing: 0; font-size: 11px; }
+
+    .criteria-list { display: flex; flex-direction: column; gap: 7px; }
+
+    .criterion {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .criterion label { flex: 1; font-size: 13px; color: var(--text); }
+
+    .criterion input[type="number"] {
+      width: 76px;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-3);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .criterion input[type="number"]:focus { border-color: var(--accent); }
+
+    .criterion-remove {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-3);
+      font-size: 18px;
+      line-height: 1;
+      padding: 0 4px;
+      transition: color 0.1s;
+    }
+    .criterion-remove:hover { color: var(--danger); }
+
+    .add-criterion {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px 12px;
+      border: 1.5px dashed var(--border-2);
+      border-radius: 8px;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-3);
+      transition: all 0.15s;
+    }
+    .add-criterion:hover { border-color: var(--accent); color: var(--accent); }
+
+    .add-criterion-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .add-criterion-row input {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-3);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .add-criterion-row input:focus { border-color: var(--accent); }
+
+    .btn {
+      padding: 7px 14px;
+      background: var(--accent);
+      color: #0b0c10;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.1s;
+    }
+    .btn:hover { background: var(--accent-2); }
+    .btn:disabled { background: var(--border-2); color: var(--text-3); cursor: default; }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--card); color: var(--text); border-color: var(--border-2); }
+
+    .btn-success {
+      background: var(--success);
+      color: #0b0c10;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+
+    .stat-box {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 10px;
+      text-align: center;
+    }
+
+    .stat-box .num { font-size: 22px; font-weight: 700; color: var(--text); }
+    .stat-box .lbl { font-size: 10px; color: var(--text-3); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-box.accent .num { color: var(--accent); }
+    .stat-box.danger .num { color: var(--danger); }
+
+    /* Type filter */
+    .type-filter { position: relative; }
+
+    .type-pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      padding: 7px 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-height: 38px;
+      cursor: pointer;
+      align-items: center;
+    }
+    .type-pill-list:hover { border-color: var(--border-2); }
+
+    .type-pill-list .placeholder { color: var(--text-3); font-size: 13px; }
+
+    .type-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 2px 4px 2px 8px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .type-pill button {
+      background: none; border: none; color: var(--accent);
+      font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1;
+    }
+    .type-pill button:hover { color: var(--accent-2); }
+
+    .type-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: var(--card);
+      border: 1px solid var(--border-2);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      z-index: 50;
+      padding: 6px;
+      display: none;
+    }
+    .type-dropdown.open { display: block; }
+
+    .type-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+      transition: background 0.08s;
+    }
+    .type-option:hover { background: var(--bg-3); }
+    .type-option .check { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; }
+    .type-option .icon { font-size: 16px; width: 20px; text-align: center; }
+
+    .select-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+    .select-input:focus { border-color: var(--accent); }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      background: var(--border);
+      border-radius: 99px;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .toggle.on { background: var(--accent); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px; height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.15s;
+    }
+    .toggle.on::after { transform: translateX(16px); }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .toggle-row .label-stack {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .toggle-row .label-stack .primary { font-size: 13px; color: var(--text); }
+    .toggle-row .label-stack .secondary { font-size: 11px; color: var(--text-3); }
+
+    .last-run {
+      font-size: 11px;
+      color: var(--text-3);
+      padding: 6px 10px;
+      background: var(--bg-3);
+      border-radius: 6px;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    /* States */
+    .state-msg {
+      padding: 50px 20px;
+      text-align: center;
+      color: var(--text-3);
+      font-size: 14px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 22px; height: 22px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      margin: 12px;
+      padding: 14px 16px;
+      background: var(--danger-soft);
+      border: 1px solid var(--danger);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      width: 500px;
+      max-width: 90vw;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .modal h2 { font-size: 18px; margin-bottom: 6px; }
+    .modal p { color: var(--text-2); font-size: 13px; line-height: 1.6; margin-bottom: 14px; }
+
+    .modal textarea, .modal input[type="text"] {
+      width: 100%;
+      min-height: 90px;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+    }
+    .modal textarea:focus, .modal input:focus { border-color: var(--accent); }
+
+    .modal input[type="text"] { min-height: auto; height: 38px; }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    .modal details {
+      margin: 14px 0 4px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .modal details summary { cursor: pointer; font-size: 13px; color: var(--text-2); font-weight: 500; }
+    .modal details ol { margin: 10px 0 4px 18px; font-size: 12px; color: var(--text-2); line-height: 1.7; }
+    .modal code {
+      background: var(--bg-3);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .modal-error {
+      background: var(--danger-soft);
+      border: 1px solid var(--danger);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--danger);
+      margin-top: 10px;
+      display: none;
+    }
+    .modal-error.show { display: block; }
+
+    /* Debug panel */
+    .debug-modal pre {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 11px;
+      max-height: 380px;
+      overflow: auto;
+      color: var(--text-2);
+      font-family: 'SF Mono', Menlo, monospace;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .field-label {
+      font-size: 11px;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      font-family: 'SF Mono', Menlo, monospace;
+    }
+    .text-input:focus { border-color: var(--accent); }
+
+    /* Priority (boosted) project cards */
+    .project-card.priority-card {
+      border-left: 3px solid var(--success);
+    }
+    .project-card.priority-card.selected {
+      border-left-color: var(--success);
+    }
+    .priority-tag {
+      display: inline-block;
+      background: var(--success-soft);
+      color: var(--success);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* Apply button on project cards */
+    .apply-btn {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+      flex-shrink: 0;
+    }
+    .apply-btn:hover { background: var(--accent); color: #0b0c10; }
+
+    .apply-prompt {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .apply-prompt .prompt-text { flex: 1; font-weight: 500; color: var(--text); }
+    .apply-prompt .prompt-actions { display: flex; gap: 6px; }
+
+    /* Keyword overflow toggle */
+    .kw-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 5px 8px;
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-3);
+      cursor: pointer;
+      border-radius: 6px;
+      border: none;
+      background: none;
+      width: 100%;
+      transition: all 0.12s;
+    }
+    .kw-toggle:hover { color: var(--accent); background: var(--bg-3); }
+    .kw-toggle .arrow { font-size: 10px; transition: transform 0.15s; }
+    .kw-toggle.expanded .arrow { transform: rotate(180deg); }
+
+    /* Keyword match badge */
+    .kw-count {
+      font-size: 11px;
+      background: var(--bg-3);
+      color: var(--text-3);
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-left: auto;
+    }
+    .kw-count.has-match { background: var(--accent-soft); color: var(--accent); }
+
+    /* Tooltip via native title — enhanced with a custom data-tooltip for longer text */
+    [data-tip] { cursor: help; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Respondent Projects</h1>
+  <span class="badge" id="total-badge">—</span>
+  <span class="auto-indicator" id="auto-indicator" style="display:none">
+    <span class="pulse"></span>Auto-hide ON
+  </span>
+  <div class="header-spacer"></div>
+  <span style="font-size:11px; color:var(--text-3); margin-right:8px;">↑↓ navigate • ↵ apply • ⌃D hide</span>
+  <button class="header-btn" id="debug-btn">🐛 Debug</button>
+  <button class="header-btn" id="reload-btn">↻ Reload</button>
+  <button class="header-btn" id="cookie-btn">🔑 Cookie</button>
+</header>
+
+<div class="layout">
+
+  <div class="projects-panel">
+    <div class="panel-header">
+      <h2>Projects</h2>
+      <span class="project-count" id="visible-count"></span>
+    </div>
+    <div class="projects-list" id="projects-list">
+      <div class="state-msg"><div class="spinner"></div><br>Loading projects…</div>
+    </div>
+    <div class="status-bar">
+      <span id="status-bar">—</span>
+      <span style="display:flex; gap:14px; align-items:center;">
+        <span id="page-info"></span>
+        <span id="applied-counter" title="Times you applied to a project then hid it" style="color:var(--success);">✓ 0 applied</span>
+        <span id="hidden-counter" title="Total projects this app has hidden (manual + auto)" style="color:var(--danger);">🗑 0 hidden</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="config-panel">
+    <div class="panel-header">
+      <h2>Filter Config</h2>
+    </div>
+    <div class="config-body">
+
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="num" id="stat-total">0</div>
+          <div class="lbl">Fetched</div>
+        </div>
+        <div class="stat-box accent">
+          <div class="num" id="stat-visible">0</div>
+          <div class="lbl">Visible</div>
+        </div>
+        <div class="stat-box danger">
+          <div class="num" id="stat-hidden">0</div>
+          <div class="lbl">Hidden</div>
+        </div>
+      </div>
+
+      <!-- Type filter -->
+      <div class="config-section">
+        <h3>Project type</h3>
+        <div class="type-filter" id="type-filter">
+          <div class="type-pill-list" id="type-pill-list">
+            <span class="placeholder">All types</span>
+          </div>
+          <div class="type-dropdown" id="type-dropdown"></div>
+        </div>
+      </div>
+
+      <!-- Sort -->
+      <div class="config-section">
+        <h3 title="Order in which projects are fetched from Respondent. Changes trigger a fresh fetch.">Sort by</h3>
+        <select class="select-input" id="sort-select" title="API sorts fetch in that order. Question sorts are applied locally after fetching.">
+          <option value="v4Score">Recommended</option>
+          <option value="publishedAt">Most recent</option>
+          <option value="respondentRemuneration">Highest pay</option>
+          <option value="timeMinutesRequired">Shortest sessions</option>
+          <option value="totalQuestions">Fewest questions</option>
+          <option value="dollarPerQuestion">Best $/question</option>
+        </select>
+      </div>
+
+      <!-- Priority / boost keywords -->
+      <div class="config-section">
+        <h3 style="color: var(--success)">
+          ⭐ Boost by keyword
+          <span class="right" id="priority-kw-total-badge" style="display:none; color:var(--text-3)"></span>
+        </h3>
+        <div style="font-size:11px; color:var(--text-3); margin-bottom:8px;">
+          Projects matching these keywords are pinned to the top of the list.
+        </div>
+        <div class="criteria-list" id="priority-keyword-list"></div>
+        <div class="add-criterion-row" id="priority-keyword-add-row" style="display:none">
+          <input id="priority-keyword-input" placeholder="e.g. UX, AI, fintech…" />
+          <button class="btn btn-success" id="priority-keyword-confirm">Add</button>
+        </div>
+        <button class="add-criterion" id="priority-keyword-add-btn">+ Add keyword</button>
+      </div>
+
+      <!-- Keyword exclude -->
+      <div class="config-section">
+        <h3>
+          Exclude by keyword
+          <span class="right" id="keyword-total-badge" style="display:none"></span>
+        </h3>
+        <div style="font-size:11px; color:var(--text-3); margin-bottom:8px;">
+          Hide if title or description contains any of these.
+        </div>
+        <div class="criteria-list" id="keyword-list"></div>
+        <div class="add-criterion-row" id="keyword-add-row" style="display:none">
+          <input id="keyword-input" placeholder="e.g. survey, NDA…" />
+          <button class="btn" id="keyword-confirm">Add</button>
+        </div>
+        <button class="add-criterion" id="keyword-add-btn">+ Add keyword</button>
+      </div>
+
+      <!-- Pay rules -->
+      <div class="config-section">
+        <h3 title="Projects below these pay thresholds will be hidden. Set to 0 to disable.">Minimum pay</h3>
+        <div class="criteria-list">
+          <div class="criterion">
+            <label title="Hide projects whose calculated hourly rate (incentive ÷ duration × 60) falls below this. Set to 0 to disable.">Minimum $/hr</label>
+            <input type="number" id="min-hourly-rate" min="0" max="500" step="5" value="0"
+                   title="Hide projects whose calculated hourly rate falls below this threshold. Set to 0 to disable.">
+          </div>
+          <div class="criterion">
+            <label title="Hide projects whose total incentive / compensation is below this amount. Set to 0 to disable.">Minimum incentive $</label>
+            <input type="number" id="min-incentive" min="0" max="2000" step="5" value="0"
+                   title="Hide projects whose total compensation is below this amount. Set to 0 to disable.">
+          </div>
+        </div>
+      </div>
+
+      <!-- Duration rules -->
+      <div class="config-section">
+        <h3 title="Filter projects by session duration in minutes. Set either to 0 to disable that bound.">Session length</h3>
+        <div class="criteria-list">
+          <div class="criterion">
+            <label title="Hide projects longer than this. Useful for excluding long interviews or diary studies. Set to 0 to disable.">Max minutes</label>
+            <input type="number" id="max-duration" min="0" max="300" step="15" value="120"
+                   title="Hide projects longer than this many minutes. Set to 0 to disable.">
+          </div>
+          <div class="criterion">
+            <label title="Increase to avoid very short tasks — useful if you prefer focused sessions over quick surveys. Set to 0 to disable.">Min minutes</label>
+            <input type="number" id="min-duration" min="0" max="300" step="15" value="0"
+                   title="Hide projects shorter than this many minutes. Raise this to skip quick surveys. Set to 0 to disable.">
+          </div>
+        </div>
+      </div>
+
+      <!-- Apply filters (manual) -->
+      <div class="config-section">
+        <h3>Apply filters</h3>
+        <div style="font-size:11px; color:var(--text-3); margin-bottom:8px;">
+          Hide all currently-loaded projects matching your filter rules.
+        </div>
+        <button class="btn" id="apply-filters-btn" style="width:100%;">
+          ▶ Apply filters now
+        </button>
+        <div class="last-run" id="apply-status" style="display:none"></div>
+      </div>
+
+      <!-- Auto-hide -->
+      <div class="config-section">
+        <h3>Auto-hide cron</h3>
+        <div class="toggle-row">
+          <div class="label-stack">
+            <span class="primary">Enable auto-hide</span>
+            <span class="secondary">Periodically hide projects matching your rules</span>
+          </div>
+          <div class="toggle" id="auto-hide-toggle"></div>
+        </div>
+
+        <div id="auto-hide-options" style="display:none">
+          <div class="criterion" style="margin-bottom:4px">
+            <label>Run every</label>
+            <select class="select-input" id="auto-hide-schedule" style="width:auto; padding:5px 8px;"></select>
+          </div>
+          <div class="criterion" style="margin-bottom:4px">
+            <label title="Max projects to hide per cron run. Lower this for slow/debug mode — e.g. 1 project every 5 minutes. Fastest meaningful setting: 10 per 1-minute run.">Max per run</label>
+            <input type="number" id="auto-hide-max-per-run" min="1" max="20" step="1" value="1"
+                   title="Cap on how many projects are hidden in a single cron run. Combine with schedule frequency to control overall pace."
+                   style="width:70px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg-3); color:var(--text); font-size:13px; outline:none;">
+          </div>
+
+          <div id="auto-hide-custom-row" style="display:none; margin-top:6px;">
+            <div class="criterion" style="gap:4px;">
+              <label style="flex:0 0 auto;">Custom</label>
+              <input type="number" id="auto-hide-custom-n" min="1" max="3600" step="1" value="1"
+                     style="width:60px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg-3); color:var(--text); font-size:13px; outline:none;">
+              <select class="select-input" id="auto-hide-custom-unit" style="width:auto; padding:5px 8px;">
+                <option value="s">seconds</option>
+                <option value="m" selected>minutes</option>
+                <option value="h">hours</option>
+              </select>
+              <button class="btn" id="auto-hide-custom-apply" style="padding:5px 10px;">Apply</button>
+            </div>
+            <div id="auto-hide-custom-info" style="font-size:11px; color:var(--text-3); margin-top:4px;"></div>
+          </div>
+
+          <div class="last-run" id="auto-hide-status">No runs yet.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Cookie modal -->
+<div class="modal-backdrop" id="cookie-modal">
+  <div class="modal">
+    <h2 id="cookie-modal-title">Session expired</h2>
+    <p id="cookie-modal-desc">Paste a fresh cookie below to continue.</p>
+    <textarea id="cookie-input" placeholder="respondent.session.sid=s%3A..."></textarea>
+    <div class="modal-error" id="cookie-modal-error"></div>
+
+    <!-- Keep-alive controls live here, alongside the cookie they keep alive -->
+    <div style="margin-top:16px;">
+      <div class="toggle-row">
+        <div class="label-stack">
+          <span class="primary">Keep session alive</span>
+          <span class="secondary">Ping the API on a schedule so the cookie doesn't expire</span>
+        </div>
+        <div class="toggle" id="keep-alive-toggle"></div>
+      </div>
+
+      <div id="keep-alive-options" style="display:none">
+        <div class="criterion">
+          <label>Ping every</label>
+          <select class="select-input" id="keep-alive-schedule" style="width:auto; padding:5px 8px;"></select>
+        </div>
+        <div class="last-run" id="keep-alive-status">No runs yet.</div>
+      </div>
+    </div>
+
+    <details>
+      <summary>How do I find my cookie?</summary>
+      <ol>
+        <li>Open <code>app.respondent.io</code> and sign in</li>
+        <li>Open DevTools (F12) → <strong>Application</strong> → <strong>Cookies</strong></li>
+        <li>Select <code>https://app.respondent.io</code></li>
+        <li>Copy the value of <code>respondent.session.sid</code></li>
+        <li>Paste it above — either as the bare value, or as <code>respondent.session.sid=&lt;value&gt;</code></li>
+      </ol>
+    </details>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cookie-cancel">Cancel</button>
+      <button class="btn" id="cookie-save">Save &amp; reload</button>
+    </div>
+  </div>
+</div>
+
+<!-- Debug modal -->
+<div class="modal-backdrop debug-modal" id="debug-modal">
+  <div class="modal" style="width:680px">
+    <h2>Debug</h2>
+    <p>Latest API activity & config. Refreshes when reopened.</p>
+    <pre id="debug-content">Loading…</pre>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="debug-refresh">Refresh</button>
+      <button class="btn" id="debug-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm modal (for auto-hide warning) -->
+<div class="modal-backdrop" id="confirm-modal">
+  <div class="modal" style="width:440px">
+    <h2 id="confirm-title">Confirm change</h2>
+    <p id="confirm-body">Auto-hide is enabled — these filter changes will affect projects on the next run.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+      <button class="btn" id="confirm-ok">Yes, save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Numeric ids inferred from the live API; tweak if any are mislabeled.
+const PROJECT_TYPES = [
+  { value: 'video-call',       numeric: 1,  label: 'Video call',         icon: '▶', color: '#34d399' },
+  { value: 'video-call-group', numeric: 2,  label: 'Video call (Group)', icon: '▶', color: '#22c55e' },
+  { value: 'survey',           numeric: 4,  label: 'Survey',             icon: '◐', color: '#a78bfa' },
+  { value: 'in-person',        numeric: 8,  label: 'In person',          icon: '📍', color: '#60a5fa' },
+  { value: 'online-task',      numeric: 9,  label: 'Online task',        icon: '→', color: '#fb923c' },
+  { value: 'in-person-group',  numeric: 10, label: 'In person (Group)',  icon: '👥', color: '#3b82f6' },
+  { value: 'diary-study',      numeric: 12, label: 'Diary study',        icon: '📔', color: '#ec4899' },
+];
+
+let filters = {
+  keywords: [],
+  priorityKeywords: [],
+  minHourlyRate: 0,
+  minIncentive: 0,
+  minDuration: 0,
+  maxDuration: 120,
+  kindsOfResearchStudy: [],
+  sort: 'publishedAt',
+  showEligible: true,
+};
+let autoHide  = { enabled: false, schedule: 'hourly', maxPerRun: 1, lastRunAt: null, lastRunResult: null };
+let keepAlive = { enabled: false, schedule: 'hourly', lastRunAt: null, lastRunResult: null };
+let allProjects = [];
+let profileId = '';
+let hasCookie = false;
+let scheduleOptions = [];   // populated from /api/config
+let nextRuns = { keepAlive: null, autoHide: null };
+let totalHidden = 0;
+let totalApplied = 0;
+let selectedIndex = -1;     // index into allProjects; -1 = no selection
+
+function renderScheduleOptions() {
+  const presets = scheduleOptions.map(opt =>
+    `<option value="${esc(opt.key)}">${esc(opt.label)}</option>`
+  ).join('');
+  // Auto-hide adds a "Custom" option
+  $('auto-hide-schedule').innerHTML = presets + `<option value="custom">Custom interval…</option>`;
+  $('keep-alive-schedule').innerHTML = presets;
+}
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Escape regex metacharacters in a user-supplied keyword.
+const escRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Escape first, then wrap any keyword occurrences in <mark>. Keywords are
+// matched case-insensitively and as whole substrings.
+function highlightKeywords(text, keywords) {
+  const safe = esc(text);
+  const terms = (keywords || []).map(k => String(k).trim()).filter(Boolean);
+  if (terms.length === 0) return safe;
+  const pattern = new RegExp(`(${terms.map(escRegex).join('|')})`, 'gi');
+  return safe.replace(pattern, '<mark>$1</mark>');
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { 'content-type': 'application/json' },
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+// ── Confirmation dialog (used when auto-hide is on) ──────
+function confirmAction(title, body) {
+  return new Promise((resolve) => {
+    $('confirm-title').textContent = title;
+    $('confirm-body').textContent = body;
+    $('confirm-modal').classList.add('open');
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const cleanup = () => {
+      $('confirm-modal').classList.remove('open');
+      $('confirm-ok').removeEventListener('click', onOk);
+      $('confirm-cancel').removeEventListener('click', onCancel);
+    };
+    $('confirm-ok').addEventListener('click', onOk);
+    $('confirm-cancel').addEventListener('click', onCancel);
+  });
+}
+
+// Direct save — no prompt.
+async function saveFiltersGuarded() {
+  await api('/api/config/filters', { method: 'POST', body: filters });
+  return true;
+}
+
+// ── Config sync ──────────────────────────────────────────
+async function loadConfig() {
+  const { body } = await api('/api/config');
+  if (body.filters)   filters  = { ...filters,  ...body.filters };
+  if (body.autoHide)  autoHide = { maxPerRun: 1, ...autoHide, ...body.autoHide, maxPerRun: Math.min(20, body.autoHide.maxPerRun ?? 1) };
+  if (body.keepAlive) keepAlive= { ...keepAlive,...body.keepAlive };
+  if (body.nextRuns)  nextRuns = body.nextRuns;
+  if (body.schedules) {
+    scheduleOptions = body.schedules;
+    renderScheduleOptions();
+  }
+  profileId = body.profileId || '';
+  hasCookie = body.hasCookie;
+  totalHidden = body.totalHidden || 0;
+  totalApplied = body.totalApplied || 0;
+  renderHeader();
+}
+
+function renderHeader() {
+  $('hidden-counter').textContent = `🗑 ${totalHidden} hidden`;
+  $('applied-counter').textContent = `✓ ${totalApplied} applied`;
+}
+
+// ── Field extraction (matches Respondent.io API shape) ───
+const getId = (p) => p.id || p._id || p.projectId || '';
+const getTitle = (p) => p.name || p.title || p.projectName || '(untitled)';
+const getDesc = (p) => p.description || p.summary || p.shortDescription || '';
+const getReferralLink = (p) => p.referralLink || p.referral_link || p.applicationUrl || p.applyUrl || p.url || '';
+const getQuestionCount = (p) => {
+  // screenerQuestionsLength comes from the /view/:id detail endpoint (fetched lazily).
+  // Fall back to any other field the API might surface on the list endpoint.
+  const raw = p.screenerQuestionsLength
+    ?? p.response?.screenerQuestionsLength   // in case the proxy wraps it
+    ?? p.numberOfQuestions ?? p.questionsCount ?? p.totalQuestions
+    ?? p.screenerQuestionsCount ?? p.numberOfScreenerQuestions
+    ?? (Array.isArray(p.screenerQuestions) ? p.screenerQuestions.length : undefined);
+  return typeof raw === 'number' ? Math.round(raw) : 0;
+};
+const getDollarPerQuestion = (p) => {
+  const q = getQuestionCount(p);
+  const inc = getIncentive(p);
+  return q > 0 && inc > 0 ? Math.round((inc / q) * 100) / 100 : 0;
+};
+const toNum = (raw) => {
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') { const m = raw.match(/[\d.]+/); return m ? Number(m[0]) : 0; }
+  if (raw && typeof raw === 'object') return Number(raw.amount ?? raw.value ?? 0);
+  return 0;
+};
+const getDuration = (p) => Number(p.timeMinutesRequired || p.duration || p.sessionLength || p.lengthInMinutes || 0);
+const getIncentive = (p) => toNum(p.respondentRemuneration ?? p.incentive ?? p.compensation ?? 0);
+const getHourly = (p) => {
+  const direct = toNum(p.hourlyRate ?? p.hourly_rate ?? p.pay ?? p.rate ?? 0);
+  if (direct > 0) return direct;
+  const inc = getIncentive(p);
+  const dur = getDuration(p);
+  return inc > 0 && dur > 0 ? Math.round((inc / dur) * 60) : 0;
+};
+function getKind(p) {
+  // API returns numeric kindOfResearch; map to our slug
+  const n = p.kindOfResearch ?? p.kind;
+  if (typeof n === 'number') {
+    return PROJECT_TYPES.find(t => t.numeric === n)?.value || `kind-${n}`;
+  }
+  return p.kindOfResearchStudy || p.studyType || p.type || '';
+}
+
+function isHidden(project) {
+  const title = getTitle(project).toLowerCase();
+  const desc = getDesc(project).toLowerCase();
+  const hourly = getHourly(project);
+  const incentive = getIncentive(project);
+  const duration = getDuration(project);
+
+  for (const kw of filters.keywords) {
+    const k = kw.toLowerCase();
+    if (title.includes(k) || desc.includes(k)) return { hidden: true, reason: `keyword "${kw}"` };
+  }
+  if (filters.minHourlyRate > 0 && hourly > 0 && hourly < filters.minHourlyRate)
+    return { hidden: true, reason: `$${hourly}/hr < min $${filters.minHourlyRate}` };
+  if (filters.minIncentive > 0 && incentive > 0 && incentive < filters.minIncentive)
+    return { hidden: true, reason: `$${incentive} incentive < min $${filters.minIncentive}` };
+  if (filters.maxDuration > 0 && duration > 0 && duration > filters.maxDuration)
+    return { hidden: true, reason: `${duration}min > max ${filters.maxDuration}min` };
+  if (filters.minDuration > 0 && duration > 0 && duration < filters.minDuration)
+    return { hidden: true, reason: `${duration}min < min ${filters.minDuration}min` };
+  return { hidden: false };
+}
+
+const kindLabel = (k) => PROJECT_TYPES.find(t => t.value === k)?.label || k;
+
+// ── Priority boost ────────────────────────────────────────
+function isPriorityMatch(p) {
+  const kws = (filters.priorityKeywords || []).map(k => k.toLowerCase()).filter(Boolean);
+  if (!kws.length) return false;
+  const t = getTitle(p).toLowerCase();
+  const d = getDesc(p).toLowerCase();
+  return kws.some(k => t.includes(k) || d.includes(k));
+}
+
+// Stable-partition allProjects: matching projects first, rest maintain relative order.
+function applyPrioritySort() {
+  const kws = (filters.priorityKeywords || []).map(k => k.toLowerCase()).filter(Boolean);
+  if (!kws.length) return;
+  const hits = allProjects.filter(p => isPriorityMatch(p));
+  const rest = allProjects.filter(p => !isPriorityMatch(p));
+  allProjects.length = 0;
+  allProjects.push(...hits, ...rest);
+}
+
+// ── Client-side sort ──────────────────────────────────────
+function applyClientSort() {
+  if (filters.sort === 'totalQuestions') {
+    allProjects.sort((a, b) => getQuestionCount(a) - getQuestionCount(b)); // fewest first
+  } else if (filters.sort === 'dollarPerQuestion') {
+    // highest $/question first; push zero (unknown) to end
+    allProjects.sort((a, b) => {
+      const ra = getDollarPerQuestion(a);
+      const rb = getDollarPerQuestion(b);
+      if (ra === 0 && rb === 0) return 0;
+      if (ra === 0) return 1;
+      if (rb === 0) return -1;
+      return rb - ra;
+    });
+  }
+}
+
+// ── Render projects ──────────────────────────────────────
+function renderProjects() {
+  const list = $('projects-list');
+  const savedScroll = list.scrollTop; // preserve scroll before rebuilding DOM
+  if (!allProjects.length) {
+    list.innerHTML = '<div class="state-msg">No projects loaded.</div>';
+    $('stat-total').textContent = 0;
+    $('stat-visible').textContent = 0;
+    $('stat-hidden').textContent = 0;
+    $('total-badge').textContent = 0;
+    return;
+  }
+
+  // Clamp selection if list shrunk
+  if (selectedIndex >= allProjects.length) selectedIndex = allProjects.length - 1;
+  if (selectedIndex < 0 && allProjects.length > 0) selectedIndex = 0;
+
+  let visible = 0, hidden = 0;
+  list.innerHTML = allProjects.map((p, idx) => {
+    const { hidden: isHide, reason } = isHidden(p);
+    if (isHide) hidden++; else visible++;
+    const id = getId(p);
+    const isSel = idx === selectedIndex;
+    const link = getReferralLink(p);
+    const priority = isPriorityMatch(p);
+    return `
+      <div class="project-card ${isHide ? 'hidden-card' : ''} ${isSel ? 'selected' : ''} ${priority ? 'priority-card' : ''}" data-id="${esc(id)}" data-idx="${idx}">
+        <div class="title-row">
+          <div class="title">${highlightKeywords(getTitle(p), filters.keywords)}</div>
+          <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
+            ${link ? `<button class="apply-btn" data-action="apply" data-id="${esc(id)}" data-link="${esc(link)}" title="Open project application page">↗</button>` : ''}
+            <button class="icon-btn danger" data-action="hide" data-id="${esc(id)}" title="Hide this project (also on Respondent.io)">×</button>
+          </div>
+        </div>
+        <div class="meta">
+          ${priority ? `<span class="priority-tag">⭐ boosted</span>` : ''}
+          ${getHourly(p) ? `<span title="Estimated hourly rate">💰 $${getHourly(p)}/hr</span>` : ''}
+          ${getIncentive(p) ? `<span title="Total incentive">🪙 $${getIncentive(p)}</span>` : ''}
+          ${getDuration(p) ? `<span title="Session duration">⏱ ${getDuration(p)} min</span>` : ''}
+          ${(() => {
+            const q = getQuestionCount(p);
+            const dpq = getDollarPerQuestion(p);
+            const ratio = dpq ? ` ($${dpq % 1 === 0 ? dpq : dpq.toFixed(2)}/q)` : '';
+            const txt  = q ? `❓ ${q}q${ratio}` : p._detailFetched ? '' : '…';
+            const tip  = q ? `${q} question${q === 1 ? '' : 's'}${dpq ? ` · $${dpq.toFixed(2)} per question` : ''}` : 'Fetching question count…';
+            // Always render the span; hide when fetched but 0 questions found
+            const hide = p._detailFetched && !q;
+            return `<span data-qid="${esc(id)}" title="${esc(tip)}" style="${hide ? 'display:none' : ''}">${esc(txt)}</span>`;
+          })()}
+          ${getKind(p) ? `<span class="tag accent">${esc(kindLabel(getKind(p)))}</span>` : ''}
+          ${isHide ? `<span class="hidden-label">hidden — ${esc(reason)}</span>` : ''}
+        </div>
+        ${getDesc(p) ? `<div class="description">${highlightKeywords(getDesc(p), filters.keywords)}</div>` : ''}
+        <div class="apply-prompt" id="apply-prompt-${esc(id)}" style="display:none">
+          <span class="prompt-text">Did you apply?</span>
+          <div class="prompt-actions">
+            <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px;" data-action="apply-keep" data-id="${esc(id)}">No, keep it</button>
+            <button class="btn" style="padding:3px 10px; font-size:12px; background:var(--success); color:#0b0c10;" data-action="apply-hide" data-id="${esc(id)}">Yes, hide it</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-action="hide"]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      if (id) await hideProjectById(id, btn);
+    });
+  });
+
+  list.querySelectorAll('[data-action="apply"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openAndPromptApply(btn.dataset.id, btn.dataset.link);
+    });
+  });
+
+  list.querySelectorAll('[data-action="apply-keep"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const prompt = document.getElementById(`apply-prompt-${btn.dataset.id}`);
+      if (prompt) prompt.style.display = 'none';
+    });
+  });
+
+  list.querySelectorAll('[data-action="apply-hide"]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await hideProjectById(btn.dataset.id, null, { applied: true });
+    });
+  });
+
+  $('visible-count').textContent = `${visible} visible / ${hidden} hidden`;
+  $('stat-total').textContent = allProjects.length;
+  $('stat-visible').textContent = visible;
+  $('stat-hidden').textContent = hidden;
+  $('total-badge').textContent = allProjects.length;
+
+  // Update keyword match counts whenever project list changes
+  if (filters.keywords.length > 0) renderKeywords();
+  if ((filters.priorityKeywords || []).length > 0) renderPriorityKeywords();
+
+  // Click-to-select on cards
+  list.querySelectorAll('.project-card').forEach(card => {
+    card.addEventListener('click', () => {
+      selectedIndex = Number(card.dataset.idx);
+      updateSelectionDom();
+    });
+  });
+
+  // Restore scroll; only override if the selected card is outside the viewport
+  list.scrollTop = savedScroll;
+  scrollSelectionIntoView();
+}
+
+function updateSelectionDom() {
+  document.querySelectorAll('.project-card').forEach((el, idx) => {
+    el.classList.toggle('selected', idx === selectedIndex);
+  });
+  scrollSelectionIntoView();
+}
+
+function scrollSelectionIntoView() {
+  const el = document.querySelector(`.project-card[data-idx="${selectedIndex}"]`);
+  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// ── Type filter UI ───────────────────────────────────────
+function renderTypeFilter() {
+  const list = $('type-pill-list');
+  const dropdown = $('type-dropdown');
+
+  list.innerHTML = filters.kindsOfResearchStudy.length === 0
+    ? '<span class="placeholder">All types</span>'
+    : filters.kindsOfResearchStudy.map(v => {
+        const t = PROJECT_TYPES.find(p => p.value === v) || { label: v };
+        return `<span class="type-pill">${esc(t.label)}<button data-remove="${esc(v)}">×</button></span>`;
+      }).join('');
+
+  dropdown.innerHTML = PROJECT_TYPES.map(t => {
+    const active = filters.kindsOfResearchStudy.includes(t.value);
+    return `<div class="type-option" data-value="${t.value}">
+      <span class="icon" style="color:${t.color}">${t.icon}</span>
+      <span style="flex:1">${esc(t.label)}</span>
+      <span class="check">${active ? '✓' : ''}</span>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const prev = JSON.parse(JSON.stringify(filters));
+      filters.kindsOfResearchStudy = filters.kindsOfResearchStudy.filter(x => x !== btn.dataset.remove);
+      if (await saveFiltersGuarded(prev)) {
+        renderTypeFilter();
+        reloadProjects();
+      }
+    });
+  });
+
+  dropdown.querySelectorAll('.type-option').forEach(opt => {
+    opt.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const v = opt.dataset.value;
+      const prev = JSON.parse(JSON.stringify(filters));
+      filters.kindsOfResearchStudy = filters.kindsOfResearchStudy.includes(v)
+        ? filters.kindsOfResearchStudy.filter(x => x !== v)
+        : [...filters.kindsOfResearchStudy, v];
+      if (await saveFiltersGuarded(prev)) {
+        renderTypeFilter();
+        reloadProjects();
+      }
+    });
+  });
+}
+
+$('type-pill-list').addEventListener('click', (e) => {
+  if (e.target.closest('[data-remove]')) return;
+  $('type-dropdown').classList.toggle('open');
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.type-filter')) $('type-dropdown').classList.remove('open');
+});
+
+// ── Priority keywords ─────────────────────────────────────
+function renderPriorityKeywords() {
+  const all = filters.priorityKeywords || [];
+  const badge = $('priority-kw-total-badge');
+  if (all.length > 0) {
+    badge.textContent = `${all.length} keyword${all.length === 1 ? '' : 's'}`;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  $('priority-keyword-list').innerHTML = all.map((kw, i) => {
+    const count = countPriorityMatches(kw);
+    const badgeClass = count > 0 ? 'kw-count has-match' : 'kw-count';
+    return `
+    <div class="criterion">
+      <label title="Boost keyword: ${esc(kw)}">${esc(kw)}</label>
+      <span class="${badgeClass}" title="${count} project${count === 1 ? '' : 's'} boosted by this keyword">${count}</span>
+      <button class="criterion-remove" data-i="${i}" title="Remove keyword">×</button>
+    </div>`;
+  }).join('');
+
+  $('priority-keyword-list').querySelectorAll('.criterion-remove').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const prev = JSON.parse(JSON.stringify(filters));
+      filters.priorityKeywords = filters.priorityKeywords.filter((_, i) => i !== Number(btn.dataset.i));
+      if (await saveFiltersGuarded(prev)) {
+        applyPrioritySort();
+        renderPriorityKeywords();
+        renderProjects();
+      }
+    });
+  });
+}
+
+function countPriorityMatches(keyword) {
+  const kw = keyword.toLowerCase();
+  return allProjects.filter(p => {
+    const t = getTitle(p).toLowerCase();
+    const d = getDesc(p).toLowerCase();
+    return t.includes(kw) || d.includes(kw);
+  }).length;
+}
+
+$('priority-keyword-add-btn').addEventListener('click', () => {
+  $('priority-keyword-add-row').style.display = 'flex';
+  $('priority-keyword-add-btn').style.display = 'none';
+  $('priority-keyword-input').focus();
+});
+
+$('priority-keyword-confirm').addEventListener('click', addPriorityKeyword);
+$('priority-keyword-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addPriorityKeyword();
+  if (e.key === 'Escape') cancelPriorityKeyword();
+});
+
+async function addPriorityKeyword() {
+  const val = $('priority-keyword-input').value.trim();
+  if (val) {
+    const prev = JSON.parse(JSON.stringify(filters));
+    filters.priorityKeywords = [...(filters.priorityKeywords || []), val];
+    if (await saveFiltersGuarded(prev)) {
+      applyPrioritySort();
+      renderPriorityKeywords();
+      renderProjects();
+    }
+  }
+  cancelPriorityKeyword();
+}
+
+function cancelPriorityKeyword() {
+  $('priority-keyword-input').value = '';
+  $('priority-keyword-add-row').style.display = 'none';
+  $('priority-keyword-add-btn').style.display = '';
+}
+
+// ── Keywords ──────────────────────────────────────────────
+const KEYWORD_PREVIEW = 3;
+let keywordsExpanded = false;
+
+function countKeywordMatches(keyword) {
+  const kw = keyword.toLowerCase();
+  return allProjects.filter(p => {
+    const t = getTitle(p).toLowerCase();
+    const d = getDesc(p).toLowerCase();
+    return t.includes(kw) || d.includes(kw);
+  }).length;
+}
+
+function renderKeywords() {
+  const all = filters.keywords;
+  const overflow = all.length - KEYWORD_PREVIEW;
+  const showAll = keywordsExpanded || overflow <= 0;
+  const visible = showAll ? all : all.slice(-KEYWORD_PREVIEW);
+
+  // Header badge: show total when list is truncated
+  const badge = $('keyword-total-badge');
+  if (overflow > 0) {
+    badge.textContent = `${all.length} total`;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  const offset = showAll ? 0 : Math.max(0, all.length - KEYWORD_PREVIEW);
+  const rows = visible.map((kw, i) => {
+    const realIdx = offset + i;
+    const count = countKeywordMatches(kw);
+    const badgeClass = count > 0 ? 'kw-count has-match' : 'kw-count';
+    const countBadge = `<span class="${badgeClass}" title="${count} currently-loaded project${count === 1 ? '' : 's'} match this keyword">${count}</span>`;
+    return `
+    <div class="criterion">
+      <label title="Keyword: ${esc(kw)}">${esc(kw)}</label>
+      ${countBadge}
+      <button class="criterion-remove" data-i="${realIdx}" title="Remove keyword">×</button>
+    </div>`;
+  }).join('');
+
+  const toggleBtn = overflow > 0 ? `
+    <button class="kw-toggle ${showAll ? 'expanded' : ''}" id="kw-toggle-btn">
+      ${showAll
+        ? `<span class="arrow">▾</span> Show fewer`
+        : `<span class="arrow">▾</span> Show ${overflow} more…`}
+    </button>` : '';
+
+  $('keyword-list').innerHTML = rows + toggleBtn;
+
+  $('keyword-list').querySelectorAll('.criterion-remove').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const prev = JSON.parse(JSON.stringify(filters));
+      // Map visible index back to real index (always safe since visible = all when fully shown,
+      // or first KEYWORD_PREVIEW entries otherwise — but we use data-i as the real index)
+      filters.keywords = filters.keywords.filter((_, i) => i !== Number(btn.dataset.i));
+      // Auto-collapse if list drops at or below threshold
+      if (filters.keywords.length <= KEYWORD_PREVIEW) keywordsExpanded = false;
+      if (await saveFiltersGuarded(prev)) {
+        renderKeywords();
+        renderProjects();
+      }
+    });
+  });
+
+  const toggleEl = $('kw-toggle-btn');
+  if (toggleEl) {
+    toggleEl.addEventListener('click', () => {
+      keywordsExpanded = !keywordsExpanded;
+      renderKeywords();
+    });
+  }
+}
+
+$('keyword-add-btn').addEventListener('click', () => {
+  $('keyword-add-row').style.display = 'flex';
+  $('keyword-add-btn').style.display = 'none';
+  $('keyword-input').focus();
+});
+
+$('keyword-confirm').addEventListener('click', addKeyword);
+$('keyword-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addKeyword();
+  if (e.key === 'Escape') cancelKeyword();
+});
+
+async function addKeyword() {
+  const val = $('keyword-input').value.trim();
+  if (val) {
+    const prev = JSON.parse(JSON.stringify(filters));
+    filters.keywords = [...filters.keywords, val];
+    // Expand so the user can see the keyword they just added
+    if (filters.keywords.length > KEYWORD_PREVIEW) keywordsExpanded = true;
+    if (await saveFiltersGuarded(prev)) {
+      renderKeywords();
+      renderProjects();
+    }
+  }
+  cancelKeyword();
+}
+
+function cancelKeyword() {
+  $('keyword-input').value = '';
+  $('keyword-add-row').style.display = 'none';
+  $('keyword-add-btn').style.display = '';
+}
+
+// ── Numeric filters ──────────────────────────────────────
+function bindNumeric(id, key, rerender = true) {
+  const el = $(id);
+  el.value = filters[key];
+  el.addEventListener('change', async () => {
+    const prev = JSON.parse(JSON.stringify(filters));
+    filters[key] = Number(el.value);
+    if (await saveFiltersGuarded(prev) && rerender) renderProjects();
+  });
+}
+
+// ── Sort ──────────────────────────────────────────────────
+const CLIENT_SORTS = new Set(['totalQuestions', 'dollarPerQuestion']);
+
+$('sort-select').addEventListener('change', async (e) => {
+  const prev = JSON.parse(JSON.stringify(filters));
+  filters.sort = e.target.value;
+  if (await saveFiltersGuarded(prev)) {
+    if (CLIENT_SORTS.has(filters.sort)) {
+      // No need to re-fetch; just re-sort in place and re-render
+      applyClientSort();
+      applyPrioritySort();
+      renderProjects();
+    } else {
+      reloadProjects();
+    }
+  }
+});
+
+// ── Auto-hide controls ────────────────────────────────────
+async function saveAutoHide(extra = {}) {
+  await api('/api/config/auto-hide', {
+    method: 'POST',
+    body: { enabled: autoHide.enabled, schedule: autoHide.schedule, maxPerRun: autoHide.maxPerRun, ...extra },
+  });
+  $('auto-indicator').style.display = autoHide.enabled ? 'inline-flex' : 'none';
+}
+
+// Build a cron expression from N + unit (s/m/h).
+function buildCustomCron(n, unit) {
+  const num = Math.max(1, Math.min(3600, Number(n) || 1));
+  if (unit === 's') return `*/${num} * * * * *`;
+  if (unit === 'h') return `0 */${num} * * *`;
+  return `*/${num} * * * *`; // minutes
+}
+
+$('auto-hide-max-per-run').addEventListener('change', async (e) => {
+  const n = Math.max(1, Math.min(20, Math.floor(Number(e.target.value)) || 1));
+  e.target.value = n;
+  autoHide.maxPerRun = n;
+  await saveAutoHide();
+});
+
+$('auto-hide-custom-apply').addEventListener('click', async () => {
+  const n = $('auto-hide-custom-n').value;
+  const unit = $('auto-hide-custom-unit').value;
+  const expr = buildCustomCron(n, unit);
+  autoHide.schedule = 'custom';
+  autoHide.customCron = expr;
+  const { status, body } = await api('/api/config/auto-hide', {
+    method: 'POST',
+    body: { enabled: autoHide.enabled, schedule: 'custom', customCron: expr },
+  });
+  if (status >= 400) {
+    $('auto-hide-custom-info').innerHTML = `<span style="color:var(--danger)">❌ ${esc(body.detail || body.error)}</span>`;
+    return;
+  }
+  await loadConfig();
+  renderAutoHide();
+});
+
+$('auto-hide-toggle').addEventListener('click', async () => {
+  autoHide.enabled = !autoHide.enabled;
+  renderAutoHide();
+  await saveAutoHide();
+  await loadConfig();
+  renderAutoHide();
+});
+
+$('auto-hide-schedule').addEventListener('change', async (e) => {
+  autoHide.schedule = e.target.value;
+  await saveAutoHide();
+  await loadConfig();
+  renderAutoHide();
+});
+
+// "Apply filters now" — direct commit, no confirm.
+$('apply-filters-btn').addEventListener('click', async () => {
+  const btn = $('apply-filters-btn');
+  const status = $('apply-status');
+
+  btn.disabled = true;
+  btn.textContent = 'Hiding…';
+  status.style.display = 'block';
+  status.innerHTML = 'Scanning and hiding matches…';
+
+  const { body } = await api('/api/auto-hide/run', { method: 'POST' });
+
+  btn.disabled = false;
+  btn.textContent = '▶ Apply filters now';
+
+  if (body.error === 'already_running') {
+    status.innerHTML = '⏳ A run was already in progress.';
+    return;
+  }
+  if (!body.ok) {
+    status.innerHTML = `❌ ${esc(body.error || 'failed')}`;
+    return;
+  }
+
+  if (body.matched === 0) {
+    status.innerHTML = `✓ Scanned ${body.scanned} — nothing matched.`;
+  } else {
+    status.innerHTML = `✓ Hidden ${body.hidden} of ${body.matched} match${body.matched === 1 ? '' : 'es'}${body.errors ? ` (${body.errors} errors)` : ''}${body.skipped ? ` — ${body.skipped} skipped over per-run cap` : ''}.`;
+  }
+
+  await loadConfig();
+  renderAutoHide();
+  renderHeader();
+  reloadProjects();
+});
+
+function renderAutoHide() {
+  $('auto-hide-toggle').classList.toggle('on', autoHide.enabled);
+  $('auto-hide-options').style.display = autoHide.enabled ? 'block' : 'none';
+  $('auto-hide-schedule').value = autoHide.schedule || 'hourly';
+  $('auto-hide-max-per-run').value = autoHide.maxPerRun ?? 200;
+  $('auto-indicator').style.display = autoHide.enabled ? 'inline-flex' : 'none';
+
+  const isCustom = autoHide.schedule === 'custom';
+  $('auto-hide-custom-row').style.display = isCustom ? 'block' : 'none';
+  if (isCustom && autoHide.customCron) {
+    $('auto-hide-custom-info').innerHTML = `Cron: <code style="color:var(--accent)">${esc(autoHide.customCron)}</code>`;
+  } else if (isCustom) {
+    $('auto-hide-custom-info').textContent = 'Set N + unit and click Apply.';
+  }
+
+  const last = autoHide.lastRunResult;
+  const at   = autoHide.lastRunAt;
+  const next = nextRuns.autoHide;
+
+  const lines = [];
+  if (last && at) {
+    lines.push(last.error
+      ? `❌ Last: ${new Date(at).toLocaleString()} — ${esc(last.error)}`
+      : `✓ Last: ${new Date(at).toLocaleString()} — scanned ${last.scanned} • hid ${last.hidden}${last.errors ? ` • ${last.errors} errors` : ''}`);
+  } else {
+    lines.push('No runs yet.');
+  }
+  if (next) {
+    lines.push(`Next: ${new Date(next).toLocaleString()} (${fmtRelative(next)})`);
+  }
+  $('auto-hide-status').innerHTML = lines.join('<br>');
+}
+
+// ── Keep-alive controls ───────────────────────────────────
+async function saveKeepAlive() {
+  await api('/api/config/keep-alive', { method: 'POST', body: { enabled: keepAlive.enabled, schedule: keepAlive.schedule } });
+}
+
+$('keep-alive-toggle').addEventListener('click', async () => {
+  keepAlive.enabled = !keepAlive.enabled;
+  renderKeepAlive();
+  await saveKeepAlive();
+  await loadConfig();        // pick up fresh nextRuns
+  renderKeepAlive();
+});
+
+$('keep-alive-schedule').addEventListener('change', async (e) => {
+  keepAlive.schedule = e.target.value;
+  await saveKeepAlive();
+  await loadConfig();
+  renderKeepAlive();
+});
+
+function fmtRelative(iso) {
+  if (!iso) return '';
+  const diff = new Date(iso) - new Date();
+  if (diff <= 0) return 'momentarily';
+  const m = Math.round(diff / 60000);
+  if (m < 60) return `in ${m} min`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `in ${h}h ${rem}m` : `in ${h}h`;
+}
+
+function renderKeepAlive() {
+  $('keep-alive-toggle').classList.toggle('on', keepAlive.enabled);
+  $('keep-alive-options').style.display = keepAlive.enabled ? 'block' : 'none';
+  $('keep-alive-schedule').value = keepAlive.schedule || 'hourly';
+
+  const last = keepAlive.lastRunResult;
+  const at = keepAlive.lastRunAt;
+  const next = nextRuns.keepAlive;
+
+  const parts = [];
+  if (last && at) {
+    parts.push(last.error
+      ? `❌ Last: ${new Date(at).toLocaleTimeString()} — ${esc(last.error)}`
+      : `✓ Last: ${new Date(at).toLocaleTimeString()} (status ${last.status})`);
+  } else {
+    parts.push('No runs yet.');
+  }
+  if (next) {
+    parts.push(`Next: ${new Date(next).toLocaleTimeString()} (${fmtRelative(next)})`);
+  }
+  $('keep-alive-status').innerHTML = parts.join('<br>');
+}
+
+// ── Apply state to UI ─────────────────────────────────────
+function applyFiltersToUI() {
+  $('min-hourly-rate').value = filters.minHourlyRate;
+  $('min-incentive').value = filters.minIncentive;
+  $('max-duration').value = filters.maxDuration;
+  $('min-duration').value = filters.minDuration;
+  $('sort-select').value = filters.sort;
+  renderPriorityKeywords();
+  renderKeywords();
+  renderTypeFilter();
+}
+
+// ── Cookie modal ──────────────────────────────────────────
+function showCookieModal(msg) {
+  $('cookie-modal-title').textContent = msg ? 'Session expired' : 'Update session cookie';
+  $('cookie-modal-desc').textContent = msg || 'Paste a fresh cookie value to update the session.';
+  $('cookie-modal-error').classList.remove('show');
+  $('cookie-input').value = '';
+  $('cookie-modal').classList.add('open');
+  setTimeout(() => $('cookie-input').focus(), 100);
+}
+
+function hideCookieModal() { $('cookie-modal').classList.remove('open'); }
+
+$('cookie-btn').addEventListener('click', () => showCookieModal());
+$('cookie-cancel').addEventListener('click', hideCookieModal);
+
+$('cookie-save').addEventListener('click', async () => {
+  const cookie = $('cookie-input').value.trim();
+  if (!cookie) {
+    $('cookie-modal-error').textContent = 'Cookie cannot be empty.';
+    $('cookie-modal-error').classList.add('show');
+    return;
+  }
+  $('cookie-save').disabled = true;
+  $('cookie-save').textContent = 'Saving…';
+  const { status } = await api('/api/config/cookie', { method: 'POST', body: { cookie } });
+  if (status >= 200 && status < 300) {
+    hasCookie = true;
+    hideCookieModal();
+    reloadProjects();
+  } else {
+    $('cookie-modal-error').textContent = 'Failed to save cookie. Try again.';
+    $('cookie-modal-error').classList.add('show');
+  }
+  $('cookie-save').disabled = false;
+  $('cookie-save').textContent = 'Save & reload';
+});
+
+// ── Debug modal ───────────────────────────────────────────
+$('debug-btn').addEventListener('click', refreshDebug);
+$('debug-refresh').addEventListener('click', refreshDebug);
+$('debug-close').addEventListener('click', () => $('debug-modal').classList.remove('open'));
+
+async function refreshDebug() {
+  $('debug-modal').classList.add('open');
+  $('debug-content').textContent = 'Loading…';
+  const { body } = await api('/api/debug');
+  $('debug-content').textContent = JSON.stringify(body, null, 2);
+}
+
+// ── Load projects ─────────────────────────────────────────
+async function reloadProjects() {
+  if (!hasCookie) { showCookieModal('No cookie set yet. Paste your Respondent.io session cookie:'); return; }
+
+  $('status-bar').textContent = 'Loading projects…';
+  $('reload-btn').disabled = true;
+  $('projects-list').innerHTML = '<div class="state-msg"><div class="spinner"></div><br>Loading projects…</div>';
+
+  const { status, body } = await api('/api/projects');
+  $('reload-btn').disabled = false;
+
+  if (status === 401 || body.error === 'session_expired' || body.error === 'no_cookie') {
+    showCookieModal('Session expired — your cookie needs to be refreshed.');
+    $('status-bar').textContent = 'Session expired';
+    return;
+  }
+
+  if (body.error === 'no_profile_id') {
+    $('projects-list').innerHTML = `<div class="error-msg">
+      Couldn't determine your profile ID automatically.
+      <br><br><small>Open the Debug panel for details.</small>
+    </div>`;
+    $('status-bar').textContent = 'No profile ID';
+    return;
+  }
+
+  if (status >= 400 || body.error) {
+    $('projects-list').innerHTML = `<div class="error-msg">
+      Failed to load projects: ${esc(body.error || status)}
+      <br><br><small>Open the Debug panel for details.</small>
+    </div>`;
+    $('status-bar').textContent = 'Error';
+    return;
+  }
+
+  enrichAbortFlag++; // cancel any in-progress enrichment from a previous load
+  allProjects = body.projects || [];
+  applyClientSort();
+  applyPrioritySort();
+
+  // Refresh profileId in case it was just discovered
+  if (!profileId) await loadConfig();
+
+  $('status-bar').textContent = `Loaded ${allProjects.length} projects`;
+  $('page-info').textContent = body.pages ? `${body.pages} page${body.pages > 1 ? 's' : ''}` : '';
+  renderProjects();
+
+  // Background: fetch screenerQuestionsLength for visible (non-filtered) projects
+  enrichVisibleProjects();
+}
+
+$('reload-btn').addEventListener('click', reloadProjects);
+
+// ── Project detail enrichment (screenerQuestionsLength) ───
+const DETAIL_CONCURRENCY = 4;
+let enrichAbortFlag = 0; // increment to cancel an in-progress enrichment run
+
+async function enrichVisibleProjects() {
+  const myRun = ++enrichAbortFlag; // each reload gets its own run id
+
+  const toFetch = allProjects.filter(p => !p._detailFetched && !isHidden(p).hidden);
+  if (toFetch.length === 0) return;
+
+  for (let i = 0; i < toFetch.length; i += DETAIL_CONCURRENCY) {
+    if (enrichAbortFlag !== myRun) return;
+    const batch = toFetch.slice(i, i + DETAIL_CONCURRENCY);
+    await Promise.all(batch.map(async (p) => {
+      const id = getId(p);
+      try {
+        const { status, body } = await api(`/api/projects/${id}/detail`);
+        if (status === 401) { enrichAbortFlag = myRun - 1; return; }
+        if (status === 200) {
+          // Response shape: { success, statusCode, response: { screenerQuestionsLength, ... } }
+          p.screenerQuestionsLength = body?.response?.screenerQuestionsLength ?? null;
+        }
+      } catch (err) { /* network error — skip this project */ }
+      p._detailFetched = true;
+      patchCardQuestions(id, p);
+    }));
+  }
+}
+
+function patchCardQuestions(id, p) {
+  const span = document.querySelector(`[data-qid="${id}"]`);
+  if (!span) return;
+  const q   = getQuestionCount(p);
+  const dpq = getDollarPerQuestion(p);
+  if (!q) { span.style.display = 'none'; return; }
+  const ratio = dpq ? ` ($${dpq % 1 === 0 ? dpq : dpq.toFixed(2)}/q)` : '';
+  span.textContent = `❓ ${q}q${ratio}`;
+  span.title = `${q} question${q === 1 ? '' : 's'}${dpq ? ` · $${dpq.toFixed(2)} per question` : ''}`;
+  span.style.display = '';
+}
+
+// ── Apply button: open referral link + prompt ─────────────
+function openAndPromptApply(id, link) {
+  if (link) window.open(link, '_blank', 'noopener,noreferrer');
+  const prompt = document.getElementById(`apply-prompt-${id}`);
+  if (prompt) {
+    prompt.style.display = 'flex';
+    // Scroll the card into view so the prompt is visible
+    prompt.closest('.project-card')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+// ── Hide-by-id (reusable for × button + Ctrl+D) ──────────
+async function hideProjectById(id, btn, { applied = false } = {}) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const { status, body } = await api(`/api/projects/${id}/hide`, { method: 'POST', body: { applied } });
+  if (body.ok) {
+    if (typeof body.totalHidden === 'number') totalHidden = body.totalHidden;
+    if (typeof body.totalApplied === 'number') totalApplied = body.totalApplied;
+    renderHeader();
+    allProjects = allProjects.filter(p => getId(p) !== id);
+    renderProjects();
+    return true;
+  }
+  if (status === 401) {
+    showCookieModal('Session expired — your cookie needs to be refreshed.');
+    return false;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '×'; }
+  console.error('Hide failed:', body);
+  return false;
+}
+
+// ── Keyboard nav (↑ / ↓ / Ctrl+D) ────────────────────────
+document.addEventListener('keydown', async (e) => {
+  // Don't intercept when typing in inputs/textareas
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  // Don't intercept while a modal is open
+  if (document.querySelector('.modal-backdrop.open')) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (allProjects.length === 0) return;
+    selectedIndex = Math.min(allProjects.length - 1, Math.max(0, selectedIndex) + 1);
+    updateSelectionDom();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (allProjects.length === 0) return;
+    selectedIndex = Math.max(0, (selectedIndex < 0 ? 1 : selectedIndex) - 1);
+    updateSelectionDom();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (selectedIndex < 0 || selectedIndex >= allProjects.length) return;
+    const p = allProjects[selectedIndex];
+    const id = getId(p);
+    const link = getReferralLink(p);
+    if (!id) return;
+    openAndPromptApply(id, link);
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+    e.preventDefault();
+    if (selectedIndex < 0 || selectedIndex >= allProjects.length) return;
+    const p = allProjects[selectedIndex];
+    const id = getId(p);
+    if (!id) return;
+    // Selection stays at the same index after the card is removed (next card slots in)
+    await hideProjectById(id, null);
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────
+(async () => {
+  await loadConfig();
+  applyFiltersToUI();
+  bindNumeric('min-hourly-rate', 'minHourlyRate');
+  bindNumeric('min-incentive', 'minIncentive');
+  bindNumeric('max-duration', 'maxDuration');
+  bindNumeric('min-duration', 'minDuration');
+  renderAutoHide();
+  renderKeepAlive();
+
+  if (!hasCookie) {
+    showCookieModal('No cookie set yet. Paste your Respondent.io session cookie to begin:');
+    $('status-bar').textContent = 'Awaiting cookie';
+    $('projects-list').innerHTML = '<div class="state-msg">Set your session cookie to load projects.</div>';
+    return;
+  }
+  reloadProjects();
+})();
+</script>
+
+</body>
+</html>
