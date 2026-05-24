@@ -17,6 +17,7 @@ import { whyHide } from './lib/filter.js';
 import { getProjectId, getTitle } from './lib/project-fields.js';
 import { pickProfileId } from './lib/profile.js';
 import { applyMigrations, VALID_SORTS } from './lib/migrations.js';
+import { loadAnswers, appendSession } from './lib/answers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -473,6 +474,67 @@ app.post('/api/auto-hide/run', async (req, res) => {
 app.post('/api/keep-alive/run', async (req, res) => {
   const result = await runKeepAlive();
   res.status(result.ok ? 200 : 500).json(result);
+});
+
+// ── Screener endpoints ────────────────────────────────────
+
+// Fetch screener questions for a project
+app.get('/api/projects/:id/screener', async (req, res) => {
+  if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
+  const { id } = req.params;
+  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(id)) return res.status(400).json({ error: 'invalid_id' });
+  try {
+    const { res: upRes, isJson } = await respondentFetch(`/next/v4/participant/projects/${id}/screener`);
+    if (upRes.status === 401) return res.status(401).json({ error: 'session_expired' });
+    if (upRes.status === 404) return res.status(404).json({ error: 'not_found' });
+    if (!isJson) return res.status(502).json({ error: 'unexpected_response' });
+    const body = await upRes.json();
+    res.json(body);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// Submit screener answers to Respondent on the user's behalf.
+// Endpoint: POST /next/v4/participant/projects/{id}/screener-responses
+// Body shape: { responses: [{ questionId, questionText, order, type, questionType, answers }], totalTime }
+//   type mapping: 1→"radio", 2→"textarea", 3→"checkbox", 4→"text"
+//   answers:      types 1 & 4 → string; type 2 → string; type 3 → string[]
+app.post('/api/projects/:id/screener/submit', async (req, res) => {
+  if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
+  const { id } = req.params;
+  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(id)) return res.status(400).json({ error: 'invalid_id' });
+  const { responses, totalTime } = req.body ?? {};
+  if (!Array.isArray(responses) || responses.length === 0) {
+    return res.status(400).json({ error: 'responses[] required' });
+  }
+  try {
+    const { res: upRes, isJson } = await respondentFetch(
+      `/next/v4/participant/projects/${id}/screener-responses`,
+      { method: 'POST', body: { responses, totalTime } },
+    );
+    if (upRes.status === 401) return res.status(401).json({ error: 'session_expired' });
+    const body = isJson ? await upRes.json() : {};
+    debug('screener_submit', { id, status: upRes.status, questions: responses.length });
+    res.status(upRes.status).json({ ...body, ok: upRes.ok });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// Get stored screener answer history
+app.get('/api/screener-answers', (req, res) => {
+  res.json(loadAnswers());
+});
+
+// Append a completed screener session to local history
+app.post('/api/screener-answers', (req, res) => {
+  const { projectId, projectName, answers } = req.body ?? {};
+  if (!projectId || !Array.isArray(answers)) {
+    return res.status(400).json({ error: 'projectId and answers[] required' });
+  }
+  const updated = appendSession({ projectId, projectName: projectName || '', answers });
+  res.json({ ok: true, total: updated.length });
 });
 
 // Raw upstream probe — lets you inspect what Respondent actually returns for any path.

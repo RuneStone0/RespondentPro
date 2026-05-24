@@ -3,5 +3,5 @@ coverage/
 .env
 .env.local
 
-# Runtime data — contains live session cookie, never commit
+# Runtime data — contains live session cookie and personal answers, never commit
 data/
