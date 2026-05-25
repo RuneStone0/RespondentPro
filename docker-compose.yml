@@ -1,0 +1,15 @@
+services:
+  respondentpro:
+    build: .
+    image: respondentpro
+    container_name: respondentpro
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - respondentpro-data:/app/data
+    environment:
+      - NODE_ENV=production
+
+volumes:
+  respondentpro-data:
