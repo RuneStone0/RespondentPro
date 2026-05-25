@@ -5,3 +5,5 @@ coverage/
 
 # Runtime data — contains live session cookie and personal answers, never commit
 data/
+
+.DS_Store
