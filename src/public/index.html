@@ -665,6 +665,27 @@
     }
     .modal-error.show { display: block; }
 
+    /* Daily screener limit banner */
+    #screener-limit-banner {
+      display: none;
+      background: #2d1f00;
+      border-bottom: 1px solid #a16207;
+      color: #fde68a;
+      padding: 10px 20px;
+      font-size: 13px;
+      align-items: center;
+      gap: 10px;
+      z-index: 40;
+    }
+    #screener-limit-banner.show { display: flex; }
+    #screener-limit-banner strong { color: #fbbf24; }
+    #screener-limit-banner .limit-reset {
+      margin-left: auto;
+      font-size: 12px;
+      color: #d97706;
+      white-space: nowrap;
+    }
+
     /* Toast notification */
     #toast {
       position: fixed;
@@ -960,6 +981,11 @@
   <button class="header-btn" id="reload-btn">↻ Reload</button>
   <button class="header-btn" id="cookie-btn">🔑 Cookie</button>
 </header>
+
+<div id="screener-limit-banner">
+  <span>⚠️ <strong>Daily application limit reached</strong> — <span id="screener-limit-used"></span></span>
+  <span class="limit-reset" id="screener-limit-reset"></span>
+</div>
 
 <div class="layout">
 
@@ -1366,6 +1392,7 @@ let keepAlive = { enabled: false, schedule: 'hourly', lastRunAt: null, lastRunRe
 let allProjects = [];
 let profileId = '';
 let hasCookie = false;
+let screenerCycle = null; // { screenerCount, limit, cycleExpiryDate } — daily app limit
 let scheduleOptions = [];   // populated from /api/config
 let nextRuns = { keepAlive: null, autoHide: null };
 let totalHidden = 0;
@@ -1459,6 +1486,34 @@ async function loadConfig() {
 function renderHeader() {
   $('hidden-counter').textContent = `🗑 ${totalHidden} hidden`;
   $('applied-counter').textContent = `✓ ${totalApplied} applied`;
+}
+
+function renderScreenerCycleBanner() {
+  const banner = $('screener-limit-banner');
+  if (!screenerCycle) { banner.classList.remove('show'); return; }
+
+  const { screenerCount, limit, cycleExpiryDate } = screenerCycle;
+  if (screenerCount < limit) { banner.classList.remove('show'); return; }
+
+  const expiry = new Date(cycleExpiryDate);
+  const now = new Date();
+  const msLeft = expiry - now;
+
+  let resetMsg;
+  if (msLeft <= 0) {
+    resetMsg = 'Limit may have reset — reload to check.';
+  } else {
+    const hLeft = Math.floor(msLeft / 3_600_000);
+    const mLeft = Math.floor((msLeft % 3_600_000) / 60_000);
+    const timeStr = expiry.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    resetMsg = hLeft > 0
+      ? `Resets in ${hLeft}h ${mLeft}m (at ${timeStr})`
+      : `Resets in ${mLeft}m (at ${timeStr})`;
+  }
+
+  $('screener-limit-used').textContent = `${screenerCount} of ${limit} applications used today.`;
+  $('screener-limit-reset').textContent = resetMsg;
+  banner.classList.add('show');
 }
 
 // ── Field extraction (matches Respondent.io API shape) ───
@@ -2721,10 +2776,17 @@ async function enrichVisibleProjects() {
         const { status, body } = await api(`/api/projects/${id}/detail`);
         if (status === 401) { enrichAbortFlag = myRun - 1; return; }
         if (status === 200) {
-          // Response shape: { success, statusCode, response: { screenerQuestionsLength, ... } }
+          // Response shape: { success, statusCode, response: { screenerQuestionsLength, screenerCycle, ... } }
           const qLen = body?.response?.screenerQuestionsLength ?? null;
           p.screenerQuestionsLength = qLen;
           detailCacheSet(id, qLen); // persist for future page loads
+
+          // screenerCycle is an account-level daily limit — grab it from any detail response
+          const cycle = body?.response?.screenerCycle;
+          if (cycle && typeof cycle.limit === 'number') {
+            screenerCycle = cycle;
+            renderScreenerCycleBanner();
+          }
         }
       } catch (err) { /* network error — skip this project */ }
       p._detailFetched = true;
@@ -3074,6 +3136,8 @@ async function pollAutoHideSync() {
 
 function startAutoHidePoller() {
   setInterval(pollAutoHideSync, 20_000);
+  // Refresh the screener-cycle countdown text every minute
+  setInterval(renderScreenerCycleBanner, 60_000);
 }
 </script>
 
