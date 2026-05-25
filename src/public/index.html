@@ -2671,6 +2671,8 @@ async function reloadProjects() {
 
   // Background: fetch screenerQuestionsLength for visible (non-filtered) projects
   enrichVisibleProjects();
+  // Always fetch screenerCycle fresh — it changes throughout the day and isn't cached
+  checkScreenerCycle();
 }
 
 $('reload-btn').addEventListener('click', reloadProjects);
@@ -2796,6 +2798,21 @@ async function enrichVisibleProjects() {
 
   // All detail data fetched — push question counts to server for auto-hide filtering
   if (enrichAbortFlag === myRun) syncQuestionCountsToServer();
+}
+
+// Fetch screenerCycle from the first available project detail — account-level
+// daily limit that changes throughout the day, so always fetched fresh.
+async function checkScreenerCycle() {
+  const p = allProjects.find(proj => !isHidden(proj).hidden);
+  if (!p) return;
+  const { status, body } = await api(`/api/projects/${getId(p)}/detail`);
+  if (status === 200) {
+    const cycle = body?.response?.screenerCycle;
+    if (cycle && typeof cycle.limit === 'number') {
+      screenerCycle = cycle;
+      renderScreenerCycleBanner();
+    }
+  }
 }
 
 // Push all locally-known question counts to the server so auto-hide can apply
