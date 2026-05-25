@@ -32,6 +32,7 @@ if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 // ── Config ────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
   cookie: process.env.RESPONDENT_COOKIE || '',
+  claudeApiKey: process.env.ANTHROPIC_API_KEY || '',
   profileId: '',
   filters: {
     keywords: [],
@@ -40,6 +41,7 @@ const DEFAULT_CONFIG = {
     minIncentive: 0,
     minDuration: 0,
     maxDuration: 120,
+    maxQuestions: 0,
     kindsOfResearchStudy: [],
     sort: 'publishedAt',
     showEligible: true,
@@ -177,6 +179,7 @@ async function fetchAllProjects({ pageSize = 500, maxPages = 10, useFilters = tr
       { query: params.toString() },
     );
     if (!isJson) throw new Error('session_expired');
+    if (res.status === 401 || res.status === 403) throw new Error('session_expired');
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
       throw new Error(errBody.errorDetails || `http_${res.status}`);
@@ -224,28 +227,30 @@ const HIDE_MAX_PER_RUN = 200;
 let autoHideInFlight = false;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-async function runAutoHide({ dryRun = false } = {}) {
+async function runAutoHide({ dryRun = false, limitOverride = null } = {}) {
   if (autoHideInFlight) {
     debug('auto_hide_skipped_in_flight');
     return { ok: false, error: 'already_running' };
   }
   autoHideInFlight = true;
 
-  debug('auto_hide_start', { dryRun });
+  debug('auto_hide_start', { dryRun, limitOverride });
   try {
     const { projects } = await fetchAllProjects({ useFilters: false });
 
-    const matches = projects.map(p => ({
-      id: getProjectId(p),
-      title: getTitle(p),
-      reason: whyHide(p, config.filters),
-    })).filter(m => m.reason && m.id);
+    const matches = projects.map(p => {
+      const enriched = supplementQuestionCount(p);
+      return { id: getProjectId(enriched), title: getTitle(enriched), reason: whyHide(enriched, config.filters) };
+    }).filter(m => m.reason && m.id);
 
     debug('auto_hide_matches', { total: projects.length, toHide: matches.length, dryRun });
 
     if (dryRun) return { ok: true, dryRun: true, scanned: projects.length, matches };
 
-    const cap = Math.max(1, Math.min(500, Number(config.autoHide.maxPerRun) || HIDE_MAX_PER_RUN));
+    // limitOverride lets manual "Apply now" runs bypass the per-cron-run cap.
+    const cap = limitOverride !== null && limitOverride !== undefined
+      ? Math.max(1, Math.min(500, limitOverride))
+      : Math.max(1, Math.min(500, Number(config.autoHide.maxPerRun) || HIDE_MAX_PER_RUN));
     const toProcess = matches.slice(0, cap);
     const skipped = matches.length - toProcess.length;
 
@@ -329,10 +334,11 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(join(__dirname, 'public')));
 
 app.get('/api/config', (req, res) => {
-  const { cookie, ...safe } = config;
+  const { cookie, claudeApiKey, ...safe } = config;
   res.json({
     ...safe,
     hasCookie: Boolean(cookie),
+    hasClaudeKey: Boolean(claudeApiKey),
     schedules: SCHEDULE_OPTIONS,
     cookieName: COOKIE_NAME,
     nextRuns: {
@@ -465,9 +471,53 @@ app.post('/api/projects/:id/hide', async (req, res) => {
   res.status(result.status || 502).json(result);
 });
 
+// In-memory store of {projectId → screenerQuestionsLength} pushed by the client.
+// The listing API doesn't return question counts; the client fetches them via the
+// detail endpoint and caches them locally. This endpoint lets the client share that
+// knowledge so server-side auto-hide can apply the maxQuestions filter correctly.
+const questionCountStore = new Map();
+
+app.post('/api/projects/question-counts', (req, res) => {
+  const { counts } = req.body ?? {};
+  if (!counts || typeof counts !== 'object' || Array.isArray(counts)) {
+    return res.status(400).json({ error: 'counts object required' });
+  }
+  for (const [id, count] of Object.entries(counts)) {
+    if (/^[a-zA-Z0-9_-]{8,64}$/.test(id) && typeof count === 'number' && count >= 0) {
+      questionCountStore.set(id, count);
+    }
+  }
+  res.json({ ok: true, stored: questionCountStore.size });
+});
+
+function supplementQuestionCount(p) {
+  const id = getProjectId(p);
+  if (id && questionCountStore.has(id)) {
+    return { ...p, screenerQuestionsLength: questionCountStore.get(id) };
+  }
+  return p;
+}
+
+app.get('/api/auto-hide/pending', async (req, res) => {
+  if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
+  try {
+    const { projects } = await fetchAllProjects({ useFilters: false });
+    const matches = projects
+      .map(p => ({ id: getProjectId(supplementQuestionCount(p)), title: getTitle(p), reason: whyHide(supplementQuestionCount(p), config.filters) }))
+      .filter(m => m.reason && m.id);
+    res.json({ ok: true, pending: matches.length, scanned: projects.length });
+  } catch (err) {
+    if (err.message === 'no_cookie' || err.message === 'session_expired') {
+      return res.status(401).json({ error: err.message });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/auto-hide/run', async (req, res) => {
   const dryRun = req.body?.dryRun === true;
-  const result = await runAutoHide({ dryRun });
+  const limitOverride = typeof req.body?.limitOverride === 'number' ? req.body.limitOverride : null;
+  const result = await runAutoHide({ dryRun, limitOverride });
   res.status(result.ok || result.error === 'already_running' ? 200 : 500).json(result);
 });
 
@@ -476,55 +526,25 @@ app.post('/api/keep-alive/run', async (req, res) => {
   res.status(result.ok ? 200 : 500).json(result);
 });
 
-// ── Screener endpoints ────────────────────────────────────
-
-// Fetch screener questions for a project
-app.get('/api/projects/:id/screener', async (req, res) => {
-  if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
-  const { id } = req.params;
-  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(id)) return res.status(400).json({ error: 'invalid_id' });
-  try {
-    const { res: upRes, isJson } = await respondentFetch(`/next/v4/participant/projects/${id}/screener`);
-    if (upRes.status === 401) return res.status(401).json({ error: 'session_expired' });
-    if (upRes.status === 404) return res.status(404).json({ error: 'not_found' });
-    if (!isJson) return res.status(502).json({ error: 'unexpected_response' });
-    const body = await upRes.json();
-    res.json(body);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
-});
-
-// Submit screener answers to Respondent on the user's behalf.
-// Endpoint: POST /next/v4/participant/projects/{id}/screener-responses
-// Body shape: { responses: [{ questionId, questionText, order, type, questionType, answers }], totalTime }
-//   type mapping: 1→"radio", 2→"textarea", 3→"checkbox", 4→"text"
-//   answers:      types 1 & 4 → string; type 2 → string; type 3 → string[]
-app.post('/api/projects/:id/screener/submit', async (req, res) => {
-  if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
-  const { id } = req.params;
-  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(id)) return res.status(400).json({ error: 'invalid_id' });
-  const { responses, totalTime } = req.body ?? {};
-  if (!Array.isArray(responses) || responses.length === 0) {
-    return res.status(400).json({ error: 'responses[] required' });
-  }
-  try {
-    const { res: upRes, isJson } = await respondentFetch(
-      `/next/v4/participant/projects/${id}/screener-responses`,
-      { method: 'POST', body: { responses, totalTime } },
-    );
-    if (upRes.status === 401) return res.status(401).json({ error: 'session_expired' });
-    const body = isJson ? await upRes.json() : {};
-    debug('screener_submit', { id, status: upRes.status, questions: responses.length });
-    res.status(upRes.status).json({ ...body, ok: upRes.ok });
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
-});
+// ── Answer history endpoints ──────────────────────────────
 
 // Get stored screener answer history
 app.get('/api/screener-answers', (req, res) => {
   res.json(loadAnswers());
+});
+
+// Deduplicated profile — most-recent answer per unique question text.
+// Used to build the Claude-in-Chrome prompt.
+app.get('/api/screener-answers/profile', (req, res) => {
+  const history = loadAnswers();
+  const seen = new Map(); // normalised text → { questionText, answer }
+  for (let i = history.length - 1; i >= 0; i--) {
+    for (const a of (history[i].answers || [])) {
+      const key = (a.questionText || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (key && !seen.has(key)) seen.set(key, { questionText: a.questionText, answer: a.answer });
+    }
+  }
+  res.json([...seen.values()]);
 });
 
 // Append a completed screener session to local history
@@ -535,6 +555,107 @@ app.post('/api/screener-answers', (req, res) => {
   }
   const updated = appendSession({ projectId, projectName: projectName || '', answers });
   res.json({ ok: true, total: updated.length });
+});
+
+// ── Claude API key ────────────────────────────────────────
+
+app.post('/api/config/claude-key', (req, res) => {
+  const { apiKey } = req.body ?? {};
+  if (typeof apiKey !== 'string') return res.status(400).json({ error: 'apiKey required' });
+  config.claudeApiKey = apiKey.trim();
+  saveConfig();
+  res.json({ ok: true, hasKey: Boolean(config.claudeApiKey) });
+});
+
+// ── AI keyword suggestions (calls Anthropic API) ──────────
+
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+
+app.post('/api/ai-keywords', async (req, res) => {
+  if (!config.claudeApiKey) return res.status(401).json({ error: 'no_claude_key' });
+
+  const { projects } = req.body ?? {};
+  if (!Array.isArray(projects) || projects.length === 0) {
+    return res.status(400).json({ error: 'projects[] required' });
+  }
+
+  // Build a compact text corpus (cap at 120 projects, truncate long descriptions)
+  const corpus = projects.slice(0, 120).map((p, i) => {
+    const title = String(p.title || '').slice(0, 120).trim();
+    const desc  = String(p.description || '').slice(0, 300).trim();
+    return `${i + 1}. ${title}${desc ? ` — ${desc}` : ''}`;
+  }).join('\n');
+
+  // Existing excluded keywords to avoid re-suggesting them
+  const alreadyExcluded = (req.body.excluded || []).slice(0, 100).map(String);
+
+  const systemPrompt = `You are a data analyst helping a UX research participant filter out unwanted study invitations.`;
+
+  const userPrompt = `Analyze these ${projects.length} research study listings and identify keyword phrases that would help someone filter out studies they're not interested in.
+
+STUDY LISTINGS:
+${corpus}
+
+${alreadyExcluded.length ? `ALREADY EXCLUDED (do not suggest these): ${alreadyExcluded.join(', ')}\n` : ''}
+Return 20-30 keyword phrases that represent:
+1. Specific industry verticals that repeat (e.g. "insurance", "real estate", "supply chain")
+2. Job/role requirements they may not match (e.g. "small business owner", "HR manager", "medical device")
+3. Product categories worth filtering (e.g. "credit card", "mobile app", "smart home")
+4. Recurring study sub-types or constraints (e.g. "diary study", "unmoderated task")
+
+Rules:
+- Lowercase only
+- 1–3 words per phrase
+- Be specific and meaningful — no generic phrases like "research study", "tell us", "looking for"
+- Each phrase should be something a person would genuinely want to exclude
+
+Respond with valid JSON only, no markdown, no explanation:
+{"suggestions":[{"phrase":"insurance","reason":"Insurance industry studies"},...]}`
+
+  try {
+    const response = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': config.claudeApiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const msg = err?.error?.message || `Anthropic API error ${response.status}`;
+      return res.status(502).json({ error: msg });
+    }
+
+    const data = await response.json();
+    const text = data?.content?.[0]?.text || '';
+
+    // Parse the JSON response (Claude sometimes adds whitespace but no markdown with our prompt)
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // Try to extract JSON from the text
+      const match = text.match(/\{[\s\S]*\}/);
+      parsed = match ? JSON.parse(match[0]) : null;
+    }
+
+    const suggestions = (parsed?.suggestions || [])
+      .filter(s => s && typeof s.phrase === 'string' && s.phrase.trim())
+      .map(s => ({ phrase: s.phrase.toLowerCase().trim(), reason: s.reason || '' }))
+      .slice(0, 40);
+
+    res.json({ ok: true, suggestions });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
 });
 
 // Raw upstream probe — lets you inspect what Respondent actually returns for any path.

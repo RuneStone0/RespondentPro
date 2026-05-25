@@ -191,7 +191,7 @@
       gap: 8px;
       font-size: 12px;
       color: var(--text-2);
-      align-items: center;
+      align-items: baseline;
     }
 
     .meta span { display: flex; align-items: center; gap: 3px; }
@@ -295,7 +295,7 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: var(--text-3);
+      color: var(--text-2);
       margin-bottom: 10px;
       display: flex;
       align-items: center;
@@ -665,63 +665,28 @@
     }
     .modal-error.show { display: block; }
 
-    /* Screener modal */
-    .screener-question {
-      margin-bottom: 20px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .screener-question:last-child { border-bottom: none; margin-bottom: 0; }
-    .screener-question-label {
-      font-size: 13px;
-      font-weight: 600;
+    /* Toast notification */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--card);
+      border: 1px solid var(--border-2);
       color: var(--text);
-      margin-bottom: 8px;
-      line-height: 1.5;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      box-shadow: var(--shadow);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 9999;
+      white-space: nowrap;
     }
-    .screener-required { color: var(--danger); margin-left: 3px; }
-    .screener-options { display: flex; flex-direction: column; gap: 6px; }
-    .screener-option {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.1s;
-    }
-    .screener-option:hover { background: var(--bg-3); }
-    .screener-option input { margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
-    .screener-option span { font-size: 13px; color: var(--text); line-height: 1.4; }
-    .screener-suggestion {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      color: var(--accent);
-      background: rgba(139,92,246,0.1);
-      border: 1px solid rgba(139,92,246,0.3);
-      border-radius: 4px;
-      padding: 2px 7px;
-      margin-bottom: 6px;
-    }
-    .screener-modal-actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-    }
-    .screener-notice {
-      background: var(--bg-3);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 12px;
-      font-size: 12px;
-      color: var(--text-2);
-      margin-top: 12px;
-      line-height: 1.5;
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
 
     /* Debug panel */
@@ -797,6 +762,140 @@
     }
     .apply-btn:hover { background: var(--accent); color: #0b0c10; }
 
+    /* Apply-using-Claude button on cards */
+    .apply-claude-btn {
+      background: transparent;
+      color: var(--accent-2);
+      border: 1px solid var(--accent-2);
+      border-radius: 6px;
+      padding: 0 9px;
+      height: 28px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      transition: all 0.12s;
+      flex-shrink: 0;
+    }
+    .apply-claude-btn:hover { background: var(--accent-2); color: #0b0c10; }
+
+    /* Numbered step sections in the Apply-Claude modal */
+    .apply-step {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .apply-step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .apply-step-body { flex: 1; }
+    .apply-step-body h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    .apply-step-body p { font-size: 12px; color: var(--text-2); margin: 8px 0 0; line-height: 1.5; }
+    .apply-step-body .step-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    #apply-claude-prompt-preview {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 11px;
+      font-family: 'SF Mono', Menlo, monospace;
+      white-space: pre-wrap;
+      max-height: 160px;
+      overflow-y: auto;
+      color: var(--text-2);
+      margin-bottom: 8px;
+    }
+
+    /* Keyword management modal */
+    .kw-modal-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--text);
+      margin-bottom: 5px;
+    }
+    .kw-modal-chip span { flex: 1; }
+    .kw-modal-chip button { background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+    .kw-modal-chip button:hover { color: var(--danger); }
+
+    .kw-suggestion-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      transition: background 0.1s;
+    }
+    .kw-suggestion-row:hover { background: var(--bg-3); }
+    .kw-suggestion-word { flex: 1; font-size: 13px; color: var(--text); }
+    .kw-suggestion-count {
+      font-size: 11px;
+      color: var(--text-3);
+      white-space: nowrap;
+    }
+    .kw-suggestion-count.high { color: var(--danger); }
+    .kw-suggestion-add {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      border-radius: 5px;
+      padding: 2px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.1s;
+    }
+    .kw-suggestion-add:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .kw-suggestion-add.added { border-color: var(--success); color: var(--success); }
+
+    .kw-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-3);
+      padding: 10px 8px 4px;
+      margin-top: 2px;
+    }
+    .kw-group-label:first-child { padding-top: 2px; }
+
+    /* Claude-in-Chrome button on project cards */
+    .claude-btn {
+      background: transparent;
+      color: var(--text-3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+      flex-shrink: 0;
+    }
+    .claude-btn:hover { background: var(--bg-3); color: var(--text); border-color: var(--border-2); }
+
     .apply-prompt {
       margin-top: 10px;
       padding: 8px 12px;
@@ -830,8 +929,7 @@
       transition: all 0.12s;
     }
     .kw-toggle:hover { color: var(--accent); background: var(--bg-3); }
-    .kw-toggle .arrow { font-size: 10px; transition: transform 0.15s; }
-    .kw-toggle.expanded .arrow { transform: rotate(180deg); }
+    .kw-toggle .arrow { font-size: 10px; }
 
     /* Keyword match badge */
     .kw-count {
@@ -879,6 +977,7 @@
         <span id="page-info"></span>
         <span id="applied-counter" title="Times you applied to a project then hid it" style="color:var(--success);">✓ 0 applied</span>
         <span id="hidden-counter" title="Total projects this app has hidden (manual + auto)" style="color:var(--danger);">🗑 0 hidden</span>
+        <button class="btn btn-secondary" id="import-answers-btn" title="Import Q&amp;A answers from Claude" style="padding:2px 10px; font-size:12px;">Import answers</button>
       </span>
     </div>
   </div>
@@ -948,7 +1047,7 @@
       <!-- Keyword exclude -->
       <div class="config-section">
         <h3>
-          Exclude by keyword
+          🚫 Exclude by keyword
           <span class="right" id="keyword-total-badge" style="display:none"></span>
         </h3>
         <div style="font-size:11px; color:var(--text-3); margin-bottom:8px;">
@@ -960,6 +1059,7 @@
           <button class="btn" id="keyword-confirm">Add</button>
         </div>
         <button class="add-criterion" id="keyword-add-btn">+ Add keyword</button>
+        <button class="add-criterion" id="keyword-manage-btn" style="margin-top:2px;">&#9881; Manage all &amp; suggestions</button>
       </div>
 
       <!-- Pay rules -->
@@ -996,16 +1096,16 @@
         </div>
       </div>
 
-      <!-- Apply filters (manual) -->
+      <!-- Screener length -->
       <div class="config-section">
-        <h3>Apply filters</h3>
-        <div style="font-size:11px; color:var(--text-3); margin-bottom:8px;">
-          Hide all currently-loaded projects matching your filter rules.
+        <h3 title="Hide projects whose screener has more questions than this. 0 = no limit. Requires question counts to be loaded.">❓ Screener questions</h3>
+        <div class="criteria-list">
+          <div class="criterion">
+            <label title="Hide projects whose screener has more than this many questions. Set to 0 to disable.">Max questions</label>
+            <input type="number" id="max-questions" min="0" max="50" step="1" value="0"
+                   title="Hide projects with more screener questions than this. 0 = no limit.">
+          </div>
         </div>
-        <button class="btn" id="apply-filters-btn" style="width:100%;">
-          ▶ Apply filters now
-        </button>
-        <div class="last-run" id="apply-status" style="display:none"></div>
       </div>
 
       <!-- Auto-hide -->
@@ -1048,6 +1148,24 @@
 
           <div class="last-run" id="auto-hide-status">No runs yet.</div>
         </div>
+
+        <!-- Pending queue — always visible inside the auto-hide section -->
+        <div id="pending-badge" style="display:none; font-size:12px; color:var(--warning); margin-top:8px; flex-direction:row; align-items:center; gap:6px;">
+          <span id="pending-count"></span>
+          <button class="btn" id="pending-refresh-btn" style="padding:2px 7px; font-size:11px; flex-shrink:0;">↻</button>
+        </div>
+      </div>
+
+      <!-- Apply filters (manual) — hidden when auto-hide is on -->
+      <div class="config-section" id="apply-filters-section">
+        <h3>Apply filters</h3>
+        <div style="font-size:11px; color:var(--text-3); margin-bottom:8px;">
+          Hide all projects matching your filter rules in one shot.
+        </div>
+        <button class="btn" id="apply-filters-btn" style="width:100%;">
+          ▶ Apply filters now
+        </button>
+        <div class="last-run" id="apply-status" style="display:none"></div>
       </div>
 
     </div>
@@ -1124,18 +1242,97 @@
   </div>
 </div>
 
-<!-- Screener modal -->
-<div class="modal-backdrop" id="screener-modal">
-  <div class="modal" style="width:600px; max-height:88vh; overflow-y:auto">
-    <h2 id="screener-modal-title">Screener questions</h2>
-    <p id="screener-modal-meta" style="margin-bottom:16px"></p>
-    <div id="screener-modal-questions"></div>
-    <div class="modal-error" id="screener-modal-error"></div>
-    <div id="screener-modal-notice" class="screener-notice" style="display:none"></div>
-    <div class="screener-modal-actions">
-      <button class="btn btn-secondary" id="screener-cancel">Cancel</button>
-      <button class="btn btn-secondary" id="screener-apply-direct" title="Save your answers and open Respondent's screener page">Apply on Respondent.io ↗</button>
-      <button class="btn" id="screener-submit" style="background:var(--accent);color:#fff">Submit in-app ✓</button>
+<!-- Apply-using-Claude modal -->
+<div class="modal-backdrop" id="apply-claude-modal">
+  <div class="modal" style="width:580px">
+    <h2>✨ Apply using Claude</h2>
+    <p id="apply-claude-project" style="font-size:13px;color:var(--text-2);margin-bottom:20px;"></p>
+
+    <div class="apply-step">
+      <div class="apply-step-num">1</div>
+      <div class="apply-step-body">
+        <h4>Copy this prompt</h4>
+        <pre id="apply-claude-prompt-preview">Building prompt…</pre>
+        <button class="btn" id="apply-claude-copy">📋 Copy prompt</button>
+      </div>
+    </div>
+
+    <div class="apply-step">
+      <div class="apply-step-num">2</div>
+      <div class="apply-step-body">
+        <h4>Open and fill</h4>
+        <div class="step-actions">
+          <button id="apply-claude-open-app" class="btn btn-secondary">Open application ↗</button>
+          <button id="apply-claude-open-claude" class="btn btn-secondary">Open Claude.ai ↗</button>
+        </div>
+        <p>Paste the prompt into Claude and let it navigate to Respondent and fill the screener form. For questions it can't answer from your profile, it will ask you.</p>
+      </div>
+    </div>
+
+    <div class="apply-step">
+      <div class="apply-step-num">3</div>
+      <div class="apply-step-body">
+        <h4>Import answers</h4>
+        <p>After Claude finishes and outputs the Q: / A: pairs, import them to update your profile for future applications.</p>
+        <button id="apply-claude-import" class="btn btn-secondary" style="margin-top:8px;">Import answers →</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="apply-claude-cancel">Cancel</button>
+      <button class="btn" id="apply-claude-applied" style="background:var(--success);color:#0b0c10">✓ Mark as applied</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Import answers modal -->
+<div class="modal-backdrop" id="import-modal">
+  <div class="modal" style="width:560px">
+    <h2>Import answers from Claude</h2>
+    <p>After Claude fills your screener, ask it to output the answers in <code>Q: … / A: …</code> format, then paste them here to save for future pre-fills.</p>
+    <textarea id="import-textarea" rows="12" placeholder="Q: Your company?&#10;A: FloQast&#10;Q: Your job title?&#10;A: Engineering Manager"></textarea>
+    <div class="modal-error" id="import-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="import-cancel">Cancel</button>
+      <button class="btn" id="import-save" style="background:var(--accent);color:#fff">Save answers</button>
+    </div>
+  </div>
+</div>
+
+<!-- Keyword management modal -->
+<div class="modal-backdrop" id="keyword-modal">
+  <div class="modal" style="width:860px">
+    <h2>Exclude by keyword</h2>
+    <div style="display:flex;gap:24px;margin-top:16px;">
+      <!-- Left: current exclusions -->
+      <div style="width:280px;flex-shrink:0;">
+        <h4 style="margin-bottom:10px;font-size:13px;">Current exclusions</h4>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <input id="keyword-modal-input" style="flex:1" placeholder="Add keyword…" />
+          <button class="btn" id="keyword-modal-add">Add</button>
+        </div>
+        <div id="keyword-modal-list"></div>
+      </div>
+      <!-- Right: suggestions -->
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <h4 style="font-size:13px;flex:1;">Suggestions</h4>
+          <button class="btn btn-secondary" id="kw-ai-btn" style="font-size:11px;padding:3px 10px;">✨ AI suggestions</button>
+        </div>
+        <div id="kw-ai-key-row" style="display:none;gap:6px;margin-bottom:8px;">
+          <input id="kw-ai-key-input" placeholder="Paste your Anthropic API key…" style="flex:1;height:32px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;padding:0 10px;color:var(--text);font-size:12px;outline:none;" />
+          <button class="btn" id="kw-ai-key-save" style="font-size:11px;padding:0 10px;">Save</button>
+        </div>
+        <div id="kw-ai-error" style="font-size:11px;color:var(--danger);margin-bottom:6px;"></div>
+        <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Frequency-based phrases from loaded projects. Use ✨ AI suggestions for category-level keywords.</p>
+        <input id="keyword-suggestion-filter" placeholder="Filter suggestions…" style="width:100%;margin-bottom:10px;height:32px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;padding:0 10px;color:var(--text);font-size:12px;outline:none;" />
+        <div id="keyword-suggestion-list" style="max-height:340px;overflow-y:auto;scrollbar-width:none;"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="keyword-modal-close">Close</button>
     </div>
   </div>
 </div>
@@ -1159,6 +1356,7 @@ let filters = {
   minIncentive: 0,
   minDuration: 0,
   maxDuration: 120,
+  maxQuestions: 0,
   kindsOfResearchStudy: [],
   sort: 'publishedAt',
   showEligible: true,
@@ -1205,7 +1403,14 @@ async function api(path, opts = {}) {
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
-  return { status: res.status, body: await res.json().catch(() => ({})) };
+  const body = await res.json().catch(() => ({}));
+  // Any 401 from the server means the Respondent session has expired.
+  // Show the blocking cookie modal immediately — skip for the cookie-save
+  // endpoint itself so the user can actually submit a new cookie.
+  if (res.status === 401 && path !== '/api/config/cookie') {
+    showCookieModal('Session expired — paste a fresh cookie to continue.');
+  }
+  return { status: res.status, body };
 }
 
 // ── Confirmation dialog (used when auto-hide is on) ──────
@@ -1245,6 +1450,7 @@ async function loadConfig() {
   }
   profileId = body.profileId || '';
   hasCookie = body.hasCookie;
+  _hasClaudeKey = body.hasClaudeKey || false;
   totalHidden = body.totalHidden || 0;
   totalApplied = body.totalApplied || 0;
   renderHeader();
@@ -1305,6 +1511,7 @@ function isHidden(project) {
   const hourly = getHourly(project);
   const incentive = getIncentive(project);
   const duration = getDuration(project);
+  const questions = getQuestionCount(project);
 
   for (const kw of filters.keywords) {
     const k = kw.toLowerCase();
@@ -1318,6 +1525,8 @@ function isHidden(project) {
     return { hidden: true, reason: `${duration}min > max ${filters.maxDuration}min` };
   if (filters.minDuration > 0 && duration > 0 && duration < filters.minDuration)
     return { hidden: true, reason: `${duration}min < min ${filters.minDuration}min` };
+  if (filters.maxQuestions > 0 && questions > 0 && questions > filters.maxQuestions)
+    return { hidden: true, reason: `${questions}q > max ${filters.maxQuestions}q` };
   return { hidden: false };
 }
 
@@ -1372,9 +1581,8 @@ function renderProjects() {
     return;
   }
 
-  // Clamp selection if list shrunk
+  // Clamp selection if list shrunk; never force a selection when there was none (-1 = no selection)
   if (selectedIndex >= allProjects.length) selectedIndex = allProjects.length - 1;
-  if (selectedIndex < 0 && allProjects.length > 0) selectedIndex = 0;
 
   let visible = 0, hidden = 0;
   list.innerHTML = allProjects.map((p, idx) => {
@@ -1389,6 +1597,7 @@ function renderProjects() {
         <div class="title-row">
           <div class="title">${highlightKeywords(getTitle(p), filters.keywords)}</div>
           <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
+            ${link ? `<button class="apply-claude-btn" data-action="claude" data-id="${esc(id)}" data-link="${esc(link)}" title="Apply using Claude">✨ Claude</button>` : ''}
             ${link ? `<button class="apply-btn" data-action="apply" data-id="${esc(id)}" data-link="${esc(link)}" title="Open project application page">↗</button>` : ''}
             <button class="icon-btn danger" data-action="hide" data-id="${esc(id)}" title="Hide this project (also on Respondent.io)">×</button>
           </div>
@@ -1434,6 +1643,13 @@ function renderProjects() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       openAndPromptApply(btn.dataset.id, btn.dataset.link);
+    });
+  });
+
+  list.querySelectorAll('[data-action="claude"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openApplyClaudeModal(btn.dataset.id, btn.dataset.link);
     });
   });
 
@@ -1623,7 +1839,6 @@ function cancelPriorityKeyword() {
 
 // ── Keywords ──────────────────────────────────────────────
 const KEYWORD_PREVIEW = 3;
-let keywordsExpanded = false;
 
 function countKeywordMatches(keyword) {
   const kw = keyword.toLowerCase();
@@ -1636,11 +1851,9 @@ function countKeywordMatches(keyword) {
 
 function renderKeywords() {
   const all = filters.keywords;
+  const preview = all.slice(-KEYWORD_PREVIEW);
   const overflow = all.length - KEYWORD_PREVIEW;
-  const showAll = keywordsExpanded || overflow <= 0;
-  const visible = showAll ? all : all.slice(-KEYWORD_PREVIEW);
 
-  // Header badge: show total when list is truncated
   const badge = $('keyword-total-badge');
   if (overflow > 0) {
     badge.textContent = `${all.length} total`;
@@ -1649,37 +1862,29 @@ function renderKeywords() {
     badge.style.display = 'none';
   }
 
-  const offset = showAll ? 0 : Math.max(0, all.length - KEYWORD_PREVIEW);
-  const rows = visible.map((kw, i) => {
+  const offset = Math.max(0, all.length - KEYWORD_PREVIEW);
+  const rows = preview.map((kw, i) => {
     const realIdx = offset + i;
     const count = countKeywordMatches(kw);
     const badgeClass = count > 0 ? 'kw-count has-match' : 'kw-count';
-    const countBadge = `<span class="${badgeClass}" title="${count} currently-loaded project${count === 1 ? '' : 's'} match this keyword">${count}</span>`;
     return `
     <div class="criterion">
       <label title="Keyword: ${esc(kw)}">${esc(kw)}</label>
-      ${countBadge}
-      <button class="criterion-remove" data-i="${realIdx}" title="Remove keyword">×</button>
+      <span class="${badgeClass}" title="${count} project${count === 1 ? '' : 's'} match">${count}</span>
+      <button class="criterion-remove" data-i="${realIdx}" title="Remove">×</button>
     </div>`;
   }).join('');
 
-  const toggleBtn = overflow > 0 ? `
-    <button class="kw-toggle ${showAll ? 'expanded' : ''}" id="kw-toggle-btn">
-      ${showAll
-        ? `<span class="arrow">▾</span> Show fewer`
-        : `<span class="arrow">▾</span> Show ${overflow} more…`}
-    </button>` : '';
+  const manageBtn = all.length > 0
+    ? `<button class="kw-toggle" id="kw-manage-btn">Manage all ${all.length} keyword${all.length === 1 ? '' : 's'} →</button>`
+    : '';
 
-  $('keyword-list').innerHTML = rows + toggleBtn;
+  $('keyword-list').innerHTML = rows + manageBtn;
 
   $('keyword-list').querySelectorAll('.criterion-remove').forEach(btn => {
     btn.addEventListener('click', async () => {
       const prev = JSON.parse(JSON.stringify(filters));
-      // Map visible index back to real index (always safe since visible = all when fully shown,
-      // or first KEYWORD_PREVIEW entries otherwise — but we use data-i as the real index)
       filters.keywords = filters.keywords.filter((_, i) => i !== Number(btn.dataset.i));
-      // Auto-collapse if list drops at or below threshold
-      if (filters.keywords.length <= KEYWORD_PREVIEW) keywordsExpanded = false;
       if (await saveFiltersGuarded(prev)) {
         renderKeywords();
         renderProjects();
@@ -1687,20 +1892,18 @@ function renderKeywords() {
     });
   });
 
-  const toggleEl = $('kw-toggle-btn');
-  if (toggleEl) {
-    toggleEl.addEventListener('click', () => {
-      keywordsExpanded = !keywordsExpanded;
-      renderKeywords();
-    });
-  }
+  const manageEl = $('kw-manage-btn');
+  if (manageEl) manageEl.addEventListener('click', openKeywordModal);
 }
 
 $('keyword-add-btn').addEventListener('click', () => {
   $('keyword-add-row').style.display = 'flex';
   $('keyword-add-btn').style.display = 'none';
+  $('keyword-manage-btn').style.display = 'none';
   $('keyword-input').focus();
 });
+
+$('keyword-manage-btn').addEventListener('click', openKeywordModal);
 
 $('keyword-confirm').addEventListener('click', addKeyword);
 $('keyword-input').addEventListener('keydown', e => {
@@ -1713,8 +1916,6 @@ async function addKeyword() {
   if (val) {
     const prev = JSON.parse(JSON.stringify(filters));
     filters.keywords = [...filters.keywords, val];
-    // Expand so the user can see the keyword they just added
-    if (filters.keywords.length > KEYWORD_PREVIEW) keywordsExpanded = true;
     if (await saveFiltersGuarded(prev)) {
       renderKeywords();
       renderProjects();
@@ -1727,7 +1928,326 @@ function cancelKeyword() {
   $('keyword-input').value = '';
   $('keyword-add-row').style.display = 'none';
   $('keyword-add-btn').style.display = '';
+  $('keyword-manage-btn').style.display = '';
 }
+
+// ── Keyword management modal ──────────────────────────────
+
+const STOP_WORDS = new Set([
+  // Core English function words
+  'a','about','above','after','again','against','all','am','an','and','any','are',
+  'as','at','be','because','been','before','being','below','between','both','but',
+  'by','can','could','did','do','does','doing','down','during','each','few','for',
+  'from','further','get','got','had','has','have','having','he','her','here',
+  'hers','herself','him','himself','his','how','i','if','in','into','is','it',
+  'its','itself','just','me','more','most','my','myself','no','nor',
+  'not','now','of','off','on','once','only','or','other','our','ours','out',
+  'over','own','same','she','should','so','some','such','than',
+  'that','the','their','them','then','there','these','they','this','those',
+  'through','to','too','under','until','up','us','very','was','we','were',
+  'what','when','where','which','while','who','will','with','would','you','your',
+  // Filler / sentiment words that add no signal
+  'love','hear','tell','share','great','good','best','better','interested',
+  'currently','already','still','even','really','truly','simply','easy','quick',
+  'short','long','high','low','large','small','big','little',
+  // Research / survey boilerplate
+  'study','research','participant','participants','looking','join','help','want',
+  'need','please','like','use','using','also','may','new','one','two','three',
+  'time','times','based','include','including','different','various','well','able',
+  'take','making','make','many','give','first','second','third','without','within',
+  'across','around','following','provide','related','specific','type','types',
+  'company','companies','product','products','service','services','experience',
+  'experiences','project','projects','user','users','people','person',
+  'opinion','opinions','feedback','thoughts','ideas','understand','understanding',
+  'learn','learning','know','knowing','find','finding','seek','seeking',
+  'answer','answers','question','questions','survey','surveys',
+]);
+
+/**
+ * Tokenise text robustly:
+ * - Strip contractions entirely (we'd, it's, they're → removed, not split)
+ * - Keep only clean alphabetic tokens ≥ 3 chars
+ */
+function tokenise(text) {
+  return text
+    .toLowerCase()
+    .replace(/\b\w+'\w*\b/g, ' ')   // remove contractions: we'd, it's, don't
+    .match(/[a-z]{3,}/g) || [];
+}
+
+/**
+ * Build 1-, 2-, and 3-word phrase frequency maps across all loaded projects.
+ * N-grams use the ORIGINAL positional stream so only truly adjacent words form a phrase.
+ * Stop words break adjacency: "love to hear" is NOT a 3-gram because "to" is a stop word
+ * and it breaks the run — "love" and "hear" are separated.
+ *
+ * Returns { unigrams, bigrams, trigrams } each as Array<{ word, count }> sorted by count.
+ */
+function computeKeywordSuggestions() {
+  const uni  = new Map(); // phrase → Set<projectId>
+  const bi   = new Map();
+  const tri  = new Map();
+  const excluded = new Set(filters.keywords.map(k => k.toLowerCase()));
+
+  for (const p of allProjects) {
+    const id = getId(p);
+    const tokens = tokenise(getTitle(p) + ' ' + getDesc(p));
+
+    const seenUni = new Set();
+    const seenBi  = new Set();
+    const seenTri = new Set();
+
+    const addTo = (map, seen, phrase) => {
+      if (excluded.has(phrase)) return;
+      if (seen.has(phrase)) return;
+      seen.add(phrase);
+      if (!map.has(phrase)) map.set(phrase, new Set());
+      map.get(phrase).add(id);
+    };
+
+    // Scan with a "clean run" buffer: consecutive non-stop tokens stay adjacent.
+    // A stop word RESETS the buffer, preventing cross-stop-word bigrams/trigrams.
+    let run = []; // rolling window of up to 3 recent non-stop tokens
+    for (const tok of tokens) {
+      if (STOP_WORDS.has(tok)) {
+        run = []; // stop word breaks adjacency
+        continue;
+      }
+      // Unigram
+      addTo(uni, seenUni, tok);
+
+      run.push(tok);
+      if (run.length > 3) run.shift();
+
+      // Bigram: run[-2] + run[-1]
+      if (run.length >= 2) {
+        addTo(bi, seenBi, `${run[run.length - 2]} ${run[run.length - 1]}`);
+      }
+      // Trigram: run[-3] + run[-2] + run[-1]
+      if (run.length === 3) {
+        addTo(tri, seenTri, `${run[0]} ${run[1]} ${run[2]}`);
+      }
+    }
+  }
+
+  const toArr = (map) =>
+    [...map.entries()]
+      .filter(([, ids]) => ids.size >= 2)
+      .sort((a, b) => b[1].size - a[1].size)
+      .slice(0, 50)
+      .map(([word, ids]) => ({ word, count: ids.size }));
+
+  return { unigrams: toArr(uni), bigrams: toArr(bi), trigrams: toArr(tri) };
+}
+
+function openKeywordModal() {
+  $('keyword-modal-input').value = '';
+  $('keyword-suggestion-filter').value = '';
+  $('keyword-modal').classList.add('open');
+  renderKeywordModalList();
+  renderKeywordSuggestions('');
+  setTimeout(() => $('keyword-modal-input').focus(), 50);
+}
+
+function closeKeywordModal() {
+  $('keyword-modal').classList.remove('open');
+}
+
+function renderKeywordModalList() {
+  const all = filters.keywords;
+  if (all.length === 0) {
+    $('keyword-modal-list').innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:4px 0;">No keywords yet.</div>';
+    return;
+  }
+  $('keyword-modal-list').innerHTML = all.map((kw, i) => {
+    return `<div class="kw-modal-chip" data-i="${i}">
+      <span title="${esc(kw)}">${esc(kw)}</span>
+      <button data-remove="${i}" title="Remove">×</button>
+    </div>`;
+  }).join('');
+
+  $('keyword-modal-list').querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const prev = JSON.parse(JSON.stringify(filters));
+      filters.keywords = filters.keywords.filter((_, i) => i !== Number(btn.dataset.remove));
+      if (await saveFiltersGuarded(prev)) {
+        renderKeywords();
+        renderProjects();
+        renderKeywordModalList();
+        renderKeywordSuggestions($('keyword-suggestion-filter').value);
+      }
+    });
+  });
+}
+
+function renderSuggestionRow({ word, count, reason }) {
+  const isHigh = count >= 6; // absolute threshold — red if likely to hide many
+  const tip = reason
+    ? `${esc(reason)} · ${count} project${count === 1 ? '' : 's'}`
+    : `${count} project${count === 1 ? '' : 's'} contain this phrase`;
+  return `<div class="kw-suggestion-row">
+    <span class="kw-suggestion-word" title="${tip}">${esc(word)}</span>
+    ${count ? `<span class="kw-suggestion-count ${isHigh ? 'high' : ''}" title="${tip}">hides ${count}</span>` : ''}
+    <button class="kw-suggestion-add" data-word="${esc(word)}">+ Add</button>
+  </div>`;
+}
+
+function renderSuggestionGroup(label, items, query) {
+  if (items.length === 0) return '';
+  const rows = items
+    .filter(s => !query || s.word.includes(query))
+    .map(renderSuggestionRow).join('');
+  if (!rows) return '';
+  return `<div class="kw-group-label">${esc(label)}</div>${rows}`;
+}
+
+function renderKeywordSuggestions(filterText) {
+  const { unigrams, bigrams, trigrams } = computeKeywordSuggestions();
+  const query = filterText.toLowerCase().trim();
+
+  const html = [
+    renderSuggestionGroup('2-word phrases', bigrams, query),
+    renderSuggestionGroup('3-word phrases', trigrams, query),
+    renderSuggestionGroup('Single words', unigrams, query),
+  ].join('');
+
+  $('keyword-suggestion-list').innerHTML = html ||
+    '<div style="font-size:12px;color:var(--text-3);padding:8px 0;">No suggestions found.</div>';
+
+  $('keyword-suggestion-list').querySelectorAll('[data-word]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const word = btn.dataset.word;
+      const prev = JSON.parse(JSON.stringify(filters));
+      filters.keywords = [...filters.keywords, word];
+      if (await saveFiltersGuarded(prev)) {
+        btn.textContent = '✓ Added';
+        btn.classList.add('added');
+        btn.disabled = true;
+        renderKeywords();
+        renderProjects();
+        renderKeywordModalList();
+      }
+    });
+  });
+}
+
+// ── AI keyword suggestions ─────────────────────────────────
+let _hasClaudeKey = false; // loaded from /api/config on boot
+
+async function runAiKeywords() {
+  const btn = $('kw-ai-btn');
+  const errEl = $('kw-ai-error');
+  errEl.textContent = '';
+
+  // If no key set, show the key input inline
+  if (!_hasClaudeKey) {
+    $('kw-ai-key-row').style.display = 'flex';
+    $('kw-ai-key-input').focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing…';
+
+  const projects = allProjects.slice(0, 120).map(p => ({
+    title: getTitle(p),
+    description: getDesc(p),
+  }));
+
+  const { status, body } = await api('/api/ai-keywords', {
+    method: 'POST',
+    body: { projects, excluded: filters.keywords },
+  });
+
+  btn.disabled = false;
+  btn.textContent = '✨ AI suggestions';
+
+  if (status === 401) {
+    _hasClaudeKey = false;
+    $('kw-ai-key-row').style.display = 'flex';
+    errEl.textContent = 'Claude API key not set or invalid.';
+    return;
+  }
+  if (!body?.ok) {
+    errEl.textContent = body?.error || `Error ${status}`;
+    return;
+  }
+
+  // Render AI suggestions in a dedicated section above the frequency-based ones
+  const aiItems = (body.suggestions || [])
+    .filter(s => !filters.keywords.includes(s.phrase))
+    .map(s => ({ word: s.phrase, count: 0, reason: s.reason }));
+
+  const aiHtml = aiItems.length
+    ? `<div class="kw-group-label" style="color:var(--accent-2)">✨ AI suggestions</div>`
+      + aiItems.map(renderSuggestionRow).join('')
+    : '<div style="font-size:12px;color:var(--text-3);padding:4px 0;">No new AI suggestions.</div>';
+
+  const existing = $('keyword-suggestion-list').innerHTML;
+  $('keyword-suggestion-list').innerHTML = aiHtml + existing;
+
+  // Wire the new add buttons
+  $('keyword-suggestion-list').querySelectorAll('[data-word]:not([data-wired])').forEach(btn => {
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async () => {
+      const word = btn.dataset.word;
+      const prev = JSON.parse(JSON.stringify(filters));
+      filters.keywords = [...filters.keywords, word];
+      if (await saveFiltersGuarded(prev)) {
+        btn.textContent = '✓ Added';
+        btn.classList.add('added');
+        btn.disabled = true;
+        renderKeywords();
+        renderProjects();
+        renderKeywordModalList();
+      }
+    });
+  });
+}
+
+async function saveClaudeKey() {
+  const key = $('kw-ai-key-input').value.trim();
+  if (!key) return;
+  const { body } = await api('/api/config/claude-key', { method: 'POST', body: { apiKey: key } });
+  if (body?.ok) {
+    _hasClaudeKey = true;
+    $('kw-ai-key-row').style.display = 'none';
+    $('kw-ai-key-input').value = '';
+    runAiKeywords();
+  }
+}
+
+$('kw-ai-btn').addEventListener('click', runAiKeywords);
+$('kw-ai-key-save').addEventListener('click', saveClaudeKey);
+$('kw-ai-key-input').addEventListener('keydown', e => { if (e.key === 'Enter') saveClaudeKey(); });
+
+$('keyword-modal-close').addEventListener('click', closeKeywordModal);
+$('keyword-modal').addEventListener('click', e => {
+  if (e.target === $('keyword-modal')) closeKeywordModal();
+});
+
+$('keyword-suggestion-filter').addEventListener('input', e => {
+  renderKeywordSuggestions(e.target.value);
+});
+
+async function addKeywordFromModal() {
+  const val = $('keyword-modal-input').value.trim();
+  if (!val) return;
+  $('keyword-modal-input').value = '';
+  const prev = JSON.parse(JSON.stringify(filters));
+  filters.keywords = [...filters.keywords, val];
+  if (await saveFiltersGuarded(prev)) {
+    renderKeywords();
+    renderProjects();
+    renderKeywordModalList();
+    renderKeywordSuggestions($('keyword-suggestion-filter').value);
+  }
+}
+
+$('keyword-modal-add').addEventListener('click', addKeywordFromModal);
+$('keyword-modal-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addKeywordFromModal();
+});
 
 // ── Numeric filters ──────────────────────────────────────
 function bindNumeric(id, key, rerender = true) {
@@ -1815,6 +2335,33 @@ $('auto-hide-schedule').addEventListener('change', async (e) => {
   renderAutoHide();
 });
 
+// Pending queue count — how many projects currently match the filter rules.
+async function loadPending() {
+  const badge = $('pending-badge');
+  const countEl = $('pending-count');
+  countEl.textContent = '…';
+  badge.style.display = 'flex';
+  const { status, body } = await api('/api/auto-hide/pending');
+  // On auth failure or any server error, hide the badge silently —
+  // the cookie modal handles session errors separately.
+  if (status === 401 || status >= 500) {
+    badge.style.display = 'none';
+    return;
+  }
+  if (body.ok) {
+    badge.style.display = 'flex';
+    if (body.pending === 0) {
+      countEl.innerHTML = `<span style="color:var(--success)">✓ 0 pending</span> <span style="color:var(--text-3)">(${body.scanned} scanned)</span>`;
+    } else {
+      countEl.innerHTML = `<span style="color:var(--warning)">⏳ ${body.pending} pending</span> <span style="color:var(--text-3)">(of ${body.scanned} scanned)</span>`;
+    }
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+$('pending-refresh-btn').addEventListener('click', loadPending);
+
 // "Apply filters now" — direct commit, no confirm.
 $('apply-filters-btn').addEventListener('click', async () => {
   const btn = $('apply-filters-btn');
@@ -1825,7 +2372,7 @@ $('apply-filters-btn').addEventListener('click', async () => {
   status.style.display = 'block';
   status.innerHTML = 'Scanning and hiding matches…';
 
-  const { body } = await api('/api/auto-hide/run', { method: 'POST' });
+  const { body } = await api('/api/auto-hide/run', { method: 'POST', body: { limitOverride: 500 } });
 
   btn.disabled = false;
   btn.textContent = '▶ Apply filters now';
@@ -1849,6 +2396,7 @@ $('apply-filters-btn').addEventListener('click', async () => {
   renderAutoHide();
   renderHeader();
   reloadProjects();
+  loadPending();  // refresh queue count after hiding
 });
 
 function renderAutoHide() {
@@ -1857,6 +2405,7 @@ function renderAutoHide() {
   $('auto-hide-schedule').value = autoHide.schedule || 'hourly';
   $('auto-hide-max-per-run').value = autoHide.maxPerRun ?? 200;
   $('auto-indicator').style.display = autoHide.enabled ? 'inline-flex' : 'none';
+  $('apply-filters-section').style.display = autoHide.enabled ? 'none' : 'block';
 
   const isCustom = autoHide.schedule === 'custom';
   $('auto-hide-custom-row').style.display = isCustom ? 'block' : 'none';
@@ -1944,6 +2493,7 @@ function applyFiltersToUI() {
   $('min-incentive').value = filters.minIncentive;
   $('max-duration').value = filters.maxDuration;
   $('min-duration').value = filters.minDuration;
+  $('max-questions').value = filters.maxQuestions;
   $('sort-select').value = filters.sort;
   renderPriorityKeywords();
   renderKeywords();
@@ -1951,16 +2501,33 @@ function applyFiltersToUI() {
 }
 
 // ── Cookie modal ──────────────────────────────────────────
+// ── Toast notification ────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, durationMs = 3500) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.classList.remove('show'); _toastTimer = null; }, durationMs);
+}
+
 function showCookieModal(msg) {
-  $('cookie-modal-title').textContent = msg ? 'Session expired' : 'Update session cookie';
+  const forced = Boolean(msg); // true = session expired, false = voluntary update
+  $('cookie-modal-title').textContent = forced ? 'Session expired' : 'Update session cookie';
   $('cookie-modal-desc').textContent = msg || 'Paste a fresh cookie value to update the session.';
   $('cookie-modal-error').classList.remove('show');
   $('cookie-input').value = '';
+  $('cookie-modal').classList.toggle('forced', forced);
+  $('cookie-cancel').style.display = forced ? 'none' : '';
   $('cookie-modal').classList.add('open');
   setTimeout(() => $('cookie-input').focus(), 100);
 }
 
-function hideCookieModal() { $('cookie-modal').classList.remove('open'); }
+function hideCookieModal() {
+  // Never close a forced (session-expired) modal — user must supply a cookie.
+  if ($('cookie-modal').classList.contains('forced')) return;
+  $('cookie-modal').classList.remove('open');
+}
 
 $('cookie-btn').addEventListener('click', () => showCookieModal());
 $('cookie-cancel').addEventListener('click', hideCookieModal);
@@ -1977,7 +2544,8 @@ $('cookie-save').addEventListener('click', async () => {
   const { status } = await api('/api/config/cookie', { method: 'POST', body: { cookie } });
   if (status >= 200 && status < 300) {
     hasCookie = true;
-    hideCookieModal();
+    $('cookie-modal').classList.remove('forced'); // allow dismiss again
+    $('cookie-modal').classList.remove('open');
     reloadProjects();
   } else {
     $('cookie-modal-error').textContent = 'Failed to save cookie. Try again.';
@@ -2052,6 +2620,72 @@ async function reloadProjects() {
 
 $('reload-btn').addEventListener('click', reloadProjects);
 
+// ── Project detail cache (localStorage) ──────────────────
+//
+// Stores screenerQuestionsLength keyed by project ID.
+// TTL: 7 days — question counts are set at project creation and don't change.
+// Pruned on boot; capped at DETAIL_CACHE_MAX entries to prevent bloat.
+const DETAIL_CACHE_KEY  = 'rp_detail_cache';
+const DETAIL_CACHE_TTL  = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+const DETAIL_CACHE_MAX  = 1000;
+
+let _detailCache = null; // loaded lazily
+
+function _loadDetailCache() {
+  if (_detailCache) return _detailCache;
+  try {
+    _detailCache = JSON.parse(localStorage.getItem(DETAIL_CACHE_KEY) || '{}');
+  } catch {
+    _detailCache = {};
+  }
+  return _detailCache;
+}
+
+function _saveDetailCache() {
+  try {
+    localStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(_detailCache));
+  } catch { /* storage full or private-mode restriction — silently skip */ }
+}
+
+/** Returns the cached screenerQuestionsLength, or undefined if missing/stale. */
+function detailCacheGet(id) {
+  const cache = _loadDetailCache();
+  const entry = cache[id];
+  if (!entry) return undefined;
+  if (Date.now() - entry.cachedAt > DETAIL_CACHE_TTL) return undefined;
+  return entry.screenerQuestionsLength;
+}
+
+/** Writes a fetched value into the cache and persists it. */
+function detailCacheSet(id, screenerQuestionsLength) {
+  const cache = _loadDetailCache();
+  cache[id] = { screenerQuestionsLength, cachedAt: Date.now() };
+
+  // Cap size: evict oldest entries when over the limit
+  const entries = Object.entries(cache);
+  if (entries.length > DETAIL_CACHE_MAX) {
+    entries.sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+    const evict = entries.slice(0, entries.length - DETAIL_CACHE_MAX);
+    for (const [key] of evict) delete cache[key];
+  }
+
+  _saveDetailCache();
+}
+
+/** Remove entries older than TTL. Called once on boot. */
+function pruneDetailCache() {
+  const cache = _loadDetailCache();
+  const cutoff = Date.now() - DETAIL_CACHE_TTL;
+  let changed = false;
+  for (const [id, entry] of Object.entries(cache)) {
+    if (entry.cachedAt < cutoff) { delete cache[id]; changed = true; }
+  }
+  if (changed) _saveDetailCache();
+}
+
+// Prune stale entries on boot
+pruneDetailCache();
+
 // ── Project detail enrichment (screenerQuestionsLength) ───
 const DETAIL_CONCURRENCY = 4;
 let enrichAbortFlag = 0; // increment to cancel an in-progress enrichment run
@@ -2059,8 +2693,24 @@ let enrichAbortFlag = 0; // increment to cancel an in-progress enrichment run
 async function enrichVisibleProjects() {
   const myRun = ++enrichAbortFlag; // each reload gets its own run id
 
+  // Pass 1: serve from cache instantly — no network needed
+  for (const p of allProjects) {
+    if (p._detailFetched) continue;
+    const id = getId(p);
+    const cached = detailCacheGet(id);
+    if (cached !== undefined) {
+      p.screenerQuestionsLength = cached;
+      p._detailFetched = true;
+      patchCardQuestions(id, p);
+    }
+  }
+
+  // Pass 2: fetch the remainder from the API
   const toFetch = allProjects.filter(p => !p._detailFetched && !isHidden(p).hidden);
-  if (toFetch.length === 0) return;
+  if (toFetch.length === 0) {
+    syncQuestionCountsToServer();
+    return;
+  }
 
   for (let i = 0; i < toFetch.length; i += DETAIL_CONCURRENCY) {
     if (enrichAbortFlag !== myRun) return;
@@ -2072,12 +2722,32 @@ async function enrichVisibleProjects() {
         if (status === 401) { enrichAbortFlag = myRun - 1; return; }
         if (status === 200) {
           // Response shape: { success, statusCode, response: { screenerQuestionsLength, ... } }
-          p.screenerQuestionsLength = body?.response?.screenerQuestionsLength ?? null;
+          const qLen = body?.response?.screenerQuestionsLength ?? null;
+          p.screenerQuestionsLength = qLen;
+          detailCacheSet(id, qLen); // persist for future page loads
         }
       } catch (err) { /* network error — skip this project */ }
       p._detailFetched = true;
       patchCardQuestions(id, p);
     }));
+  }
+
+  // All detail data fetched — push question counts to server for auto-hide filtering
+  if (enrichAbortFlag === myRun) syncQuestionCountsToServer();
+}
+
+// Push all locally-known question counts to the server so auto-hide can apply
+// the maxQuestions filter even though the listing API omits that field.
+async function syncQuestionCountsToServer() {
+  const cache = _detailCache;
+  const counts = {};
+  for (const [id, entry] of Object.entries(cache)) {
+    if (entry && typeof entry.screenerQuestionsLength === 'number') {
+      counts[id] = entry.screenerQuestionsLength;
+    }
+  }
+  if (Object.keys(counts).length > 0) {
+    await api('/api/projects/question-counts', { method: 'POST', body: { counts } });
   }
 }
 
@@ -2093,20 +2763,8 @@ function patchCardQuestions(id, p) {
   span.style.display = '';
 }
 
-// ── Apply button: intercept → screener modal ─────────────
-async function openAndPromptApply(id, link) {
-  const { status, body } = await api(`/api/projects/${id}/screener`);
-  if (status === 401) { showCookieModal(); return; }
-  const questions = body?.questions ?? [];
-  if (status !== 200 || questions.length === 0) {
-    // No screener questions — fall straight through to the old behaviour
-    _openLinkAndShowPrompt(id, link);
-    return;
-  }
-  openScreenerModal(id, link, body);
-}
-
-function _openLinkAndShowPrompt(id, link) {
+// ── Apply button ──────────────────────────────────────────
+function openAndPromptApply(id, link) {
   if (link) window.open(link, '_blank', 'noopener,noreferrer');
   const prompt = document.getElementById(`apply-prompt-${id}`);
   if (prompt) {
@@ -2115,293 +2773,179 @@ function _openLinkAndShowPrompt(id, link) {
   }
 }
 
-// ── Screener modal ────────────────────────────────────────
-let _screenerProjectId = null;
-let _screenerLink = null;
-let _screenerHistory = [];   // loaded once on first open
-let _screenerOpenedAt = 0;   // timestamp for totalTime calculation
-let _screenerQuestions = []; // full question objects (for type mapping)
+// ── Claude-in-Chrome assistant ────────────────────────────
 
-async function openScreenerModal(id, link, screenerData) {
-  _screenerProjectId = id;
-  _screenerLink = link;
+let _applyClaudeProjectId = null;
+let _applyClaudeLink = null;
+let _applyClaudePromptText = '';
 
-  // Load answer history once
-  if (_screenerHistory.length === 0) {
-    const { body } = await api('/api/screener-answers');
-    if (Array.isArray(body)) _screenerHistory = body;
-  }
+async function openApplyClaudeModal(id, link) {
+  _applyClaudeProjectId = id;
+  _applyClaudeLink = link;
 
-  const questions = screenerData.questions ?? [];
-  const existing  = screenerData.existingResponse ?? {};
-  const nda       = screenerData.nda ?? {};
-
-  // Project name from allProjects
   const proj = allProjects.find(p => getId(p) === id);
-  const projName = proj ? getTitle(proj) : id;
+  $('apply-claude-project').textContent = proj ? getTitle(proj) : id;
+  $('apply-claude-prompt-preview').textContent = 'Building prompt…';
+  $('apply-claude-copy').textContent = '📋 Copy prompt';
+  $('apply-claude-copy').disabled = false;
+  $('apply-claude-modal').classList.add('open');
 
-  $('screener-modal-title').textContent = projName;
-  $('screener-modal-meta').textContent =
-    `${questions.length} question${questions.length === 1 ? '' : 's'}` +
-    (existing.status ? ` · status: ${existing.status}` : '');
-
-  // NDA / outstanding steps notice
-  const notice = $('screener-modal-notice');
-  const noticeLines = [];
-  if (nda.requiresNda) noticeLines.push(`📋 NDA required — <a href="${nda.ndaUrl || '#'}" target="_blank" rel="noopener noreferrer">review & sign on Respondent.io</a>`);
-  const steps = existing.outstandingSteps ?? {};
-  if (steps.linkedin) noticeLines.push('🔗 LinkedIn profile required (complete on Respondent.io)');
-  if (steps.phone)    noticeLines.push('📱 Phone verification required (complete on Respondent.io)');
-  if (steps.plaid)    noticeLines.push('🏦 Bank verification required (complete on Respondent.io)');
-  if (noticeLines.length) {
-    notice.innerHTML = noticeLines.join('<br>');
-    notice.style.display = '';
-  } else {
-    notice.style.display = 'none';
-  }
-
-  // Show "already complete" state
-  const submitBtn = $('screener-submit');
-  if (screenerData.isScreenerComplete) {
-    $('screener-modal-meta').textContent += ' · ✅ already submitted';
-    submitBtn.textContent = 'Resubmit in-app ✓';
-  } else {
-    submitBtn.textContent = 'Submit in-app ✓';
-  }
-
-  $('screener-modal-error').classList.remove('show');
-  $('screener-modal-error').textContent = '';
-
-  _screenerQuestions = questions;
-  renderScreenerQuestions(questions, existing.answeredQuestionIds ?? []);
-  $('screener-modal').classList.add('open');
-  _screenerOpenedAt = Date.now();
-}
-
-function renderScreenerQuestions(questions, answeredIds) {
-  const container = $('screener-modal-questions');
-  container.innerHTML = '';
-  questions.forEach((q, idx) => {
-    const suggestion = findScreenerSuggestion(q.text);
-    const div = document.createElement('div');
-    div.className = 'screener-question';
-    div.dataset.qid = q.id;
-
-    const label = document.createElement('div');
-    label.className = 'screener-question-label';
-    label.innerHTML = `${idx + 1}. ${esc(q.text)}` +
-      (q.isRequired ? '<span class="screener-required">*</span>' : '');
-    div.appendChild(label);
-
-    if (suggestion !== null) {
-      const chip = document.createElement('div');
-      chip.className = 'screener-suggestion';
-      chip.textContent = '💡 Pre-filled from a previous answer';
-      div.appendChild(chip);
-    }
-
-    const input = renderScreenerInput(q, suggestion, answeredIds.includes(q.id));
-    div.appendChild(input);
-    container.appendChild(div);
-  });
-}
-
-function renderScreenerInput(q, suggestion, alreadyAnswered) {
-  const wrap = document.createElement('div');
-  // type 1: single-select (radio), type 2: long text, type 3: multi-select (checkbox), type 4: short text
-  if (q.questionType === 1 || q.questionType === 3) {
-    wrap.className = 'screener-options';
-    const inputType = q.questionType === 1 ? 'radio' : 'checkbox';
-    const groupName = `sq_${q.id}`;
-    (q.answers || []).forEach(a => {
-      const lbl = document.createElement('label');
-      lbl.className = 'screener-option';
-      const inp = document.createElement('input');
-      inp.type = inputType;
-      inp.name = groupName;
-      inp.value = a.id;
-      inp.dataset.uid = a.uid;
-      inp.dataset.text = a.text;
-      // Pre-select if suggestion matches option text
-      if (suggestion !== null) {
-        const sArr = Array.isArray(suggestion) ? suggestion : [suggestion];
-        if (sArr.some(s => s === a.text || s === a.id)) inp.checked = true;
-      }
-      const span = document.createElement('span');
-      span.textContent = a.text + (a.isOther ? ' (other)' : '');
-      lbl.appendChild(inp);
-      lbl.appendChild(span);
-      wrap.appendChild(lbl);
-    });
-    // "Other" text input (shown when isOther radio/checkbox checked)
-    if (q.includeOtherOption) {
-      const otherInput = document.createElement('input');
-      otherInput.type = 'text';
-      otherInput.placeholder = 'Your answer…';
-      otherInput.dataset.otherId = q.id;
-      otherInput.style.display = 'none';
-      otherInput.style.marginTop = '6px';
-      wrap.appendChild(otherInput);
-      wrap.addEventListener('change', () => {
-        const hasOther = Array.from(wrap.querySelectorAll(`input[type="${inputType}"]`))
-          .some(i => i.dataset.text === 'Other' && i.checked);
-        otherInput.style.display = hasOther ? '' : 'none';
-      });
-    }
-  } else {
-    // type 2 or 4: text
-    const isLong = q.questionType === 2;
-    const el = document.createElement(isLong ? 'textarea' : 'input');
-    if (!isLong) el.type = 'text';
-    el.dataset.qinput = q.id;
-    el.placeholder = isLong ? 'Your answer…' : 'Your answer';
-    el.style.marginTop = '4px';
-    if (suggestion !== null && typeof suggestion === 'string') el.value = suggestion;
-    wrap.appendChild(el);
-  }
-  return wrap;
-}
-
-function findScreenerSuggestion(questionText) {
-  const needle = questionText.toLowerCase().replace(/\s+/g, ' ').trim();
-  for (let i = _screenerHistory.length - 1; i >= 0; i--) {
-    const match = (_screenerHistory[i].answers || [])
-      .find(a => a.questionText.toLowerCase().replace(/\s+/g, ' ').trim() === needle);
-    if (match !== undefined) return match.answer;
-  }
-  return null;
-}
-
-const QTYPE_NAME = { 1: 'radio', 2: 'textarea', 3: 'checkbox', 4: 'text' };
-
-// Returns { responses, totalTime } ready to POST, plus `historyAnswers` for local storage.
-function collectScreenerAnswers() {
-  const container = $('screener-modal-questions');
-  const responses = [];
-  const historyAnswers = [];
-
-  container.querySelectorAll('.screener-question').forEach((div, order) => {
-    const qid = div.dataset.qid;
-    const q = _screenerQuestions.find(x => x.id === qid);
-    if (!q) return;
-    const questionText = q.text;
-    const questionType = q.questionType;
-    const type = QTYPE_NAME[questionType] || 'text';
-
-    let answers = null;
-
-    if (questionType === 1) {
-      // Radio — single selection; shape: { id, uid, text } from the selected option
-      const checked = div.querySelector('input[type="radio"]:checked');
-      if (checked) {
-        const isOther = checked.dataset.text === 'Other';
-        const otherInput = div.querySelector(`input[data-other-id="${qid}"]`);
-        if (isOther && otherInput?.value) {
-          answers = { id: checked.value, uid: checked.dataset.uid, text: otherInput.value };
-        } else {
-          answers = { id: checked.value, uid: checked.dataset.uid, text: checked.dataset.text };
-        }
-      }
-    } else if (questionType === 3) {
-      // Checkbox — multiple selections; shape: array of { id, uid, text }
-      const checked = Array.from(div.querySelectorAll('input[type="checkbox"]:checked'));
-      if (checked.length) {
-        answers = checked.map(c => ({ id: c.value, uid: c.dataset.uid, text: c.dataset.text }));
-      }
-    } else {
-      // Textarea or text input; shape: { id, uid, text } — use question id + fresh UUID
-      const textEl = div.querySelector('[data-qinput]');
-      if (textEl?.value.trim()) {
-        answers = { id: qid, uid: crypto.randomUUID(), text: textEl.value.trim() };
-      }
-    }
-
-    if (answers === null) return; // unanswered — skip
-
-    responses.push({ questionId: qid, questionText, order, type, questionType, answers });
-
-    // For local history, store human-readable text
-    let humanAnswer;
-    if (questionType === 1) {
-      humanAnswer = answers.text; // already the option text
-    } else if (questionType === 3) {
-      humanAnswer = answers.map(a => a.text);
-    } else {
-      humanAnswer = answers.text; // the typed text
-    }
-    historyAnswers.push({ questionId: qid, questionText, questionType, answer: humanAnswer });
-  });
-
-  // Calculate a plausible totalTime: 10–20 seconds per question (all questions, not just answered ones)
-  const elapsed = Math.round((Date.now() - _screenerOpenedAt) / 1000);
-  const minTime = _screenerQuestions.length * 10;
-  const totalTime = Math.max(elapsed, minTime);
-
-  return { responses, totalTime, historyAnswers };
-}
-
-async function saveScreenerAnswers(historyAnswers) {
-  if (!historyAnswers.length) return;
-  const proj = allProjects.find(p => getId(p) === _screenerProjectId);
-  const projectName = proj ? getTitle(proj) : _screenerProjectId;
-  const { body } = await api('/api/screener-answers', {
-    method: 'POST',
-    body: { projectId: _screenerProjectId, projectName, answers: historyAnswers },
-  });
-  if (body?.ok) {
-    const { body: fresh } = await api('/api/screener-answers');
-    if (Array.isArray(fresh)) _screenerHistory = fresh;
+  try {
+    _applyClaudePromptText = await buildClaudePrompt(link);
+    $('apply-claude-prompt-preview').textContent = _applyClaudePromptText;
+  } catch (err) {
+    $('apply-claude-prompt-preview').textContent = '(Failed to build prompt — check your connection)';
   }
 }
 
-function closeScreenerModal() {
-  $('screener-modal').classList.remove('open');
-  _screenerProjectId = null;
-  _screenerLink = null;
+function closeApplyClaudeModal() {
+  $('apply-claude-modal').classList.remove('open');
+  _applyClaudeProjectId = null;
+  _applyClaudeLink = null;
 }
 
-// Screener modal button handlers
-$('screener-cancel').addEventListener('click', closeScreenerModal);
-
-$('screener-apply-direct').addEventListener('click', async () => {
-  const { historyAnswers } = collectScreenerAnswers();
-  await saveScreenerAnswers(historyAnswers);
-  const id = _screenerProjectId;
-  const link = _screenerLink;
-  closeScreenerModal();
-  _openLinkAndShowPrompt(id, link);
+$('apply-claude-cancel').addEventListener('click', closeApplyClaudeModal);
+$('apply-claude-modal').addEventListener('click', e => {
+  if (e.target === $('apply-claude-modal')) closeApplyClaudeModal();
 });
 
-$('screener-submit').addEventListener('click', async () => {
-  const { responses, totalTime, historyAnswers } = collectScreenerAnswers();
-  const errEl = $('screener-modal-error');
-  errEl.classList.remove('show');
+$('apply-claude-copy').addEventListener('click', async () => {
+  if (!_applyClaudePromptText) return;
+  try {
+    await navigator.clipboard.writeText(_applyClaudePromptText);
+    $('apply-claude-copy').textContent = '✓ Copied!';
+    $('apply-claude-copy').style.color = 'var(--success)';
+    setTimeout(() => {
+      $('apply-claude-copy').textContent = '📋 Copy prompt';
+      $('apply-claude-copy').style.color = '';
+    }, 2500);
+  } catch { showToast('Copy failed — try manually selecting the text.'); }
+});
 
-  const submitBtn = $('screener-submit');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Submitting…';
+$('apply-claude-open-app').addEventListener('click', () => {
+  if (_applyClaudeLink) window.open(_applyClaudeLink, '_blank', 'noopener,noreferrer');
+});
 
-  const { status, body } = await api(`/api/projects/${_screenerProjectId}/screener/submit`, {
-    method: 'POST',
-    body: { responses, totalTime },
-  });
+$('apply-claude-open-claude').addEventListener('click', () => {
+  window.open('https://claude.ai', '_blank', 'noopener,noreferrer');
+});
 
-  submitBtn.disabled = false;
-  submitBtn.textContent = 'Submit in-app ✓';
+$('apply-claude-import').addEventListener('click', () => {
+  closeApplyClaudeModal();
+  openImportModal();
+});
 
-  if (status === 401) { showCookieModal(); closeScreenerModal(); return; }
-  if (!body?.ok && status >= 400) {
-    errEl.textContent = body?.message || body?.error || `Submission failed (${status}) — try "Apply on Respondent.io" instead.`;
-    errEl.classList.add('show');
+$('apply-claude-applied').addEventListener('click', async () => {
+  const id = _applyClaudeProjectId;
+  closeApplyClaudeModal();
+  if (id) await hideProjectById(id, null, { applied: true });
+});
+
+/**
+ * Fetch the user's deduplicated answer profile and build a prompt for Claude.
+ * @param {string} referralLink
+ * @returns {Promise<string>}
+ */
+async function buildClaudePrompt(referralLink) {
+  let profile = [];
+  try {
+    const { body } = await api('/api/screener-answers/profile');
+    if (Array.isArray(body)) profile = body;
+  } catch { /* ignore — proceed with empty profile */ }
+
+  const formatAnswer = (a) => {
+    if (Array.isArray(a)) return a.join(', ');
+    if (a && typeof a === 'object' && a.text !== undefined) return a.text;
+    return String(a ?? '');
+  };
+
+  const profileLines = profile
+    .filter(p => p.questionText && p.answer !== undefined && p.answer !== null)
+    .map(p => `• ${p.questionText}: ${formatAnswer(p.answer)}`)
+    .join('\n');
+
+  const profileSection = profileLines
+    ? `\nMy profile:\n${profileLines}\n`
+    : '';
+
+  return `Please navigate to: ${referralLink}
+
+You're helping me fill out a research study screener form. Fill in each question using my profile below. For any question you can't confidently answer from my profile, stop and ask me directly before proceeding.
+${profileSection}
+When all questions are answered and the form is submitted, output the complete list in this exact format (one pair per line, no extra text before or after the list):
+Q: [exact question text]
+A: [your answer]`;
+}
+
+// ── Import-answers modal ───────────────────────────────────
+
+function openImportModal() {
+  $('import-textarea').value = '';
+  $('import-error').textContent = '';
+  $('import-modal').classList.add('open');
+  setTimeout(() => $('import-textarea').focus(), 50);
+}
+
+function closeImportModal() {
+  $('import-modal').classList.remove('open');
+}
+
+/**
+ * Parse Claude's Q:/A: output into answer pairs.
+ * Tolerates varied whitespace and punctuation after the Q/A prefix.
+ * @param {string} text
+ * @returns {{ questionText: string, answer: string }[]}
+ */
+function parseClaudeAnswers(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const pairs = [];
+  let currentQ = null;
+  for (const line of lines) {
+    if (/^Q[:.]\s*/i.test(line)) {
+      currentQ = line.replace(/^Q[:.]\s*/i, '').trim();
+    } else if (/^A[:.]\s*/i.test(line) && currentQ !== null) {
+      pairs.push({ questionText: currentQ, answer: line.replace(/^A[:.]\s*/i, '').trim() });
+      currentQ = null;
+    }
+  }
+  return pairs;
+}
+
+$('import-answers-btn').addEventListener('click', openImportModal);
+$('import-cancel').addEventListener('click', closeImportModal);
+$('import-modal').addEventListener('click', (e) => {
+  if (e.target === $('import-modal')) closeImportModal();
+});
+
+$('import-save').addEventListener('click', async () => {
+  const raw = $('import-textarea').value;
+  const errEl = $('import-error');
+  errEl.textContent = '';
+
+  const pairs = parseClaudeAnswers(raw);
+  if (pairs.length === 0) {
+    errEl.textContent = 'No Q:/A: pairs found. Make sure each question starts with "Q:" and each answer starts with "A:".';
     return;
   }
 
-  // Success — save answers locally then open link
-  await saveScreenerAnswers(historyAnswers);
-  const id = _screenerProjectId;
-  const link = _screenerLink;
-  closeScreenerModal();
-  _openLinkAndShowPrompt(id, link);
+  const saveBtn = $('import-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
+  const { status, body } = await api('/api/screener-answers', {
+    method: 'POST',
+    body: { projectId: 'imported', projectName: 'Imported from Claude', answers: pairs },
+  });
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save answers';
+
+  if (status === 200 && body?.ok) {
+    closeImportModal();
+    showToast(`Saved ${pairs.length} answer${pairs.length === 1 ? '' : 's'} ✓`);
+  } else {
+    errEl.textContent = body?.error || `Save failed (${status})`;
+  }
 });
 
 // ── Hide-by-id (reusable for × button + Ctrl+D) ──────────
@@ -2427,6 +2971,22 @@ async function hideProjectById(id, btn, { applied = false } = {}) {
 
 // ── Keyboard nav (↑ / ↓ / Ctrl+D) ────────────────────────
 document.addEventListener('keydown', async (e) => {
+  // ESC closes the topmost open modal (works even when focus is inside an input)
+  if (e.key === 'Escape') {
+    const open = document.querySelector('.modal-backdrop.open');
+    if (open) {
+      e.preventDefault();
+      const id = open.id;
+      if (id === 'cookie-modal')       hideCookieModal();
+      else if (id === 'debug-modal')   open.classList.remove('open');
+      else if (id === 'apply-claude-modal') closeApplyClaudeModal();
+      else if (id === 'import-modal')  closeImportModal();
+      else if (id === 'keyword-modal') closeKeywordModal();
+      else                             open.classList.remove('open'); // confirm-modal & any future modals
+    }
+    return;
+  }
+
   // Don't intercept when typing in inputs/textareas
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
@@ -2436,7 +2996,7 @@ document.addEventListener('keydown', async (e) => {
   if (e.key === 'ArrowDown') {
     e.preventDefault();
     if (allProjects.length === 0) return;
-    selectedIndex = Math.min(allProjects.length - 1, Math.max(0, selectedIndex) + 1);
+    selectedIndex = Math.min(allProjects.length - 1, selectedIndex < 0 ? 0 : selectedIndex + 1);
     updateSelectionDom();
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
@@ -2470,6 +3030,7 @@ document.addEventListener('keydown', async (e) => {
   bindNumeric('min-incentive', 'minIncentive');
   bindNumeric('max-duration', 'maxDuration');
   bindNumeric('min-duration', 'minDuration');
+  bindNumeric('max-questions', 'maxQuestions');
   renderAutoHide();
   renderKeepAlive();
 
@@ -2480,7 +3041,40 @@ document.addEventListener('keydown', async (e) => {
     return;
   }
   reloadProjects();
+  loadPending();  // show queue count on boot (runs in background, non-blocking)
+  startAutoHidePoller();
 })();
+
+// ── Auto-hide sync poller ─────────────────────────────────
+// Polls /api/config every 20 s. When the server's lastRunAt changes and
+// projects were actually hidden, reload the project list to stay in sync.
+let _lastKnownRunAt = autoHide.lastRunAt;
+
+async function pollAutoHideSync() {
+  if (!hasCookie) return;
+  const { status, body } = await api('/api/config');
+  if (status !== 200 || !body.autoHide) return;
+
+  const runAt  = body.autoHide.lastRunAt;
+  const hidden = body.autoHide.lastRunResult?.hidden ?? 0;
+
+  if (runAt && runAt !== _lastKnownRunAt) {
+    _lastKnownRunAt = runAt;
+    // Always update the status display so last-run text stays current
+    autoHide = { maxPerRun: 1, ...autoHide, ...body.autoHide, maxPerRun: Math.min(20, body.autoHide.maxPerRun ?? 1) };
+    renderAutoHide();
+    renderHeader();
+    if (hidden > 0) {
+      // Something was actually hidden — refresh the list and queue count
+      reloadProjects();
+      loadPending();
+    }
+  }
+}
+
+function startAutoHidePoller() {
+  setInterval(pollAutoHideSync, 20_000);
+}
 </script>
 
 </body>

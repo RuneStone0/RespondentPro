@@ -30,6 +30,16 @@ export const getDuration = (p) =>
 export const getIncentive = (p) =>
   toNumber(p?.respondentRemuneration ?? p?.incentive ?? p?.compensation ?? p?.amount ?? 0);
 
+/** Returns the screener question count, or 0 if unknown. */
+export const getScreenerQuestionCount = (p) =>
+  Number(
+    p?.screenerQuestionsLength
+    ?? p?.response?.screenerQuestionsLength
+    ?? p?.screenerQuestionsCount
+    ?? p?.numberOfScreenerQuestions
+    ?? (Array.isArray(p?.screenerQuestions) ? p.screenerQuestions.length : 0)
+  ) || 0;
+
 export function getHourlyRate(p) {
   const direct = toNumber(p?.hourlyRate ?? p?.hourly_rate ?? p?.pay ?? p?.rate ?? 0);
   if (direct > 0) return direct;

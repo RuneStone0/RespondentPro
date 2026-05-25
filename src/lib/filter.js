@@ -1,5 +1,5 @@
 // Filter-rule matching — decides whether a project should be hidden.
-import { getTitle, getDescription, getDuration, getIncentive, getHourlyRate } from './project-fields.js';
+import { getTitle, getDescription, getDuration, getIncentive, getHourlyRate, getScreenerQuestionCount } from './project-fields.js';
 
 /**
  * Returns a human-readable reason string if the project matches a hide rule,
@@ -14,7 +14,7 @@ import { getTitle, getDescription, getDuration, getIncentive, getHourlyRate } fr
  *
  * @param {object} project
  * @param {{keywords?: string[], minHourlyRate?: number, minIncentive?: number,
- *          minDuration?: number, maxDuration?: number}} filters
+ *          minDuration?: number, maxDuration?: number, maxQuestions?: number}} filters
  * @returns {string|null}
  */
 export function whyHide(project, filters = {}) {
@@ -23,6 +23,7 @@ export function whyHide(project, filters = {}) {
   const hourly = getHourlyRate(project);
   const incentive = getIncentive(project);
   const duration = getDuration(project);
+  const questions = getScreenerQuestionCount(project);
 
   for (const kw of (filters.keywords || [])) {
     if (!kw) continue;
@@ -40,6 +41,9 @@ export function whyHide(project, filters = {}) {
   }
   if (filters.minDuration > 0 && duration > 0 && duration < filters.minDuration) {
     return `${duration}min < min ${filters.minDuration}min`;
+  }
+  if (filters.maxQuestions > 0 && questions > 0 && questions > filters.maxQuestions) {
+    return `${questions}q > max ${filters.maxQuestions}q`;
   }
   return null;
 }
