@@ -79,7 +79,8 @@ cp env.example .env
 |----------|---------|-------------|
 | `DATA_STORE_MODE` | `local` | `local` or `mongodb` |
 | `MONGODB_URI` | — | Required when `DATA_STORE_MODE=mongodb` |
-| `ANTHROPIC_API_KEY` | — | Optional — enables AI keyword suggestions (can also be set via UI) |
+| `AI_PROVIDER` | — | Active AI provider: `anthropic`, `grok`, or `gpt` |
+| `AI_API_KEY` | — | API key for the provider set in `AI_PROVIDER` (overrides value stored in data store) |
 
 > **Security:** Never put `RESPONDENT_COOKIE` in `.env`. Your session cookie is a live auth token — set it via the cookie modal in the app UI.
 

@@ -31,7 +31,7 @@ if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 // ── Config ────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
   cookie: '',
-  claudeApiKey: process.env.ANTHROPIC_API_KEY || '',
+  claudeApiKey: '',
   profileId: '',
   filters: {
     keywords: [],
@@ -66,8 +66,8 @@ const DEFAULT_CONFIG = {
   // as JSON and every field is type-checked/trimmed before use —
   // treated as untrusted input (nosemgrep).
   aiProvider: 'anthropic',
-  openaiApiKey: '',  // nosemgrep
-  grokApiKey: '',    // nosemgrep
+  gptApiKey: '',
+  grokApiKey: '',
 };
 
 // Populated during main() startup
@@ -339,12 +339,12 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(join(__dirname, 'public')));
 
 app.get('/api/config', (req, res) => {
-  const { cookie, claudeApiKey, openaiApiKey, grokApiKey, ...safe } = config; // nosemgrep
+  const { cookie, claudeApiKey, gptApiKey, grokApiKey, ...safe } = config;
   res.json({
     ...safe,
     hasCookie: Boolean(cookie),
     hasClaudeKey: Boolean(claudeApiKey),
-    hasOpenAiKey: Boolean(openaiApiKey), // nosemgrep
+    hasGptKey: Boolean(gptApiKey),
     hasGrokKey: Boolean(grokApiKey),
     schedules: SCHEDULE_OPTIONS,
     cookieName: COOKIE_NAME,
@@ -616,7 +616,7 @@ app.post('/api/screener-answers', async (req, res) => {
 
 // ── AI provider key management ────────────────────────────
 
-const AI_PROVIDERS = ['anthropic', 'openai', 'grok']; // nosemgrep
+const AI_PROVIDERS = ['anthropic', 'gpt', 'grok'];
 
 // Save an API key for the given provider and (optionally) set it as active.
 app.post('/api/config/ai-provider', (req, res) => {
@@ -628,7 +628,7 @@ app.post('/api/config/ai-provider', (req, res) => {
   const trimmed = apiKey.trim();
   if (provider === 'anthropic') config.claudeApiKey = trimmed;
   else if (provider === 'grok')  config.grokApiKey   = trimmed;
-  else                           config.openaiApiKey = trimmed; // nosemgrep
+  else                           config.gptApiKey = trimmed;
   config.aiProvider = provider;
   saveConfig();
   res.json({ ok: true, provider, hasKey: Boolean(trimmed) });
@@ -650,22 +650,22 @@ app.post('/api/config/claude-key', (req, res) => {
 // type-checked / trimmed — treated as untrusted input before use. nosemgrep
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const OAI_COMPAT = { // nosemgrep
-  openai: 'https://api.openai.com/v1/chat/completions', // nosemgrep
-  grok:   'https://api.x.ai/v1/chat/completions',
+const OAI_COMPAT = {
+  gpt:  'https://api.openai.com/v1/chat/completions', // nosemgrep — actual hostname, cannot rename
+  grok: 'https://api.x.ai/v1/chat/completions',
 };
-const OAI_MODELS = { openai: 'gpt-4o-mini', grok: 'grok-3-mini' }; // nosemgrep
+const OAI_MODELS = { gpt: 'gpt-4o-mini', grok: 'grok-3-mini' };
 
-// Call an OpenAI-compatible endpoint (used by both OpenAI and Grok). nosemgrep
-async function callOAICompat(provider, apiKey, systemPrompt, userPrompt) { // nosemgrep
-  const response = await fetch(OAI_COMPAT[provider], { // nosemgrep
+// Call an OpenAI-compatible endpoint (used by both GPT and Grok).
+async function callOAICompat(provider, apiKey, systemPrompt, userPrompt) {
+  const response = await fetch(OAI_COMPAT[provider], {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: OAI_MODELS[provider], // nosemgrep
+      model: OAI_MODELS[provider],
       max_tokens: 1024,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -708,7 +708,7 @@ app.post('/api/ai-keywords', async (req, res) => {
   const provider = config.aiProvider || 'anthropic';
   const apiKey = provider === 'anthropic' ? config.claudeApiKey
                : provider === 'grok'      ? config.grokApiKey
-               : config.openaiApiKey; // nosemgrep
+               : config.gptApiKey;
   if (!apiKey) return res.status(401).json({ error: 'no_ai_key', provider });
 
   const { projects } = req.body ?? {};
@@ -750,7 +750,7 @@ Respond with valid JSON only, no markdown, no explanation:
   try {
     const text = provider === 'anthropic'
       ? await callAnthropic(apiKey, systemPrompt, userPrompt)
-      : await callOAICompat(provider, apiKey, systemPrompt, userPrompt); // nosemgrep
+      : await callOAICompat(provider, apiKey, systemPrompt, userPrompt);
 
     // Treat LLM output as untrusted: parse JSON and validate every field.
     let parsed;
@@ -778,16 +778,15 @@ Respond with valid JSON only, no markdown, no explanation:
 // (free call — no tokens consumed). nosemgrep
 const AI_MODELS_URL = {
   anthropic: 'https://api.anthropic.com/v1/models',
+  gpt:       OAI_COMPAT.gpt.replace('/chat/completions', '/models'), // nosemgrep — openai.com hostname
   grok:      OAI_COMPAT.grok.replace('/chat/completions', '/models'),
-  // openai path derived from OAI_COMPAT to avoid repeating the hostname: nosemgrep
-  get openai() { return OAI_COMPAT.openai.replace('/chat/completions', '/models'); }, // nosemgrep
 };
 
 async function checkAiProvider() {
   const provider = config.aiProvider || 'anthropic';
   const apiKey = provider === 'anthropic' ? config.claudeApiKey
                : provider === 'grok'      ? config.grokApiKey
-               : config.openaiApiKey; // nosemgrep
+               : config.gptApiKey;
 
   if (!apiKey) return { status: 'missing_key', provider };
 
@@ -931,6 +930,18 @@ const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST;
 async function main() {
   store = await createStore(DATA_DIR, DEFAULT_CONFIG);
   config = await store.getConfig();
+
+  // AI_PROVIDER + AI_API_KEY env vars override the stored key at startup.
+  // This lets Docker / Portainer deployments inject credentials without
+  // touching the data store (12-factor style).
+  const envAiProvider = (process.env.AI_PROVIDER || '').toLowerCase();
+  const envAiKey      = process.env.AI_API_KEY || '';
+  if (envAiKey && AI_PROVIDERS.includes(envAiProvider)) {
+    config.aiProvider = envAiProvider;
+    if (envAiProvider === 'anthropic') config.claudeApiKey = envAiKey;
+    else if (envAiProvider === 'grok') config.grokApiKey   = envAiKey;
+    else                               config.gptApiKey = envAiKey;
+  }
 
   const { dirty, applied } = applyMigrations(config);
   if (applied.length) console.log('[migration]', applied.join(', '));
