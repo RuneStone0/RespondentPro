@@ -152,7 +152,7 @@ async function discoverProfileId() {
   return null;
 }
 
-async function fetchAllProjects({ pageSize = 500, maxPages = 10, useFilters = true } = {}) {
+async function fetchAllProjects({ pageSize = 500, maxPages = 10, useFilters = true, showEligible = null } = {}) {
   if (!config.cookie) throw new Error('no_cookie');
   const profileId = await discoverProfileId();
   if (!profileId) throw new Error('no_profile_id');
@@ -169,7 +169,10 @@ async function fetchAllProjects({ pageSize = 500, maxPages = 10, useFilters = tr
     const API_SORTS = ['v4Score', 'publishedAt', 'respondentRemuneration', 'timeMinutesRequired'];
     const apiSort = (useFilters && f.sort && API_SORTS.includes(f.sort)) ? f.sort : 'publishedAt';
     params.set('sort', apiSort);
-    params.set('showEligible', String(useFilters ? (f.showEligible ?? true) : true));
+    // showEligible=true  → only matched/eligible projects
+    // showEligible=false → all projects in the broader marketplace
+    const effectiveShowEligible = showEligible !== null ? showEligible : (useFilters ? (f.showEligible ?? true) : true);
+    params.set('showEligible', String(effectiveShowEligible));
     if (useFilters) {
       for (const k of (f.kindsOfResearchStudy || [])) params.append('kindsOfResearchStudy', k);
     }
@@ -508,6 +511,67 @@ app.get('/api/auto-hide/pending', async (req, res) => {
     res.json({ ok: true, pending: matches.length, scanned: projects.length });
   } catch (err) {
     if (err.message === 'no_cookie' || err.message === 'session_expired') {
+      return res.status(401).json({ error: err.message });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk-clean: fetch the FULL Respondent marketplace (eligible + non-eligible),
+// apply filter rules to all of it, and hide everything that matches a rule.
+// This syncs Respondent.io with our filter settings, not just the matched feed.
+app.post('/api/auto-hide/bulk-clean', async (req, res) => {
+  if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
+  const dryRun = req.body?.dryRun === true;
+
+  try {
+    // Fetch both views and deduplicate by project ID
+    const [{ projects: eligible }, { projects: all }] = await Promise.all([
+      fetchAllProjects({ useFilters: false, showEligible: true }),
+      fetchAllProjects({ useFilters: false, showEligible: false }),
+    ]);
+
+    const seen = new Set();
+    const combined = [];
+    for (const p of [...eligible, ...all]) {
+      const id = getProjectId(p);
+      if (id && !seen.has(id)) { seen.add(id); combined.push(p); }
+    }
+
+    const matches = combined.map(p => {
+      const enriched = supplementQuestionCount(p);
+      return { id: getProjectId(enriched), title: getTitle(enriched), reason: whyHide(enriched, config.filters) };
+    }).filter(m => m.reason && m.id);
+
+    debug('bulk_clean_matches', { eligible: eligible.length, all: all.length, combined: combined.length, toHide: matches.length, dryRun });
+
+    if (dryRun) return res.json({ ok: true, dryRun: true, scanned: combined.length, eligible: eligible.length, allProjects: all.length, matches });
+
+    const results = [];
+    let bumped = 0;
+    for (const m of matches) {
+      const r = await hideProject(m.id);
+      results.push({ id: m.id, title: m.title, reason: m.reason, ...r });
+      if (r.ok && !r.alreadyHidden) bumped++;
+      await sleep(HIDE_THROTTLE_MS);
+    }
+
+    config.totalHidden = (config.totalHidden || 0) + bumped;
+    saveConfig();
+
+    const summary = {
+      scanned: combined.length,
+      eligible: eligible.length,
+      allProjects: all.length,
+      matched: matches.length,
+      hidden: results.filter(r => r.ok).length,
+      alreadyHidden: results.filter(r => r.alreadyHidden).length,
+      errors: results.filter(r => !r.ok).length,
+    };
+    debug('bulk_clean_done', summary);
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    if (err.message === 'session_expired' || err.message === 'no_cookie') {
       return res.status(401).json({ error: err.message });
     }
     res.status(500).json({ error: err.message });

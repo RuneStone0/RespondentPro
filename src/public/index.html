@@ -1192,6 +1192,16 @@
           ▶ Apply filters now
         </button>
         <div class="last-run" id="apply-status" style="display:none"></div>
+
+        <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <div style="font-size:11px; color:var(--text-3); margin-bottom:8px;">
+            Fetch the full Respondent marketplace (eligible + non-eligible) and hide everything matching your rules. Use this to sync Respondent.io with your filter settings.
+          </div>
+          <button class="btn" id="bulk-clean-btn" style="width:100%;">
+            🧹 Bulk clean Respondent.io
+          </button>
+          <div class="last-run" id="bulk-clean-status" style="display:none"></div>
+        </div>
       </div>
 
     </div>
@@ -2452,6 +2462,41 @@ $('apply-filters-btn').addEventListener('click', async () => {
   renderHeader();
   reloadProjects();
   loadPending();  // refresh queue count after hiding
+});
+
+// Bulk-clean: fetch full Respondent marketplace and hide everything matching rules
+$('bulk-clean-btn').addEventListener('click', async () => {
+  const btn = $('bulk-clean-btn');
+  const status = $('bulk-clean-status');
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  status.style.display = 'block';
+  status.innerHTML = 'Fetching full Respondent marketplace (this may take a moment)…';
+
+  const { body } = await api('/api/auto-hide/bulk-clean', { method: 'POST' });
+
+  btn.disabled = false;
+  btn.textContent = '🧹 Bulk clean Respondent.io';
+
+  if (!body.ok) {
+    status.innerHTML = `❌ ${esc(body.error || 'failed')}`;
+    return;
+  }
+
+  const extra = body.allProjects !== body.eligible
+    ? ` (${body.eligible} eligible + ${body.allProjects - body.eligible} from full marketplace)`
+    : '';
+  if (body.matched === 0) {
+    status.innerHTML = `✓ Scanned ${body.scanned}${extra} — nothing to hide.`;
+  } else {
+    status.innerHTML = `✓ Scanned ${body.scanned}${extra} — hidden ${body.hidden}${body.alreadyHidden ? ` (${body.alreadyHidden} already hidden)` : ''}${body.errors ? `, ${body.errors} errors` : ''} of ${body.matched} matches.`;
+  }
+
+  await loadConfig();
+  renderHeader();
+  reloadProjects();
+  loadPending();
 });
 
 function renderAutoHide() {
