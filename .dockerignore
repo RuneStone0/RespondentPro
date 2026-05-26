@@ -8,3 +8,6 @@ data/
 screenshot.png
 test/
 vitest.config.js
+.git/
+.github/
+scripts/

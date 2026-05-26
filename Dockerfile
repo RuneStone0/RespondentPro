@@ -6,11 +6,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy application source and package.json (version is read at runtime)
+# Copy application source
 COPY src/ ./src/
-COPY package.json ./
 
-# Bake the git SHA into the image so /health can report it without needing .git
+# Bake the git SHA at build time so /health can report it
 ARG GIT_SHA=unknown
 ENV GIT_SHA=${GIT_SHA}
 
