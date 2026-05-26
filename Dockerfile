@@ -16,6 +16,6 @@ ENV GIT_SHA=${GIT_SHA}
 # data/ is mounted at runtime (contains cookie, config, answers — never baked in)
 VOLUME /app/data
 
-EXPOSE 3000
+EXPOSE 38471
 
 CMD ["node", "src/server.js"]

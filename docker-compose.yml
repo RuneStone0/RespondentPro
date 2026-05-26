@@ -4,7 +4,7 @@ services:
     container_name: respondentpro
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "38471:38471"
     volumes:
       - respondentpro-data:/app/data
     environment:

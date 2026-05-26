@@ -30,7 +30,7 @@ npm install
 npm start
 ```
 
-Open **http://localhost:3000** in your browser.
+Open **http://localhost:38471** in your browser.
 
 **Setting your session cookie:**
 
@@ -92,7 +92,7 @@ A `docker-compose.yml` is included for running via Portainer or plain Docker Com
 docker compose up -d
 ```
 
-This builds the image and mounts a named volume at `/app/data` for persistent local storage. The app is available on port 3000.
+This builds the image and mounts a named volume at `/app/data` for persistent local storage. The app is available on port 38471.
 
 To use MongoDB instead, add the environment variables to `docker-compose.yml`:
 

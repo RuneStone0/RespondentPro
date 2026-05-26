@@ -25,7 +25,7 @@ const ROOT = join(__dirname, '..');
 const DATA_DIR = join(ROOT, 'data');
 
 const BASE_URL = 'https://app.respondent.io';
-const PORT = 3000;
+const PORT = 38471;
 
 // ── Version ───────────────────────────────────────────────
 const PKG_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
