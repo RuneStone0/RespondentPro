@@ -77,5 +77,10 @@ export async function createMongoStore(uri, defaults) {
     return getAnswers();
   }
 
-  return { getConfig, saveConfig, getAnswers, appendSession };
+  async function ping() {
+    await db.admin().command({ ping: 1 });
+    return { mode: 'mongodb', db: DB_NAME };
+  }
+
+  return { getConfig, saveConfig, getAnswers, appendSession, ping };
 }

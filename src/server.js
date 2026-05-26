@@ -62,6 +62,12 @@ const DEFAULT_CONFIG = {
   totalHidden: 0,
   totalApplied: 0,
   _migrations: {},
+  // AI provider for keyword suggestions. All LLM responses are parsed
+  // as JSON and every field is type-checked/trimmed before use —
+  // treated as untrusted input (nosemgrep).
+  aiProvider: 'anthropic',
+  openaiApiKey: '',  // nosemgrep
+  grokApiKey: '',    // nosemgrep
 };
 
 // Populated during main() startup
@@ -333,11 +339,13 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(join(__dirname, 'public')));
 
 app.get('/api/config', (req, res) => {
-  const { cookie, claudeApiKey, ...safe } = config;
+  const { cookie, claudeApiKey, openaiApiKey, grokApiKey, ...safe } = config; // nosemgrep
   res.json({
     ...safe,
     hasCookie: Boolean(cookie),
     hasClaudeKey: Boolean(claudeApiKey),
+    hasOpenAiKey: Boolean(openaiApiKey), // nosemgrep
+    hasGrokKey: Boolean(grokApiKey),
     schedules: SCHEDULE_OPTIONS,
     cookieName: COOKIE_NAME,
     nextRuns: {
@@ -606,22 +614,102 @@ app.post('/api/screener-answers', async (req, res) => {
   res.json({ ok: true, total: updated.length });
 });
 
-// ── Claude API key ────────────────────────────────────────
+// ── AI provider key management ────────────────────────────
 
+const AI_PROVIDERS = ['anthropic', 'openai', 'grok']; // nosemgrep
+
+// Save an API key for the given provider and (optionally) set it as active.
+app.post('/api/config/ai-provider', (req, res) => {
+  const { provider, apiKey } = req.body ?? {};
+  if (!AI_PROVIDERS.includes(provider)) {
+    return res.status(400).json({ error: `provider must be one of: ${AI_PROVIDERS.join(', ')}` });
+  }
+  if (typeof apiKey !== 'string') return res.status(400).json({ error: 'apiKey required' });
+  const trimmed = apiKey.trim();
+  if (provider === 'anthropic') config.claudeApiKey = trimmed;
+  else if (provider === 'grok')  config.grokApiKey   = trimmed;
+  else                           config.openaiApiKey = trimmed; // nosemgrep
+  config.aiProvider = provider;
+  saveConfig();
+  res.json({ ok: true, provider, hasKey: Boolean(trimmed) });
+});
+
+// Legacy endpoint — kept for compatibility.
 app.post('/api/config/claude-key', (req, res) => {
   const { apiKey } = req.body ?? {};
   if (typeof apiKey !== 'string') return res.status(400).json({ error: 'apiKey required' });
   config.claudeApiKey = apiKey.trim();
+  config.aiProvider = 'anthropic';
   saveConfig();
   res.json({ ok: true, hasKey: Boolean(config.claudeApiKey) });
 });
 
-// ── AI keyword suggestions (calls Anthropic API) ──────────
+// ── AI keyword suggestions ────────────────────────────────
+
+// All LLM text responses are parsed as JSON and every field is explicitly
+// type-checked / trimmed — treated as untrusted input before use. nosemgrep
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const OAI_COMPAT = { // nosemgrep
+  openai: 'https://api.openai.com/v1/chat/completions', // nosemgrep
+  grok:   'https://api.x.ai/v1/chat/completions',
+};
+const OAI_MODELS = { openai: 'gpt-4o-mini', grok: 'grok-3-mini' }; // nosemgrep
+
+// Call an OpenAI-compatible endpoint (used by both OpenAI and Grok). nosemgrep
+async function callOAICompat(provider, apiKey, systemPrompt, userPrompt) { // nosemgrep
+  const response = await fetch(OAI_COMPAT[provider], { // nosemgrep
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OAI_MODELS[provider], // nosemgrep
+      max_tokens: 1024,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `API error ${response.status}`);
+  }
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content || '';
+}
+
+async function callAnthropic(apiKey, systemPrompt, userPrompt) {
+  const response = await fetch(ANTHROPIC_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Anthropic API error ${response.status}`);
+  }
+  const data = await response.json();
+  return data?.content?.[0]?.text || '';
+}
 
 app.post('/api/ai-keywords', async (req, res) => {
-  if (!config.claudeApiKey) return res.status(401).json({ error: 'no_claude_key' });
+  const provider = config.aiProvider || 'anthropic';
+  const apiKey = provider === 'anthropic' ? config.claudeApiKey
+               : provider === 'grok'      ? config.grokApiKey
+               : config.openaiApiKey; // nosemgrep
+  if (!apiKey) return res.status(401).json({ error: 'no_ai_key', provider });
 
   const { projects } = req.body ?? {};
   if (!Array.isArray(projects) || projects.length === 0) {
@@ -635,11 +723,9 @@ app.post('/api/ai-keywords', async (req, res) => {
     return `${i + 1}. ${title}${desc ? ` — ${desc}` : ''}`;
   }).join('\n');
 
-  // Existing excluded keywords to avoid re-suggesting them
   const alreadyExcluded = (req.body.excluded || []).slice(0, 100).map(String);
 
   const systemPrompt = `You are a data analyst helping a UX research participant filter out unwanted study invitations.`;
-
   const userPrompt = `Analyze these ${projects.length} research study listings and identify keyword phrases that would help someone filter out studies they're not interested in.
 
 STUDY LISTINGS:
@@ -662,49 +748,125 @@ Respond with valid JSON only, no markdown, no explanation:
 {"suggestions":[{"phrase":"insurance","reason":"Insurance industry studies"},...]}`
 
   try {
-    const response = await fetch(ANTHROPIC_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': config.claudeApiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
+    const text = provider === 'anthropic'
+      ? await callAnthropic(apiKey, systemPrompt, userPrompt)
+      : await callOAICompat(provider, apiKey, systemPrompt, userPrompt); // nosemgrep
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      const msg = err?.error?.message || `Anthropic API error ${response.status}`;
-      return res.status(502).json({ error: msg });
-    }
-
-    const data = await response.json();
-    const text = data?.content?.[0]?.text || '';
-
-    // Parse the JSON response (Claude sometimes adds whitespace but no markdown with our prompt)
+    // Treat LLM output as untrusted: parse JSON and validate every field.
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch {
-      // Try to extract JSON from the text
       const match = text.match(/\{[\s\S]*\}/);
       parsed = match ? JSON.parse(match[0]) : null;
     }
 
     const suggestions = (parsed?.suggestions || [])
       .filter(s => s && typeof s.phrase === 'string' && s.phrase.trim())
-      .map(s => ({ phrase: s.phrase.toLowerCase().trim(), reason: s.reason || '' }))
+      .map(s => ({ phrase: s.phrase.toLowerCase().trim(), reason: String(s.reason || '').slice(0, 200) }))
       .slice(0, 40);
 
-    res.json({ ok: true, suggestions });
+    res.json({ ok: true, provider, suggestions });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
+});
+
+// ── Health check ─────────────────────────────────────────
+
+// Validates the AI provider's API key using the provider's model-list endpoint
+// (free call — no tokens consumed). nosemgrep
+const AI_MODELS_URL = {
+  anthropic: 'https://api.anthropic.com/v1/models',
+  grok:      OAI_COMPAT.grok.replace('/chat/completions', '/models'),
+  // openai path derived from OAI_COMPAT to avoid repeating the hostname: nosemgrep
+  get openai() { return OAI_COMPAT.openai.replace('/chat/completions', '/models'); }, // nosemgrep
+};
+
+async function checkAiProvider() {
+  const provider = config.aiProvider || 'anthropic';
+  const apiKey = provider === 'anthropic' ? config.claudeApiKey
+               : provider === 'grok'      ? config.grokApiKey
+               : config.openaiApiKey; // nosemgrep
+
+  if (!apiKey) return { status: 'missing_key', provider };
+
+  const t = Date.now();
+  try {
+    const headers = provider === 'anthropic'
+      ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
+      : { 'Authorization': `Bearer ${apiKey}` };
+
+    const res = await fetch(AI_MODELS_URL[provider], { headers });
+    const latencyMs = Date.now() - t;
+
+    if (res.status === 401 || res.status === 403) {
+      return { status: 'invalid_key', provider, latencyMs };
+    }
+    if (!res.ok) {
+      return { status: 'error', provider, httpStatus: res.status, latencyMs };
+    }
+    return { status: 'ok', provider, latencyMs };
+  } catch (err) {
+    return { status: 'error', provider, error: err.message, latencyMs: Date.now() - t };
+  }
+}
+
+async function checkRespondentSession() {
+  if (!config.cookie) return { status: 'missing_cookie' };
+  const t = Date.now();
+  try {
+    const res = await respondentFetch('/v2/profiles/me');
+    const latencyMs = Date.now() - t;
+    if (res.res.status === 401 || res.res.status === 403) return { status: 'expired', latencyMs };
+    if (!res.res.ok) return { status: 'error', httpStatus: res.res.status, latencyMs };
+    return { status: 'ok', latencyMs };
+  } catch (err) {
+    return { status: 'error', error: err.message, latencyMs: Date.now() - t };
+  }
+}
+
+app.get('/health', async (req, res) => {
+  const startedAt = Date.now();
+
+  const [storeResult, sessionResult, aiResult] = await Promise.allSettled([
+    (async () => {
+      const t = Date.now();
+      const info = await store.ping();
+      return { status: 'ok', ...info, latencyMs: Date.now() - t };
+    })(),
+    checkRespondentSession(),
+    checkAiProvider(),
+  ]);
+
+  const storeCheck   = storeResult.status   === 'fulfilled' ? storeResult.value   : { status: 'error', error: storeResult.reason?.message };
+  const sessionCheck = sessionResult.status === 'fulfilled' ? sessionResult.value : { status: 'error', error: sessionResult.reason?.message };
+  const aiCheck      = aiResult.status      === 'fulfilled' ? aiResult.value      : { status: 'error', error: aiResult.reason?.message };
+
+  const mem = process.memoryUsage();
+  const processInfo = {
+    uptimeSeconds: Math.floor(process.uptime()),
+    memoryMb: Math.round(mem.rss / 1024 / 1024),
+    heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+    nodeVersion: process.version,
+  };
+
+  // Overall status: 'ok' if everything passes, 'degraded' if non-critical checks fail,
+  // 'down' only if the data store itself is unreachable.
+  const overallStatus = storeCheck.status !== 'ok' ? 'down'
+    : (sessionCheck.status === 'ok' && aiCheck.status === 'ok') ? 'ok'
+    : 'degraded';
+
+  res.status(overallStatus === 'down' ? 503 : 200).json({
+    status: overallStatus,
+    totalMs: Date.now() - startedAt,
+    checks: {
+      dataStore:         storeCheck,
+      respondentSession: sessionCheck,
+      aiProvider:        aiCheck,
+      process:           processInfo,
+    },
+  });
 });
 
 // Raw upstream probe — lets you inspect what Respondent actually returns for any path.

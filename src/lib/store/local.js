@@ -6,7 +6,7 @@
  *   <dataDir>/config.json  — application config
  *   <dataDir>/answers.json — screener answer history
  */
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 function mergeConfig(defaults, stored) {
@@ -55,5 +55,10 @@ export function createLocalStore(dataDir, defaults) {
     return history;
   }
 
-  return { getConfig, saveConfig, getAnswers, appendSession };
+  async function ping() {
+    statSync(dataDir); // throws if the directory is gone or unreadable
+    return { mode: 'local', path: dataDir };
+  }
+
+  return { getConfig, saveConfig, getAnswers, appendSession, ping };
 }
