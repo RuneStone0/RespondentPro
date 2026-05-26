@@ -1,6 +1,11 @@
 services:
   respondentpro:
-    build: .
+    build:
+      context: .
+      args:
+        # Pass the current git SHA so /health can report it.
+        # Override with: GIT_SHA=$(git rev-parse --short HEAD) docker compose build
+        GIT_SHA: ${GIT_SHA:-unknown}
     image: respondentpro
     container_name: respondentpro
     restart: unless-stopped

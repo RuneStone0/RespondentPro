@@ -6,8 +6,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy application source
+# Copy application source and package.json (version is read at runtime)
 COPY src/ ./src/
+COPY package.json ./
+
+# Bake the git SHA into the image so /health can report it without needing .git
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
 
 # data/ is mounted at runtime (contains cookie, config, answers — never baked in)
 VOLUME /app/data

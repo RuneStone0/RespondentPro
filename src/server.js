@@ -2,7 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import fetch from 'node-fetch';
 import cron from 'node-cron';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -25,6 +26,18 @@ const DATA_DIR = join(ROOT, 'data');
 
 const BASE_URL = 'https://app.respondent.io';
 const PORT = 3000;
+
+// ── Version ───────────────────────────────────────────────
+const PKG_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+function resolveCommit() {
+  // 1. Honour an explicit env var (useful in Docker/Portainer where .git may be absent)
+  if (process.env.GIT_SHA) return process.env.GIT_SHA.slice(0, 8);
+  // 2. Ask git directly (works in local dev and Docker builds that include .git)
+  try { return execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] }).trim(); }
+  catch { return 'unknown'; }
+}
+const APP_COMMIT = resolveCommit();
+const APP_VERSION = `${PKG_VERSION}+${APP_COMMIT}`; // e.g. "1.0.0+6570df4"
 
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
@@ -858,6 +871,7 @@ app.get('/health', async (req, res) => {
 
   res.status(overallStatus === 'down' ? 503 : 200).json({
     status: overallStatus,
+    version: APP_VERSION,
     totalMs: Date.now() - startedAt,
     checks: {
       dataStore:         storeCheck,
@@ -951,7 +965,7 @@ async function main() {
   if (!isTest) {
     app.listen(PORT, () => {
       const storeMode = (process.env.DATA_STORE_MODE || 'local').toLowerCase();
-      console.log(`App running at http://localhost:${PORT}`);
+      console.log(`App running at http://localhost:${PORT}  (${APP_VERSION})`);
       console.log(`Store:     ${storeMode}${storeMode === 'mongodb' ? ` (${process.env.MONGODB_URI?.replace(/\/\/[^@]+@/, '//***@') || 'no URI'})` : ` (${DATA_DIR})`}`);
       console.log(`Cookie:    ${config.cookie ? `present (${config.cookie.length} chars)` : 'MISSING — set via UI'}`);
       console.log(`Profile:   ${config.profileId || '(none — will discover)'}`);
