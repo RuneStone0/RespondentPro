@@ -37,6 +37,74 @@ Open **http://localhost:3000** in your browser.
 1. Log in to [app.respondent.io](https://app.respondent.io)
 2. Open DevTools → Application → Cookies
 3. Copy the value of `respondent.session.sid`
-4. Paste it into the **Cookie** field in the app's top-right panel
+4. Paste it into the **Cookie** field in the app's settings panel
 
-The cookie is saved to `data/config.json` (gitignored, never committed).
+The cookie is saved to the data store (see below) and is never committed to git.
+
+## Data store
+
+The app supports two storage backends, controlled by `DATA_STORE_MODE` in your `.env` file.
+
+### Local (default)
+
+Config and answer history are stored as JSON files in the `data/` directory (gitignored).
+
+```
+data/config.json   ← app settings, cookie, API keys
+data/answers.json  ← screener answer history
+```
+
+No extra setup needed. Files are human-readable and easy to inspect.
+
+### MongoDB
+
+For persistent storage across redeployments (e.g. Portainer/Docker on a server):
+
+```
+DATA_STORE_MODE=mongodb
+MONGODB_URI=mongodb://user:pass@host:27017/respondentpro
+```
+
+The app auto-creates the `respondentpro` database and the `config` / `answers` collections on first start. No manual DB setup required.
+
+## Configuration
+
+Copy `env.example` to `.env` and uncomment what you need:
+
+```bash
+cp env.example .env
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATA_STORE_MODE` | `local` | `local` or `mongodb` |
+| `MONGODB_URI` | — | Required when `DATA_STORE_MODE=mongodb` |
+| `ANTHROPIC_API_KEY` | — | Optional — enables AI keyword suggestions (can also be set via UI) |
+
+> **Security:** Never put `RESPONDENT_COOKIE` in `.env`. Your session cookie is a live auth token — set it via the cookie modal in the app UI.
+
+## Docker / Portainer
+
+A `docker-compose.yml` is included for running via Portainer or plain Docker Compose.
+
+```bash
+docker compose up -d
+```
+
+This builds the image and mounts a named volume at `/app/data` for persistent local storage. The app is available on port 3000.
+
+To use MongoDB instead, add the environment variables to `docker-compose.yml`:
+
+```yaml
+environment:
+  - NODE_ENV=production
+  - DATA_STORE_MODE=mongodb
+  - MONGODB_URI=mongodb://user:pass@mongo:27017/respondentpro
+```
+
+## Development
+
+```bash
+npm test           # run all tests
+npm run test:watch # watch mode
+```

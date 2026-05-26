@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import fetch from 'node-fetch';
 import cron from 'node-cron';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -17,12 +17,11 @@ import { whyHide } from './lib/filter.js';
 import { getProjectId, getTitle } from './lib/project-fields.js';
 import { pickProfileId } from './lib/profile.js';
 import { applyMigrations, VALID_SORTS } from './lib/migrations.js';
-import { loadAnswers, appendSession } from './lib/answers.js';
+import { createStore } from './lib/store/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const DATA_DIR = join(ROOT, 'data');
-const CONFIG_PATH = join(DATA_DIR, 'config.json');
 
 const BASE_URL = 'https://app.respondent.io';
 const PORT = 3000;
@@ -31,7 +30,7 @@ if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
 // ── Config ────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
-  cookie: process.env.RESPONDENT_COOKIE || '',
+  cookie: '',
   claudeApiKey: process.env.ANTHROPIC_API_KEY || '',
   profileId: '',
   filters: {
@@ -65,32 +64,12 @@ const DEFAULT_CONFIG = {
   _migrations: {},
 };
 
-function loadConfig() {
-  if (!existsSync(CONFIG_PATH)) return structuredClone(DEFAULT_CONFIG);
-  try {
-    const stored = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-    return {
-      ...DEFAULT_CONFIG,
-      ...stored,
-      filters:   { ...DEFAULT_CONFIG.filters,   ...(stored.filters   || {}) },
-      autoHide:  { ...DEFAULT_CONFIG.autoHide,  ...(stored.autoHide  || {}) },
-      keepAlive: { ...DEFAULT_CONFIG.keepAlive, ...(stored.keepAlive || {}) },
-    };
-  } catch (e) {
-    console.error('Failed to load config, using defaults:', e.message);
-    return structuredClone(DEFAULT_CONFIG);
-  }
-}
+// Populated during main() startup
+let store;
+let config;
 
 function saveConfig() {
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
-}
-
-let config = loadConfig();
-{
-  const { dirty, applied } = applyMigrations(config);
-  if (applied.length) console.log('[migration]', applied.join(', '));
-  if (dirty || !existsSync(CONFIG_PATH)) saveConfig();
+  store.saveConfig(config).catch(err => console.error('saveConfig error:', err));
 }
 
 // ── Debug log (in-memory ring buffer) ─────────────────────
@@ -599,14 +578,14 @@ app.post('/api/keep-alive/run', async (req, res) => {
 // ── Answer history endpoints ──────────────────────────────
 
 // Get stored screener answer history
-app.get('/api/screener-answers', (req, res) => {
-  res.json(loadAnswers());
+app.get('/api/screener-answers', async (req, res) => {
+  res.json(await store.getAnswers());
 });
 
 // Deduplicated profile — most-recent answer per unique question text.
 // Used to build the Claude-in-Chrome prompt.
-app.get('/api/screener-answers/profile', (req, res) => {
-  const history = loadAnswers();
+app.get('/api/screener-answers/profile', async (req, res) => {
+  const history = await store.getAnswers();
   const seen = new Map(); // normalised text → { questionText, answer }
   for (let i = history.length - 1; i >= 0; i--) {
     for (const a of (history[i].answers || [])) {
@@ -617,13 +596,13 @@ app.get('/api/screener-answers/profile', (req, res) => {
   res.json([...seen.values()]);
 });
 
-// Append a completed screener session to local history
-app.post('/api/screener-answers', (req, res) => {
+// Append a completed screener session to history
+app.post('/api/screener-answers', async (req, res) => {
   const { projectId, projectName, answers } = req.body ?? {};
   if (!projectId || !Array.isArray(answers)) {
     return res.status(400).json({ error: 'projectId and answers[] required' });
   }
-  const updated = appendSession({ projectId, projectName: projectName || '', answers });
+  const updated = await store.appendSession({ projectId, projectName: projectName || '', answers });
   res.json({ ok: true, total: updated.length });
 });
 
@@ -785,22 +764,35 @@ app.get('/api/debug', (req, res) => {
 });
 
 // ── Boot ──────────────────────────────────────────────────
-// Skip listening when imported by tests.
 const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST;
-if (!isTest) {
-  app.listen(PORT, () => {
-    console.log(`App running at http://localhost:${PORT}`);
-    console.log(`Config:    ${CONFIG_PATH}`);
-    console.log(`Cookie:    ${config.cookie ? `present (${config.cookie.length} chars)` : 'MISSING — set via UI'}`);
-    console.log(`Profile:   ${config.profileId || '(none — will discover)'}`);
-    console.log(`AutoHide:  ${config.autoHide.enabled ? `ON (${config.autoHide.schedule})` : 'off'}`);
-    console.log(`KeepAlive: ${config.keepAlive.enabled ? `ON (${config.keepAlive.schedule})` : 'off'}`);
 
-    rescheduleAutoHide();
-    rescheduleKeepAlive();
+async function main() {
+  store = await createStore(DATA_DIR, DEFAULT_CONFIG);
+  config = await store.getConfig();
 
-    if (config.keepAlive.enabled && config.cookie) {
-      runKeepAlive().catch((err) => debug('keep_alive_boot_error', { error: err.message }));
-    }
-  });
+  const { dirty, applied } = applyMigrations(config);
+  if (applied.length) console.log('[migration]', applied.join(', '));
+  if (dirty) await store.saveConfig(config);
+
+  // Skip listening when imported by tests.
+  if (!isTest) {
+    app.listen(PORT, () => {
+      const storeMode = (process.env.DATA_STORE_MODE || 'local').toLowerCase();
+      console.log(`App running at http://localhost:${PORT}`);
+      console.log(`Store:     ${storeMode}${storeMode === 'mongodb' ? ` (${process.env.MONGODB_URI?.replace(/\/\/[^@]+@/, '//***@') || 'no URI'})` : ` (${DATA_DIR})`}`);
+      console.log(`Cookie:    ${config.cookie ? `present (${config.cookie.length} chars)` : 'MISSING — set via UI'}`);
+      console.log(`Profile:   ${config.profileId || '(none — will discover)'}`);
+      console.log(`AutoHide:  ${config.autoHide.enabled ? `ON (${config.autoHide.schedule})` : 'off'}`);
+      console.log(`KeepAlive: ${config.keepAlive.enabled ? `ON (${config.keepAlive.schedule})` : 'off'}`);
+
+      rescheduleAutoHide();
+      rescheduleKeepAlive();
+
+      if (config.keepAlive.enabled && config.cookie) {
+        runKeepAlive().catch((err) => debug('keep_alive_boot_error', { error: err.message }));
+      }
+    });
+  }
 }
+
+main().catch(err => { console.error('Fatal startup error:', err); process.exit(1); });
