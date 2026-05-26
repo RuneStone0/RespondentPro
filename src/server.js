@@ -230,6 +230,22 @@ const HIDE_MAX_PER_RUN = 200;
 let autoHideInFlight = false;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// Fetch eligible (matched) + full marketplace, deduplicated by project ID.
+async function fetchCombinedProjects() {
+  const [{ projects: eligible }, { projects: all }] = await Promise.all([
+    fetchAllProjects({ useFilters: false, showEligible: true }),
+    fetchAllProjects({ useFilters: false, showEligible: false }),
+  ]);
+  const seen = new Set();
+  const combined = [];
+  for (const p of [...eligible, ...all]) {
+    const id = getProjectId(p);
+    if (id && !seen.has(id)) { seen.add(id); combined.push(p); }
+  }
+  debug('fetch_combined', { eligible: eligible.length, marketplace: all.length, combined: combined.length });
+  return combined;
+}
+
 async function runAutoHide({ dryRun = false, limitOverride = null } = {}) {
   if (autoHideInFlight) {
     debug('auto_hide_skipped_in_flight');
@@ -239,13 +255,14 @@ async function runAutoHide({ dryRun = false, limitOverride = null } = {}) {
 
   debug('auto_hide_start', { dryRun, limitOverride });
   try {
-    const { projects } = await fetchAllProjects({ useFilters: false });
+    const projects = await fetchCombinedProjects();
 
     const matches = projects.map(p => {
       const enriched = supplementQuestionCount(p);
       return { id: getProjectId(enriched), title: getTitle(enriched), reason: whyHide(enriched, config.filters) };
     }).filter(m => m.reason && m.id);
 
+    debug('respondent_projects', { total: projects.length, to_hide: matches.length });
     debug('auto_hide_matches', { total: projects.length, toHide: matches.length, dryRun });
 
     if (dryRun) return { ok: true, dryRun: true, scanned: projects.length, matches };
@@ -525,27 +542,16 @@ app.post('/api/auto-hide/bulk-clean', async (req, res) => {
   const dryRun = req.body?.dryRun === true;
 
   try {
-    // Fetch both views and deduplicate by project ID
-    const [{ projects: eligible }, { projects: all }] = await Promise.all([
-      fetchAllProjects({ useFilters: false, showEligible: true }),
-      fetchAllProjects({ useFilters: false, showEligible: false }),
-    ]);
-
-    const seen = new Set();
-    const combined = [];
-    for (const p of [...eligible, ...all]) {
-      const id = getProjectId(p);
-      if (id && !seen.has(id)) { seen.add(id); combined.push(p); }
-    }
+    const combined = await fetchCombinedProjects();
 
     const matches = combined.map(p => {
       const enriched = supplementQuestionCount(p);
       return { id: getProjectId(enriched), title: getTitle(enriched), reason: whyHide(enriched, config.filters) };
     }).filter(m => m.reason && m.id);
 
-    debug('bulk_clean_matches', { eligible: eligible.length, all: all.length, combined: combined.length, toHide: matches.length, dryRun });
+    debug('bulk_clean_matches', { combined: combined.length, toHide: matches.length, dryRun });
 
-    if (dryRun) return res.json({ ok: true, dryRun: true, scanned: combined.length, eligible: eligible.length, allProjects: all.length, matches });
+    if (dryRun) return res.json({ ok: true, dryRun: true, scanned: combined.length, matches });
 
     const results = [];
     let bumped = 0;
