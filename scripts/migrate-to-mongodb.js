@@ -1,11 +1,12 @@
 /**
  * One-shot migration: local JSON files → MongoDB
  *
- * Reads data/config.json and data/answers.json and upserts them into the
- * MongoDB instance configured in .env (DATA_STORE_MODE + MONGODB_URI).
+ * Reads data/config.json, data/keywords.json (optional), and data/answers.json
+ * and upserts them into the MongoDB instance configured in .env.
  *
  * Safe to run multiple times:
- *   - config is upserted (replaceOne with upsert:true)
+ *   - config is upserted without keyword lists (those live in `keywords` collection)
+ *   - keywords are upserted into the `keywords` collection
  *   - answer sessions are deduplicated by projectId + answeredAt
  *
  * Usage:
@@ -18,6 +19,7 @@ import { existsSync, readFileSync } from 'fs';
 import { MongoClient } from 'mongodb';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { keywordsFromFilters, stripKeywordsFromConfig } from '../src/lib/store/keywords.js';
 
 const ROOT     = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = join(ROOT, 'data');
@@ -48,8 +50,9 @@ async function main() {
   console.log(`    Dry run: ${DRY_RUN}\n`);
 
   // ── Load local files ─────────────────────────────────────
-  const rawConfig  = readJson('config.json');
-  const rawAnswers = readJson('answers.json');
+  const rawConfig   = readJson('config.json');
+  const rawKeywords = readJson('keywords.json');
+  const rawAnswers  = readJson('answers.json');
 
   if (!rawConfig) {
     console.warn('⚠️   data/config.json not found — skipping config migration.');
@@ -63,8 +66,15 @@ async function main() {
   }
 
   const sessions = Array.isArray(rawAnswers) ? rawAnswers : [];
-  console.log(`    Config:  ${rawConfig ? 'found' : 'missing'}`);
-  console.log(`    Answers: ${sessions.length} session(s)\n`);
+  const keywordSource = rawKeywords
+    ? { exclude: rawKeywords.exclude || [], priority: rawKeywords.priority || [] }
+    : rawConfig
+      ? keywordsFromFilters(rawConfig.filters)
+      : { exclude: [], priority: [] };
+
+  console.log(`    Config:   ${rawConfig ? 'found' : 'missing'}`);
+  console.log(`    Keywords: ${keywordSource.exclude.length} exclude, ${keywordSource.priority.length} priority`);
+  console.log(`    Answers:  ${sessions.length} session(s)\n`);
 
   if (DRY_RUN) {
     console.log('🔍  Dry run — no changes written.');
@@ -78,10 +88,11 @@ async function main() {
     await client.connect();
     const db          = client.db(DB_NAME);
     const configCol   = db.collection('config');
+    const keywordsCol = db.collection('keywords');
     const answersCol  = db.collection('answers');
 
     // Ensure collections exist
-    for (const name of ['config', 'answers']) {
+    for (const name of ['config', 'keywords', 'answers']) {
       try { await db.createCollection(name); } catch (e) {
         if (e.codeName !== 'NamespaceExists') throw e;
       }
@@ -89,18 +100,36 @@ async function main() {
     console.log('✅  Connected\n');
 
     // ── Migrate config ────────────────────────────────────
+    let keywords = keywordSource;
+    if (!keywords.exclude.length && !keywords.priority.length) {
+      const existingConfig = await configCol.findOne({ _id: 'app' });
+      keywords = keywordsFromFilters(existingConfig?.filters);
+    }
+
     if (rawConfig) {
       const existing = await configCol.findOne({ _id: 'app' });
       if (existing) {
         console.log('⚠️   Config document already exists in MongoDB.');
-        console.log('    Overwriting with local data (cookie, filters, stats will be updated)…');
+        console.log('    Overwriting with local data (cookie, filter settings, stats — not keywords)…');
       }
       await configCol.replaceOne(
         { _id: 'app' },
-        { _id: 'app', ...rawConfig },
+        { _id: 'app', ...stripKeywordsFromConfig(rawConfig) },
         { upsert: true },
       );
       console.log('✅  Config migrated');
+    }
+
+    // ── Migrate keywords ────────────────────────────────────
+    if (keywords.exclude.length || keywords.priority.length) {
+      await keywordsCol.replaceOne(
+        { _id: 'app' },
+        { _id: 'app', ...keywords },
+        { upsert: true },
+      );
+      console.log(`✅  Keywords migrated (${keywords.exclude.length} exclude, ${keywords.priority.length} priority)`);
+    } else {
+      console.log('ℹ️   No keywords to migrate');
     }
 
     // ── Migrate answers ───────────────────────────────────
@@ -128,11 +157,13 @@ async function main() {
     }
 
     // ── Verify ────────────────────────────────────────────
-    const configCount  = await configCol.countDocuments();
-    const answerCount  = await answersCol.countDocuments();
+    const configCount   = await configCol.countDocuments();
+    const keywordsCount = await keywordsCol.countDocuments();
+    const answerCount   = await answersCol.countDocuments();
     console.log(`\n📊  MongoDB state after migration:`);
-    console.log(`    config  collection: ${configCount} document(s)`);
-    console.log(`    answers collection: ${answerCount} document(s)`);
+    console.log(`    config   collection: ${configCount} document(s)`);
+    console.log(`    keywords collection: ${keywordsCount} document(s)`);
+    console.log(`    answers  collection: ${answerCount} document(s)`);
     console.log('\n🎉  Migration complete!\n');
 
   } finally {

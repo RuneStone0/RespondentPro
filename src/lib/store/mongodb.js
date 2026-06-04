@@ -3,10 +3,12 @@
  * Requires `MONGODB_URI` env var (e.g. mongodb://user:pass@host:27017/respondentpro).
  *
  * Collections:
- *   config  — single document { _id: 'app', ...configFields }
- *   answers — one document per screener session
+ *   config   — single document { _id: 'app', ...configFields } (keywords omitted)
+ *   keywords — single document { _id: 'app', exclude: string[], priority: string[] }
+ *   answers  — one document per screener session
  */
 import { MongoClient } from 'mongodb';
+import { EMPTY_KEYWORDS, stripKeywordsFromConfig } from './keywords.js';
 
 const DB_NAME = 'respondentpro';
 
@@ -24,7 +26,7 @@ function mergeConfig(defaults, stored) {
 }
 
 async function ensureCollections(db) {
-  for (const name of ['config', 'answers']) {
+  for (const name of ['config', 'keywords', 'answers']) {
     try {
       await db.createCollection(name);
     } catch (e) {
@@ -41,8 +43,9 @@ export async function createMongoStore(uri, defaults) {
   const db = client.db(DB_NAME);
   await ensureCollections(db);
 
-  const configCol  = db.collection('config');
-  const answersCol = db.collection('answers');
+  const configCol   = db.collection('config');
+  const keywordsCol = db.collection('keywords');
+  const answersCol  = db.collection('answers');
 
   console.log(`[store] MongoDB connected — db: ${DB_NAME}`);
 
@@ -57,11 +60,44 @@ export async function createMongoStore(uri, defaults) {
   }
 
   async function saveConfig(cfg) {
-    // Strip in-memory-only fields before persisting
-    const { ...doc } = cfg;
+    const doc = stripKeywordsFromConfig(cfg);
     await configCol.replaceOne(
       { _id: 'app' },
       { _id: 'app', ...doc },
+      { upsert: true },
+    );
+  }
+
+  async function getKeywords() {
+    try {
+      const doc = await keywordsCol.findOne({ _id: 'app' });
+      if (doc) {
+        return {
+          exclude: doc.exclude || [],
+          priority: doc.priority || [],
+        };
+      }
+
+      // One-time fallback: lift keywords out of a legacy config document.
+      const legacy = await configCol.findOne({ _id: 'app' });
+      const lifted = {
+        exclude: legacy?.filters?.keywords || [],
+        priority: legacy?.filters?.priorityKeywords || [],
+      };
+      if (lifted.exclude.length || lifted.priority.length) {
+        await saveKeywords(lifted);
+      }
+      return lifted;
+    } catch (e) {
+      console.error('MongoDB getKeywords error, using defaults:', e.message);
+      return { ...EMPTY_KEYWORDS };
+    }
+  }
+
+  async function saveKeywords({ exclude = [], priority = [] } = {}) {
+    await keywordsCol.replaceOne(
+      { _id: 'app' },
+      { _id: 'app', exclude, priority },
       { upsert: true },
     );
   }
@@ -82,5 +118,5 @@ export async function createMongoStore(uri, defaults) {
     return { mode: 'mongodb', db: DB_NAME };
   }
 
-  return { getConfig, saveConfig, getAnswers, appendSession, ping };
+  return { getConfig, saveConfig, getKeywords, saveKeywords, getAnswers, appendSession, ping };
 }

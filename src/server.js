@@ -18,6 +18,7 @@ import { whyHide } from './lib/filter.js';
 import { getProjectId, getTitle } from './lib/project-fields.js';
 import { pickProfileId } from './lib/profile.js';
 import { applyMigrations, VALID_SORTS } from './lib/migrations.js';
+import { applyKeywordsToFilters } from './lib/store/keywords.js';
 import { createStore } from './lib/store/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -89,6 +90,15 @@ let config;
 
 function saveConfig() {
   store.saveConfig(config).catch(err => console.error('saveConfig error:', err));
+  store.saveKeywords({
+    exclude: config.filters.keywords || [],
+    priority: config.filters.priorityKeywords || [],
+  }).catch(err => console.error('saveKeywords error:', err));
+}
+
+async function loadKeywords() {
+  const kw = await store.getKeywords();
+  config.filters = applyKeywordsToFilters(config.filters, kw);
 }
 
 // ── Debug log (in-memory ring buffer) ─────────────────────
@@ -944,6 +954,7 @@ const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST;
 async function main() {
   store = await createStore(DATA_DIR, DEFAULT_CONFIG);
   config = await store.getConfig();
+  await loadKeywords();
 
   // AI_PROVIDER + AI_API_KEY env vars override the stored key at startup.
   // This lets Docker / Portainer deployments inject credentials without
