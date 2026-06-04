@@ -11,8 +11,31 @@ jobs:
       contents: read
       packages: write   # needed to push to ghcr.io
 
+    outputs:
+      version_tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0   # needed to read existing release tags
+
+      - name: Compute next version
+        id: version
+        run: |
+          git fetch --tags --quiet
+          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            base=$(node -p "require('./package.json').version")
+            next="v${base}"
+          else
+            ver="${latest#v}"
+            IFS='.' read -r major minor patch <<< "$ver"
+            patch=$((patch + 1))
+            next="v${major}.${minor}.${patch}"
+          fi
+          echo "tag=${next}" >> "$GITHUB_OUTPUT"
+          echo "version=${next#v}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
@@ -34,4 +57,23 @@ jobs:
             GIT_SHA=${{ steps.sha.outputs.short }}
           tags: |
             ghcr.io/runestone0/respondentpro:latest
-            ghcr.io/runestone0/respondentpro:${{ steps.sha.outputs.short }}
+            ghcr.io/runestone0/respondentpro:${{ steps.version.outputs.version }}
+
+  create-release:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create GitHub releases
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@7ccbafce00d8bfd026a935d90d6a6e9e9e5d874  # v2
+        with:
+          tag_name: ${{ needs.build-and-push.outputs.version_tag }}
+          name: ${{ needs.build-and-push.outputs.version_tag }}
+          generate_release_notes: true
+          body: |
+            Docker image: `ghcr.io/runestone0/respondentpro:${{ needs.build-and-push.outputs.version }}`
+            Also available as `ghcr.io/runestone0/respondentpro:latest`
