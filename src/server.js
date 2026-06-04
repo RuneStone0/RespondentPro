@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import fetch from 'node-fetch';
 import cron from 'node-cron';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';

@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import fetch from 'node-fetch';
 
 const BASE_URL = 'https://app.respondent.io';
 const cookie = process.env.RESPONDENT_COOKIE;

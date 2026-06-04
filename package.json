@@ -2,7 +2,7 @@
   "name": "respondent",
   "version": "1.0.0",
   "engines": {
-    "node": "24"
+    "node": ">=24.0.0"
   },
   "type": "module",
   "scripts": {
@@ -17,8 +17,7 @@
     "dotenv": "^16.5.0",
     "express": "^5.2.1",
     "mongodb": "^7.2.0",
-    "node-cron": "^4.2.1",
-    "node-fetch": "^3.3.2"
+    "node-cron": "^4.2.1"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^0.34.6",

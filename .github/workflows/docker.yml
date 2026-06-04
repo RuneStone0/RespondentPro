@@ -20,6 +20,11 @@ jobs:
         with:
           fetch-depth: 0   # needed to read existing release tags
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 24
+          cache: npm
+
       - name: Compute next version
         id: version
         run: |
@@ -69,7 +74,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@7ccbafce00d8bfd026a935d90d6a6e9e9e5d874  # v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           tag_name: ${{ needs.build-and-push.outputs.version_tag }}
           name: ${{ needs.build-and-push.outputs.version_tag }}
