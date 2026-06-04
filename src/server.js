@@ -356,9 +356,18 @@ const rescheduleAutoHide  = () => reschedule(config.autoHide,  autoHideRef,  run
 const rescheduleKeepAlive = () => reschedule(config.keepAlive, keepAliveRef, runKeepAlive, 'keep_alive');
 
 // ── Express app ───────────────────────────────────────────
+const PUBLIC_DIR = join(__dirname, 'public');
+
 export const app = express();
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(join(__dirname, 'public')));
+
+// Browsers request /favicon.ico before parsing HTML; serve our SVG at that path too.
+app.get('/favicon.ico', (req, res) => {
+  res.type('image/svg+xml');
+  res.sendFile(join(PUBLIC_DIR, 'favicon.svg'));
+});
+
+app.use(express.static(PUBLIC_DIR));
 
 app.get('/api/config', (req, res) => {
   const { cookie, claudeApiKey, gptApiKey, grokApiKey, ...safe } = config;
