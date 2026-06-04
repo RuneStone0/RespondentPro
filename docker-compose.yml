@@ -9,6 +9,10 @@ services:
       - respondentpro-data:/app/data
     environment:
       - NODE_ENV=production
+      - DATA_STORE_MODE=mongodb
+    # MONGODB_URI (and AI_* keys) — set in Portainer env vars or host .env via env_file:
+    env_file:
+      - .env
 
 volumes:
   respondentpro-data:

@@ -18,7 +18,7 @@ import { getProjectId, getTitle } from './lib/project-fields.js';
 import { pickProfileId } from './lib/profile.js';
 import { applyMigrations, VALID_SORTS } from './lib/migrations.js';
 import { applyKeywordsToFilters } from './lib/store/keywords.js';
-import { createStore } from './lib/store/index.js';
+import { createStore, resolveStoreMode } from './lib/store/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -969,14 +969,19 @@ async function main() {
 
   const { dirty, applied } = applyMigrations(config);
   if (applied.length) console.log('[migration]', applied.join(', '));
-  if (dirty) await store.saveConfig(config);
+  if (dirty) saveConfig();
+
+  const keywordCount = (config.filters.keywords || []).length;
+  const priorityCount = (config.filters.priorityKeywords || []).length;
+  console.log(`[store] Keywords loaded: ${keywordCount} exclude, ${priorityCount} priority`);
 
   // Skip listening when imported by tests.
   if (!isTest) {
     app.listen(PORT, () => {
-      const storeMode = (process.env.DATA_STORE_MODE || 'local').toLowerCase();
+      const { mode: storeMode } = resolveStoreMode();
       console.log(`App running at http://localhost:${PORT}  (${APP_VERSION})`);
       console.log(`Store:     ${storeMode}${storeMode === 'mongodb' ? ` (${process.env.MONGODB_URI?.replace(/\/\/[^@]+@/, '//***@') || 'no URI'})` : ` (${DATA_DIR})`}`);
+      console.log(`Keywords:  ${keywordCount} exclude, ${priorityCount} priority`);
       console.log(`Cookie:    ${config.cookie ? `present (${config.cookie.length} chars)` : 'MISSING — set via UI'}`);
       console.log(`Profile:   ${config.profileId || '(none — will discover)'}`);
       console.log(`AutoHide:  ${config.autoHide.enabled ? `ON (${config.autoHide.schedule})` : 'off'}`);
