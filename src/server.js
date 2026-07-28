@@ -57,6 +57,7 @@ const DEFAULT_CONFIG = {
     kindsOfResearchStudy: [],
     sort: 'publishedAt',
     showEligible: true,
+    hideNotEligible: true,
   },
   autoHide: {
     enabled: false,
@@ -238,19 +239,24 @@ let autoHideInFlight = false;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // Fetch eligible (matched) + full marketplace, deduplicated by project ID.
+// Each returned project is tagged with `_eligible` (true/false) based on
+// whether it appeared in the showEligible=true set, so callers can detect
+// "Not eligible" projects (Respondent's own matching result, not a field
+// present on the raw project payload).
 async function fetchCombinedProjects() {
   const [{ projects: eligible }, { projects: all }] = await Promise.all([
     fetchAllProjects({ useFilters: false, showEligible: true }),
     fetchAllProjects({ useFilters: false, showEligible: false }),
   ]);
+  const eligibleIds = new Set(eligible.map(getProjectId).filter(Boolean));
   const seen = new Set();
   const combined = [];
   for (const p of [...eligible, ...all]) {
     const id = getProjectId(p);
-    if (id && !seen.has(id)) { seen.add(id); combined.push(p); }
+    if (id && !seen.has(id)) { seen.add(id); combined.push({ ...p, _eligible: eligibleIds.has(id) }); }
   }
   debug('fetch_combined', { eligible: eligible.length, marketplace: all.length, combined: combined.length });
-  return combined;
+  return { combined, eligibleCount: eligible.length, allCount: all.length };
 }
 
 async function runAutoHide({ dryRun = false, limitOverride = null } = {}) {
@@ -262,7 +268,7 @@ async function runAutoHide({ dryRun = false, limitOverride = null } = {}) {
 
   debug('auto_hide_start', { dryRun, limitOverride });
   try {
-    const projects = await fetchCombinedProjects();
+    const { combined: projects } = await fetchCombinedProjects();
 
     const matches = projects.map(p => {
       const enriched = supplementQuestionCount(p);
@@ -539,7 +545,7 @@ function supplementQuestionCount(p) {
 app.get('/api/auto-hide/pending', async (req, res) => {
   if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
   try {
-    const { projects } = await fetchAllProjects({ useFilters: false });
+    const { combined: projects } = await fetchCombinedProjects();
     const matches = projects
       .map(p => ({ id: getProjectId(supplementQuestionCount(p)), title: getTitle(p), reason: whyHide(supplementQuestionCount(p), config.filters) }))
       .filter(m => m.reason && m.id);
@@ -560,7 +566,7 @@ app.post('/api/auto-hide/bulk-clean', async (req, res) => {
   const dryRun = req.body?.dryRun === true;
 
   try {
-    const combined = await fetchCombinedProjects();
+    const { combined, eligibleCount, allCount } = await fetchCombinedProjects();
 
     const matches = combined.map(p => {
       const enriched = supplementQuestionCount(p);
@@ -585,8 +591,8 @@ app.post('/api/auto-hide/bulk-clean', async (req, res) => {
 
     const summary = {
       scanned: combined.length,
-      eligible: eligible.length,
-      allProjects: all.length,
+      eligible: eligibleCount,
+      allProjects: allCount,
       matched: matches.length,
       hidden: results.filter(r => r.ok).length,
       alreadyHidden: results.filter(r => r.alreadyHidden).length,

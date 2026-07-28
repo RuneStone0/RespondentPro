@@ -27,7 +27,7 @@ describe('applyMigrations', () => {
   it('is a no-op on a fully migrated config', () => {
     const c = freshConfig({
       cookie: 'respondent.session.sid=abc',
-      _migrations: { keepAliveDefaultOn: true },
+      _migrations: { keepAliveDefaultOn: true, hideNotEligibleDefaultOn: true },
       keepAlive: { enabled: true },
     });
     const { dirty, applied } = applyMigrations(c);
@@ -51,7 +51,7 @@ describe('applyMigrations', () => {
     });
 
     it('does not flag dirty when cookie is empty (normalization is a no-op)', () => {
-      const c = freshConfig({ _migrations: { keepAliveDefaultOn: true } });
+      const c = freshConfig({ _migrations: { keepAliveDefaultOn: true, hideNotEligibleDefaultOn: true } });
       const { dirty } = applyMigrations(c);
       expect(dirty).toBe(false);
     });
@@ -103,7 +103,7 @@ describe('applyMigrations', () => {
     it('only flips once — respects user disabling after migration', () => {
       const c = freshConfig({
         keepAlive: { enabled: false },
-        _migrations: { keepAliveDefaultOn: true },
+        _migrations: { keepAliveDefaultOn: true, hideNotEligibleDefaultOn: true },
       });
       const { dirty } = applyMigrations(c);
       expect(c.keepAlive.enabled).toBe(false);
@@ -128,6 +128,42 @@ describe('applyMigrations', () => {
       const c = freshConfig({ _migrations: undefined });
       applyMigrations(c);
       expect(c._migrations.keepAliveDefaultOn).toBe(true);
+    });
+  });
+
+  describe('hide-not-eligible default-on migration', () => {
+    it('enables hideNotEligible on first run (field absent, as for all pre-existing configs)', () => {
+      const c = freshConfig({ filters: { sort: 'publishedAt' } });
+      const { applied } = applyMigrations(c);
+      expect(c.filters.hideNotEligible).toBe(true);
+      expect(c._migrations.hideNotEligibleDefaultOn).toBe(true);
+      expect(applied).toContain('hide_not_eligible_enabled_by_default');
+    });
+
+    it('only flips once — respects user disabling after migration', () => {
+      const c = freshConfig({
+        filters: { hideNotEligible: false },
+        _migrations: { keepAliveDefaultOn: true, hideNotEligibleDefaultOn: true },
+      });
+      const { dirty } = applyMigrations(c);
+      expect(c.filters.hideNotEligible).toBe(false);
+      expect(dirty).toBe(false);
+    });
+
+    it('leaves an already-enabled hideNotEligible alone but still marks migration as run', () => {
+      const c = freshConfig({ filters: { hideNotEligible: true } });
+      const { applied } = applyMigrations(c);
+      expect(c.filters.hideNotEligible).toBe(true);
+      expect(c._migrations.hideNotEligibleDefaultOn).toBe(true);
+      expect(applied).not.toContain('hide_not_eligible_enabled_by_default');
+    });
+
+    it('does nothing when filters is missing', () => {
+      const c = freshConfig({ filters: undefined });
+      const { applied } = applyMigrations(c);
+      expect(c.filters).toBeUndefined();
+      expect(c._migrations.hideNotEligibleDefaultOn).toBe(true);
+      expect(applied).not.toContain('hide_not_eligible_enabled_by_default');
     });
   });
 

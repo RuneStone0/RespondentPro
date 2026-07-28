@@ -94,6 +94,25 @@ describe('whyHide', () => {
     });
   });
 
+  describe('hideNotEligible rule', () => {
+    it('hides when project is tagged not eligible and rule is on', () => {
+      expect(whyHide({ ...base, _eligible: false }, { hideNotEligible: true })).toBe('not eligible');
+    });
+    it('does not hide when project is eligible', () => {
+      expect(whyHide({ ...base, _eligible: true }, { hideNotEligible: true })).toBeNull();
+    });
+    it('does not hide when eligibility is unknown (project not tagged)', () => {
+      expect(whyHide({ ...base }, { hideNotEligible: true })).toBeNull();
+    });
+    it('does not hide when the rule is off, even if not eligible', () => {
+      expect(whyHide({ ...base, _eligible: false }, { hideNotEligible: false })).toBeNull();
+    });
+    it('wins over keyword and numeric rules', () => {
+      const f = { hideNotEligible: true, keywords: ['nope'], minHourlyRate: 0 };
+      expect(whyHide({ ...base, _eligible: false }, f)).toBe('not eligible');
+    });
+  });
+
   describe('precedence', () => {
     it('keyword wins over numeric rules', () => {
       const f = { keywords: ['coffee'], minHourlyRate: 999, maxDuration: 1, minDuration: 999 };
