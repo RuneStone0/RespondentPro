@@ -2760,10 +2760,19 @@ function detailCacheGet(id) {
   return entry.screenerQuestionsLength;
 }
 
-/** Writes a fetched value into the cache and persists it. */
-function detailCacheSet(id, screenerQuestionsLength) {
+/** Returns the cached not-eligible (prequalification disqualified) flag, or undefined if missing/stale. */
+function detailCacheGetNotEligible(id) {
   const cache = _loadDetailCache();
-  cache[id] = { screenerQuestionsLength, cachedAt: Date.now() };
+  const entry = cache[id];
+  if (!entry) return undefined;
+  if (Date.now() - entry.cachedAt > DETAIL_CACHE_TTL) return undefined;
+  return entry.notEligible;
+}
+
+/** Writes a fetched value into the cache and persists it. */
+function detailCacheSet(id, screenerQuestionsLength, notEligible) {
+  const cache = _loadDetailCache();
+  cache[id] = { screenerQuestionsLength, notEligible, cachedAt: Date.now() };
 
   // Cap size: evict oldest entries when over the limit
   const entries = Object.entries(cache);
@@ -2804,6 +2813,7 @@ async function enrichVisibleProjects() {
     const cached = detailCacheGet(id);
     if (cached !== undefined) {
       p.screenerQuestionsLength = cached;
+      p._notEligible = detailCacheGetNotEligible(id) === true;
       p._detailFetched = true;
       patchCardQuestions(id, p);
     }
@@ -2825,10 +2835,15 @@ async function enrichVisibleProjects() {
         const { status, body } = await api(`/api/projects/${id}/detail`);
         if (status === 401) { enrichAbortFlag = myRun - 1; return; }
         if (status === 200) {
-          // Response shape: { success, statusCode, response: { screenerQuestionsLength, screenerCycle, ... } }
+          // Response shape: { success, statusCode, response: { screenerQuestionsLength, screenerCycle, project: { prequalifies }, ... } }
           const qLen = body?.response?.screenerQuestionsLength ?? null;
+          // showEligible=true/false on the search endpoint does NOT reflect per-project
+          // prequalification — Respondent can still list a disqualified project as "eligible".
+          // This is the only reliable source for the "Not eligible" state shown on respondent.io.
+          const notEligible = body?.response?.project?.prequalifies?.result === 'disqualified';
           p.screenerQuestionsLength = qLen;
-          detailCacheSet(id, qLen); // persist for future page loads
+          p._notEligible = notEligible;
+          detailCacheSet(id, qLen, notEligible); // persist for future page loads
 
           // screenerCycle is an account-level daily limit — grab it from any detail response
           const cycle = body?.response?.screenerCycle;
@@ -2862,18 +2877,24 @@ async function checkScreenerCycle() {
   }
 }
 
-// Push all locally-known question counts to the server so auto-hide can apply
-// the maxQuestions filter even though the listing API omits that field.
+// Push all locally-known question counts and not-eligible IDs to the server so
+// auto-hide can apply the maxQuestions filter and the hideNotEligible rule even
+// though the listing API omits both — screener count and prequalification status
+// are only available from the per-project detail endpoint.
 async function syncQuestionCountsToServer() {
   const cache = _detailCache;
   const counts = {};
+  const notEligibleIds = [];
   for (const [id, entry] of Object.entries(cache)) {
     if (entry && typeof entry.screenerQuestionsLength === 'number') {
       counts[id] = entry.screenerQuestionsLength;
     }
+    if (entry && entry.notEligible === true) {
+      notEligibleIds.push(id);
+    }
   }
-  if (Object.keys(counts).length > 0) {
-    await api('/api/projects/question-counts', { method: 'POST', body: { counts } });
+  if (Object.keys(counts).length > 0 || notEligibleIds.length > 0) {
+    await api('/api/projects/question-counts', { method: 'POST', body: { counts, notEligibleIds } });
   }
 }
 

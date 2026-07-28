@@ -271,7 +271,7 @@ async function runAutoHide({ dryRun = false, limitOverride = null } = {}) {
     const { combined: projects } = await fetchCombinedProjects();
 
     const matches = projects.map(p => {
-      const enriched = supplementQuestionCount(p);
+      const enriched = supplementEligibility(supplementQuestionCount(p));
       return { id: getProjectId(enriched), title: getTitle(enriched), reason: whyHide(enriched, config.filters) };
     }).filter(m => m.reason && m.id);
 
@@ -521,17 +521,30 @@ app.post('/api/projects/:id/hide', async (req, res) => {
 // knowledge so server-side auto-hide can apply the maxQuestions filter correctly.
 const questionCountStore = new Map();
 
+// In-memory set of project IDs the client discovered are disqualified via the
+// detail endpoint's `project.prequalifies.result === 'disqualified'` field.
+// The showEligible=true/false search toggle does NOT reflect this — Respondent's
+// matching search can still return a disqualified project as "eligible" — so this
+// is the only reliable signal for the "Not eligible" state shown on respondent.io.
+const notEligibleStore = new Set();
+
 app.post('/api/projects/question-counts', (req, res) => {
-  const { counts } = req.body ?? {};
-  if (!counts || typeof counts !== 'object' || Array.isArray(counts)) {
+  const { counts, notEligibleIds } = req.body ?? {};
+  if (counts !== undefined && (typeof counts !== 'object' || Array.isArray(counts))) {
     return res.status(400).json({ error: 'counts object required' });
   }
-  for (const [id, count] of Object.entries(counts)) {
+  for (const [id, count] of Object.entries(counts || {})) {
     if (/^[a-zA-Z0-9_-]{8,64}$/.test(id) && typeof count === 'number' && count >= 0) {
       questionCountStore.set(id, count);
     }
   }
-  res.json({ ok: true, stored: questionCountStore.size });
+  if (notEligibleIds !== undefined) {
+    if (!Array.isArray(notEligibleIds)) return res.status(400).json({ error: 'notEligibleIds array required' });
+    for (const id of notEligibleIds) {
+      if (/^[a-zA-Z0-9_-]{8,64}$/.test(id)) notEligibleStore.add(id);
+    }
+  }
+  res.json({ ok: true, stored: questionCountStore.size, notEligibleStored: notEligibleStore.size });
 });
 
 function supplementQuestionCount(p) {
@@ -542,12 +555,23 @@ function supplementQuestionCount(p) {
   return p;
 }
 
+function supplementEligibility(p) {
+  const id = getProjectId(p);
+  if (id && notEligibleStore.has(id)) {
+    return { ...p, _eligible: false };
+  }
+  return p;
+}
+
 app.get('/api/auto-hide/pending', async (req, res) => {
   if (!config.cookie) return res.status(401).json({ error: 'no_cookie' });
   try {
     const { combined: projects } = await fetchCombinedProjects();
     const matches = projects
-      .map(p => ({ id: getProjectId(supplementQuestionCount(p)), title: getTitle(p), reason: whyHide(supplementQuestionCount(p), config.filters) }))
+      .map(p => {
+        const enriched = supplementEligibility(supplementQuestionCount(p));
+        return { id: getProjectId(enriched), title: getTitle(enriched), reason: whyHide(enriched, config.filters) };
+      })
       .filter(m => m.reason && m.id);
     res.json({ ok: true, pending: matches.length, scanned: projects.length });
   } catch (err) {
@@ -569,7 +593,7 @@ app.post('/api/auto-hide/bulk-clean', async (req, res) => {
     const { combined, eligibleCount, allCount } = await fetchCombinedProjects();
 
     const matches = combined.map(p => {
-      const enriched = supplementQuestionCount(p);
+      const enriched = supplementEligibility(supplementQuestionCount(p));
       return { id: getProjectId(enriched), title: getTitle(enriched), reason: whyHide(enriched, config.filters) };
     }).filter(m => m.reason && m.id);
 
