@@ -6,6 +6,7 @@ import { getTitle, getDescription, getDuration, getIncentive, getHourlyRate, get
  * otherwise `null`.
  *
  * Rules (any one matching → hide):
+ *   - hideNotEligible set AND project is tagged `_eligible: false`
  *   - keyword present in title or description (case-insensitive)
  *   - minHourlyRate set AND project's hourly rate is positive but below it
  *   - minIncentive set AND project's incentive is positive but below it
@@ -14,7 +15,8 @@ import { getTitle, getDescription, getDuration, getIncentive, getHourlyRate, get
  *
  * @param {object} project
  * @param {{keywords?: string[], minHourlyRate?: number, minIncentive?: number,
- *          minDuration?: number, maxDuration?: number, maxQuestions?: number}} filters
+ *          minDuration?: number, maxDuration?: number, maxQuestions?: number,
+ *          hideNotEligible?: boolean}} filters
  * @returns {string|null}
  */
 export function whyHide(project, filters = {}) {
@@ -24,6 +26,10 @@ export function whyHide(project, filters = {}) {
   const incentive = getIncentive(project);
   const duration = getDuration(project);
   const questions = getScreenerQuestionCount(project);
+
+  if (filters.hideNotEligible && project._eligible === false) {
+    return 'not eligible';
+  }
 
   for (const kw of (filters.keywords || [])) {
     if (!kw) continue;

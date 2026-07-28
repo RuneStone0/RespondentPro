@@ -43,5 +43,14 @@ export function applyMigrations(config) {
     }
   }
 
+  // 4) One-time default-on for hiding not-eligible projects
+  if (!config._migrations.hideNotEligibleDefaultOn) {
+    if (config.filters && config.filters.hideNotEligible === undefined) {
+      config.filters.hideNotEligible = true;
+      applied.push('hide_not_eligible_enabled_by_default');
+    }
+    config._migrations.hideNotEligibleDefaultOn = true;
+  }
+
   return { dirty: applied.length > 0, applied };
 }
