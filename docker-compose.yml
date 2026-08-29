@@ -11,9 +11,10 @@ services:
     environment:
       - NODE_ENV=production
       - DATA_STORE_MODE=mongodb
-      # MONGODB_URI — set as a Portainer stack env var; written to the checkout's .env at deploy time
-    env_file:
-      - .env
+      # MONGODB_URI — must be set as a Portainer stack environment variable
+      # (Portainer interpolates ${...} from the stack's env vars; do NOT commit
+      # the value to git — repo stacks never read a local .env file).
+      - MONGODB_URI=${MONGODB_URI:?MONGODB_URI must be set in the Portainer stack environment}
 
 volumes:
   respondentpro-data:
