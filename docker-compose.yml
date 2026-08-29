@@ -1,7 +1,7 @@
 services:
   respondentpro:
     image: ghcr.io/runestone0/respondentpro:latest
-    pull_policy: always   # re-pull when the stack is redeployed (does not poll GHCR by itself)
+    pull_policy: always   # re-pull on every deploy; Portainer GitOps polling (5 min) drives the updates
     container_name: respondentpro
     restart: unless-stopped
     ports:
@@ -11,23 +11,9 @@ services:
     environment:
       - NODE_ENV=production
       - DATA_STORE_MODE=mongodb
-      # MONGODB_URI — set in Portainer env vars or host .env via env_file below
+      # MONGODB_URI — set as a Portainer stack env var; written to the checkout's .env at deploy time
     env_file:
       - .env
-    labels:
-      - com.centurylinklabs.watchtower.enable=true
-
-  # Auto-pull and recreate respondentpro when GHCR :latest changes.
-  # Uses the maintained Watchtower fork (containrrr/watchtower was archived Dec 2025).
-  watchtower:
-    image: ghcr.io/nicholas-fedor/watchtower:latest
-    container_name: watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 --cleanup --label-enable
-    # If ghcr.io/runestone0/respondentpro is private, the Docker host must already
-    # be logged in to ghcr.io (Portainer registry config or `docker login ghcr.io`).
 
 volumes:
   respondentpro-data:
