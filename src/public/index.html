@@ -281,6 +281,7 @@
       background: var(--panel);
       overflow: hidden;
     }
+    .config-panel.hidden { display: none; }
 
     .config-body {
       flex: 1;
@@ -994,7 +995,10 @@
   <div class="projects-panel">
     <div class="panel-header">
       <h2>Projects</h2>
-      <span class="project-count" id="visible-count"></span>
+      <span style="display:flex; align-items:center; gap:10px;">
+        <span class="project-count" id="visible-count"></span>
+        <button class="icon-btn" id="show-config-btn" title="Show Filter Config panel" style="display:none">⚙</button>
+      </span>
     </div>
     <div class="projects-list" id="projects-list">
       <div class="state-msg"><div class="spinner"></div><br>Loading projects…</div>
@@ -1010,9 +1014,10 @@
     </div>
   </div>
 
-  <div class="config-panel">
+  <div class="config-panel" id="config-panel">
     <div class="panel-header">
       <h2>Filter Config</h2>
+      <button class="icon-btn" id="hide-config-btn" title="Hide Filter Config panel">✕</button>
     </div>
     <div class="config-body">
 
@@ -3169,8 +3174,25 @@ document.addEventListener('keydown', async (e) => {
   }
 });
 
+// ── Config panel visibility (hide/show + persisted) ──────
+const CONFIG_PANEL_KEY = 'rp_config_panel_hidden';
+let configPanelHidden = false;
+try { configPanelHidden = localStorage.getItem(CONFIG_PANEL_KEY) === '1'; } catch { /* private mode — default to visible */ }
+
+function setConfigPanelHidden(hidden) {
+  configPanelHidden = hidden;
+  try { localStorage.setItem(CONFIG_PANEL_KEY, hidden ? '1' : '0'); } catch { /* storage unavailable — keep in-memory only */ }
+  $('config-panel').classList.toggle('hidden', hidden);
+  $('hide-config-btn').style.display = hidden ? 'none' : '';
+  $('show-config-btn').style.display = hidden ? '' : 'none';
+}
+
+$('hide-config-btn').addEventListener('click', () => setConfigPanelHidden(true));
+$('show-config-btn').addEventListener('click', () => setConfigPanelHidden(false));
+
 // ── Boot ──────────────────────────────────────────────────
 (async () => {
+  setConfigPanelHidden(configPanelHidden);
   await loadConfig();
   applyFiltersToUI();
   bindNumeric('min-hourly-rate', 'minHourlyRate');
