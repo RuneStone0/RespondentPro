@@ -968,6 +968,62 @@
 
     /* Tooltip via native title — enhanced with a custom data-tooltip for longer text */
     [data-tip] { cursor: help; }
+
+    /* ── Mobile (≤768px) ─────────────────────────────────── */
+    @media (max-width: 768px) {
+      /* Header: drop desktop keyboard hints & text labels */
+      .kb-hint { display: none; }
+      .header-btn .btn-label { display: none; }
+      .header-btn { padding: 6px 10px; }
+
+      /* Config panel becomes a full-width overlay drawer */
+      .config-panel {
+        position: fixed;
+        top: 0; right: 0; bottom: 0; left: 0;
+        width: 100%;
+        z-index: 90;
+        box-shadow: var(--shadow);
+      }
+
+      /* Prevent iOS auto-zoom on focus (needs ≥16px) */
+      input, select, textarea {
+        font-size: 16px !important;
+      }
+
+      /* Kill double-tap zoom + 300ms tap delay */
+      button, a, select, input, textarea, .toggle, .icon-btn, .header-btn {
+        touch-action: manipulation;
+      }
+
+      /* Larger touch targets on card actions */
+      .icon-btn, .apply-btn, .claude-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+      }
+      .apply-claude-btn {
+        height: 40px;
+        padding: 0 14px;
+        font-size: 14px;
+      }
+
+      /* Graceful wrapping: no horizontal scroll */
+      .title { min-width: 0; overflow-wrap: anywhere; }
+      .title-row > div:last-child { min-width: 0; }
+      .description { overflow-wrap: anywhere; }
+      .meta { row-gap: 4px; }
+      .projects-list { padding: 8px; }
+      .status-bar { flex-wrap: wrap; gap: 8px 14px; }
+
+      /* Modals: near-full-width, less padding */
+      .modal {
+        width: calc(100% - 24px) !important;
+        max-width: none;
+        margin: 12px;
+        padding: 18px 16px;
+        max-height: calc(100vh - 24px);
+      }
+    }
   </style>
 </head>
 <body>
@@ -979,10 +1035,10 @@
     <span class="pulse"></span>Auto-hide ON
   </span>
   <div class="header-spacer"></div>
-  <span style="font-size:11px; color:var(--text-3); margin-right:8px;">↑↓ navigate • ↵ apply • ⌃D hide</span>
-  <button class="header-btn" id="debug-btn">🐛 Debug</button>
-  <button class="header-btn" id="reload-btn">↻ Reload</button>
-  <button class="header-btn" id="cookie-btn">🔑 Cookie</button>
+  <span class="kb-hint" style="font-size:11px; color:var(--text-3); margin-right:8px;">↑↓ navigate • ↵ apply • ⌃D hide</span>
+  <button class="header-btn" id="debug-btn">🐛 <span class="btn-label">Debug</span></button>
+  <button class="header-btn" id="reload-btn">↻ <span class="btn-label">Reload</span></button>
+  <button class="header-btn" id="cookie-btn">🔑 <span class="btn-label">Cookie</span></button>
 </header>
 
 <div id="screener-limit-banner">
@@ -3176,23 +3232,43 @@ document.addEventListener('keydown', async (e) => {
 
 // ── Config panel visibility (hide/show + persisted) ──────
 const CONFIG_PANEL_KEY = 'rp_config_panel_hidden';
-let configPanelHidden = false;
-try { configPanelHidden = localStorage.getItem(CONFIG_PANEL_KEY) === '1'; } catch { /* private mode — default to visible */ }
+const CONFIG_MOBILE_MQ = window.matchMedia('(max-width: 768px)');
 
-function setConfigPanelHidden(hidden) {
-  configPanelHidden = hidden;
-  try { localStorage.setItem(CONFIG_PANEL_KEY, hidden ? '1' : '0'); } catch { /* storage unavailable — keep in-memory only */ }
+function applyConfigPanelVisibility(hidden) {
   $('config-panel').classList.toggle('hidden', hidden);
   $('hide-config-btn').style.display = hidden ? 'none' : '';
   $('show-config-btn').style.display = hidden ? '' : 'none';
 }
 
+// Persist + apply — used only on explicit user toggle, so we never
+// overwrite the user's intent with an auto-computed default.
+function setConfigPanelHidden(hidden) {
+  applyConfigPanelVisibility(hidden);
+  try { localStorage.setItem(CONFIG_PANEL_KEY, hidden ? '1' : '0'); } catch { /* storage unavailable — keep in-memory only */ }
+}
+
+function hasConfigPanelPref() {
+  try { return localStorage.getItem(CONFIG_PANEL_KEY) !== null; } catch { return false; }
+}
+
+// Explicit preference wins; otherwise default hidden on mobile, visible on desktop.
+function initialConfigPanelHidden() {
+  if (hasConfigPanelPref()) return localStorage.getItem(CONFIG_PANEL_KEY) === '1';
+  return CONFIG_MOBILE_MQ.matches;
+}
+
 $('hide-config-btn').addEventListener('click', () => setConfigPanelHidden(true));
 $('show-config-btn').addEventListener('click', () => setConfigPanelHidden(false));
 
+// When the viewport crosses the mobile breakpoint, follow it (hidden on
+// mobile, visible on desktop) — but only while the user hasn't chosen.
+CONFIG_MOBILE_MQ.addEventListener('change', (e) => {
+  if (!hasConfigPanelPref()) applyConfigPanelVisibility(e.matches);
+});
+
 // ── Boot ──────────────────────────────────────────────────
 (async () => {
-  setConfigPanelHidden(configPanelHidden);
+  applyConfigPanelVisibility(initialConfigPanelHidden());
   await loadConfig();
   applyFiltersToUI();
   bindNumeric('min-hourly-rate', 'minHourlyRate');
