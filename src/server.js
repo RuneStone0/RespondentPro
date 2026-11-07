@@ -18,6 +18,7 @@ import { getProjectId, getTitle } from './lib/project-fields.js';
 import { pickProfileId } from './lib/profile.js';
 import { applyMigrations, VALID_SORTS } from './lib/migrations.js';
 import { applyKeywordsToFilters } from './lib/store/keywords.js';
+import { publicConfig } from './lib/config-view.js';
 import { createStore, resolveStoreMode } from './lib/store/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -375,12 +376,8 @@ app.get('/favicon.ico', (req, res) => {
 app.use(express.static(PUBLIC_DIR));
 
 app.get('/api/config', (req, res) => {
-  const { cookie, grokApiKey, deepseekApiKey, ...safe } = config;
   res.json({
-    ...safe,
-    hasCookie: Boolean(cookie),
-    hasGrokKey: Boolean(grokApiKey),
-    hasDeepseekKey: Boolean(deepseekApiKey),
+    ...publicConfig(config),
     schedules: SCHEDULE_OPTIONS,
     cookieName: COOKIE_NAME,
     nextRuns: {
