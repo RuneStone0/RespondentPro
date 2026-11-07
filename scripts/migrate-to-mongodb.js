@@ -57,12 +57,8 @@ async function main() {
   if (!rawConfig) {
     console.warn('⚠️   data/config.json not found — skipping config migration.');
   } else {
-    // Rename stale field if present (openaiApiKey → gptApiKey) // nosemgrep
-    if ('openaiApiKey' in rawConfig && !('gptApiKey' in rawConfig)) { // nosemgrep
-      rawConfig.gptApiKey = rawConfig.openaiApiKey; // nosemgrep
-      delete rawConfig.openaiApiKey; // nosemgrep
-      console.log('    ✏️  Renamed gpt key field in config'); // nosemgrep
-    }
+    // Legacy openai/claude/gpt keys are intentionally not migrated: the app
+    // now supports only DeepSeek and xAI (grok).
   }
 
   const sessions = Array.isArray(rawAnswers) ? rawAnswers : [];

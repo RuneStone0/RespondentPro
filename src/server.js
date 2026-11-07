@@ -44,7 +44,6 @@ if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 // ── Config ────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
   cookie: '',
-  claudeApiKey: '',
   profileId: '',
   filters: {
     keywords: [],
@@ -79,9 +78,9 @@ const DEFAULT_CONFIG = {
   // AI provider for keyword suggestions. All LLM responses are parsed
   // as JSON and every field is type-checked/trimmed before use —
   // treated as untrusted input (nosemgrep).
-  aiProvider: 'anthropic',
-  gptApiKey: '',
+  aiProvider: 'deepseek',
   grokApiKey: '',
+  deepseekApiKey: '',
 };
 
 // Populated during main() startup
@@ -376,13 +375,12 @@ app.get('/favicon.ico', (req, res) => {
 app.use(express.static(PUBLIC_DIR));
 
 app.get('/api/config', (req, res) => {
-  const { cookie, claudeApiKey, gptApiKey, grokApiKey, ...safe } = config;
+  const { cookie, grokApiKey, deepseekApiKey, ...safe } = config;
   res.json({
     ...safe,
     hasCookie: Boolean(cookie),
-    hasClaudeKey: Boolean(claudeApiKey),
-    hasGptKey: Boolean(gptApiKey),
     hasGrokKey: Boolean(grokApiKey),
+    hasDeepseekKey: Boolean(deepseekApiKey),
     schedules: SCHEDULE_OPTIONS,
     cookieName: COOKIE_NAME,
     nextRuns: {
@@ -677,32 +675,39 @@ app.post('/api/screener-answers', async (req, res) => {
 
 // ── AI provider key management ────────────────────────────
 
-const AI_PROVIDERS = ['anthropic', 'gpt', 'grok'];
+// Two providers only: xAI (Grok) and DeepSeek. Both speak the OpenAI
+// chat-completions protocol, so one call path serves both.
+const AI_PROVIDERS = ['grok', 'deepseek'];
+const AI_KEY_FIELD = { grok: 'grokApiKey', deepseek: 'deepseekApiKey' };
+const AI_LABEL = { grok: 'xAI (Grok)', deepseek: 'DeepSeek' };
 
-// Save an API key for the given provider and (optionally) set it as active.
+function aiKeyFor(provider) {
+  const field = AI_KEY_FIELD[provider];
+  return field ? (config[field] || '') : '';
+}
+
+// Save a key for a provider, and/or make a provider active.
+//   {provider, apiKey}            -> store the key and make it active
+//   {provider}                    -> make it active, keep its stored key
 app.post('/api/config/ai-provider', (req, res) => {
-  const { provider, apiKey } = req.body ?? {};
+  const { provider, apiKey, makeActive } = req.body ?? {};
   if (!AI_PROVIDERS.includes(provider)) {
     return res.status(400).json({ error: `provider must be one of: ${AI_PROVIDERS.join(', ')}` });
   }
-  if (typeof apiKey !== 'string') return res.status(400).json({ error: 'apiKey required' });
-  const trimmed = apiKey.trim();
-  if (provider === 'anthropic') config.claudeApiKey = trimmed;
-  else if (provider === 'grok')  config.grokApiKey   = trimmed;
-  else                           config.gptApiKey = trimmed;
-  config.aiProvider = provider;
+  if (apiKey !== undefined && typeof apiKey !== 'string') {
+    return res.status(400).json({ error: 'apiKey must be a string' });
+  }
+  if (typeof apiKey === 'string' && apiKey.trim()) {
+    config[AI_KEY_FIELD[provider]] = apiKey.trim();
+  }
+  if (makeActive !== false) config.aiProvider = provider;
   saveConfig();
-  res.json({ ok: true, provider, hasKey: Boolean(trimmed) });
-});
-
-// Legacy endpoint — kept for compatibility.
-app.post('/api/config/claude-key', (req, res) => {
-  const { apiKey } = req.body ?? {};
-  if (typeof apiKey !== 'string') return res.status(400).json({ error: 'apiKey required' });
-  config.claudeApiKey = apiKey.trim();
-  config.aiProvider = 'anthropic';
-  saveConfig();
-  res.json({ ok: true, hasKey: Boolean(config.claudeApiKey) });
+  res.json({
+    ok: true,
+    provider,
+    active: config.aiProvider,
+    hasKey: Boolean(aiKeyFor(provider)),
+  });
 });
 
 // ── AI keyword suggestions ────────────────────────────────
@@ -710,66 +715,56 @@ app.post('/api/config/claude-key', (req, res) => {
 // All LLM text responses are parsed as JSON and every field is explicitly
 // type-checked / trimmed — treated as untrusted input before use. nosemgrep
 
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const OAI_COMPAT = {
-  gpt:  'https://api.openai.com/v1/chat/completions', // nosemgrep — actual hostname, cannot rename
-  grok: 'https://api.x.ai/v1/chat/completions',
+// ── AI provider plumbing ──────────────────────────────────
+// xAI and DeepSeek are both OpenAI-compatible, so one client covers both.
+const OAI_CHAT_URL = {
+  grok:     'https://api.x.ai/v1/chat/completions',
+  deepseek: 'https://api.deepseek.com/v1/chat/completions',
 };
-const OAI_MODELS = { gpt: 'gpt-4o-mini', grok: 'grok-3-mini' };
+const OAI_MODELS = { grok: 'grok-3-mini', deepseek: 'deepseek-flash' };
 
-// Call an OpenAI-compatible endpoint (used by both GPT and Grok).
-async function callOAICompat(provider, apiKey, systemPrompt, userPrompt) {
-  const response = await fetch(OAI_COMPAT[provider], {
+// Call the provider's chat endpoint. Everything the model returns is handled as
+// untrusted text by the caller.
+async function callAI(provider, apiKey, systemPrompt, userPrompt) {
+  const body = {
+    model: OAI_MODELS[provider],
+    max_tokens: 1500,   // 20-30 phrases + reasons; also leaves room if reasoning is on
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: userPrompt },
+    ],
+  };
+  if (provider === 'deepseek') {
+    // DeepSeek honours strict JSON output; the prompt already demands "valid JSON only".
+    body.response_format = { type: 'json_object' };
+    // Thinking is ON by default and its reasoning tokens are billed against
+    // max_tokens — with a 1k budget the model produced pure reasoning and an
+    // empty answer. Keyword extraction needs no chain of thought.
+    body.thinking = { type: 'disabled' };
+  }
+
+  const response = await fetch(OAI_CHAT_URL[provider], {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      model: OAI_MODELS[provider],
-      max_tokens: 1024,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userPrompt },
-      ],
-    }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `API error ${response.status}`);
+    throw new Error(err?.error?.message || `${AI_LABEL[provider] || provider} API error ${response.status}`);
   }
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || '';
 }
 
-async function callAnthropic(apiKey, systemPrompt, userPrompt) {
-  const response = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Anthropic API error ${response.status}`);
-  }
-  const data = await response.json();
-  return data?.content?.[0]?.text || '';
-}
-
 app.post('/api/ai-keywords', async (req, res) => {
-  const provider = config.aiProvider || 'anthropic';
-  const apiKey = provider === 'anthropic' ? config.claudeApiKey
-               : provider === 'grok'      ? config.grokApiKey
-               : config.gptApiKey;
+  // The UI may ask for a specific provider; otherwise use the active one.
+  const requested = String(req.body?.provider || '');
+  const provider = AI_PROVIDERS.includes(requested) ? requested
+                 : (AI_PROVIDERS.includes(config.aiProvider) ? config.aiProvider : 'deepseek');
+  const apiKey = aiKeyFor(provider);
   if (!apiKey) return res.status(401).json({ error: 'no_ai_key', provider });
 
   const { projects } = req.body ?? {};
@@ -809,9 +804,7 @@ Respond with valid JSON only, no markdown, no explanation:
 {"suggestions":[{"phrase":"insurance","reason":"Insurance industry studies"},...]}`
 
   try {
-    const text = provider === 'anthropic'
-      ? await callAnthropic(apiKey, systemPrompt, userPrompt)
-      : await callOAICompat(provider, apiKey, systemPrompt, userPrompt);
+    const text = await callAI(provider, apiKey, systemPrompt, userPrompt);
 
     // Treat LLM output as untrusted: parse JSON and validate every field.
     let parsed;
@@ -838,24 +831,19 @@ Respond with valid JSON only, no markdown, no explanation:
 // Validates the AI provider's API key using the provider's model-list endpoint
 // (free call — no tokens consumed). nosemgrep
 const AI_MODELS_URL = {
-  anthropic: 'https://api.anthropic.com/v1/models',
-  gpt:       OAI_COMPAT.gpt.replace('/chat/completions', '/models'), // nosemgrep — openai.com hostname
-  grok:      OAI_COMPAT.grok.replace('/chat/completions', '/models'),
+  grok:     'https://api.x.ai/v1/models',
+  deepseek: 'https://api.deepseek.com/models',
 };
 
 async function checkAiProvider() {
-  const provider = config.aiProvider || 'anthropic';
-  const apiKey = provider === 'anthropic' ? config.claudeApiKey
-               : provider === 'grok'      ? config.grokApiKey
-               : config.gptApiKey;
+  const provider = AI_PROVIDERS.includes(config.aiProvider) ? config.aiProvider : 'deepseek';
+  const apiKey = aiKeyFor(provider);
 
   if (!apiKey) return { status: 'missing_key', provider };
 
   const t = Date.now();
   try {
-    const headers = provider === 'anthropic'
-      ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
-      : { 'Authorization': `Bearer ${apiKey}` };
+    const headers = { 'Authorization': `Bearer ${apiKey}` };
 
     const res = await fetch(AI_MODELS_URL[provider], { headers });
     const latencyMs = Date.now() - t;
@@ -1001,9 +989,7 @@ async function main() {
   const envAiKey      = process.env.AI_API_KEY || '';
   if (envAiKey && AI_PROVIDERS.includes(envAiProvider)) {
     config.aiProvider = envAiProvider;
-    if (envAiProvider === 'anthropic') config.claudeApiKey = envAiKey;
-    else if (envAiProvider === 'grok') config.grokApiKey   = envAiKey;
-    else                               config.gptApiKey = envAiKey;
+    config[AI_KEY_FIELD[envAiProvider]] = envAiKey;
   }
 
   const { dirty, applied } = applyMigrations(config);

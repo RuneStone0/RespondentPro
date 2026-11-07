@@ -1418,10 +1418,14 @@
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
           <h4 style="font-size:13px;flex:1;">Suggestions</h4>
+          <select id="kw-ai-provider" title="AI provider" style="font-size:11px;height:26px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;padding:0 6px;color:var(--text);outline:none;">
+            <option value="deepseek">DeepSeek</option>
+            <option value="grok">xAI Grok</option>
+          </select>
           <button class="btn btn-secondary" id="kw-ai-btn" style="font-size:11px;padding:3px 10px;">✨ AI suggestions</button>
         </div>
         <div id="kw-ai-key-row" style="display:none;gap:6px;margin-bottom:8px;">
-          <input id="kw-ai-key-input" placeholder="Paste your Anthropic API key…" style="flex:1;height:32px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;padding:0 10px;color:var(--text);font-size:12px;outline:none;" />
+          <input id="kw-ai-key-input" placeholder="Paste your DeepSeek API key…" style="flex:1;height:32px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;padding:0 10px;color:var(--text);font-size:12px;outline:none;" />
           <button class="btn" id="kw-ai-key-save" style="font-size:11px;padding:0 10px;">Save</button>
         </div>
         <div id="kw-ai-error" style="font-size:11px;color:var(--danger);margin-bottom:6px;"></div>
@@ -1550,7 +1554,9 @@ async function loadConfig() {
   }
   profileId = body.profileId || '';
   hasCookie = body.hasCookie;
-  _hasClaudeKey = body.hasClaudeKey || false;
+  _aiProvider = AI_PROVIDERS.includes(body.aiProvider) ? body.aiProvider : 'deepseek';
+  _aiKeys = { grok: Boolean(body.hasGrokKey), deepseek: Boolean(body.hasDeepseekKey) };
+  syncAiProviderUi();
   totalHidden = body.totalHidden || 0;
   totalApplied = body.totalApplied || 0;
   renderHeader();
@@ -2171,6 +2177,8 @@ function computeKeywordSuggestions() {
 function openKeywordModal() {
   $('keyword-modal-input').value = '';
   $('keyword-suggestion-filter').value = '';
+  syncAiProviderUi();
+  $('kw-ai-key-row').style.display = 'none';
   $('keyword-modal').classList.add('open');
   renderKeywordModalList();
   renderKeywordSuggestions('');
@@ -2260,15 +2268,34 @@ function renderKeywordSuggestions(filterText) {
 }
 
 // ── AI keyword suggestions ─────────────────────────────────
-let _hasClaudeKey = false; // loaded from /api/config on boot
+// Only two providers are supported, both OpenAI-compatible.
+const AI_PROVIDERS = ['grok', 'deepseek'];
+const AI_LABEL = { grok: 'xAI Grok', deepseek: 'DeepSeek' };
+let _aiProvider = 'deepseek';                                   // active provider, from /api/config
+let _aiKeys = { grok: false, deepseek: false };                 // which providers hold a stored key
+
+function selectedAiProvider() {
+  const el = $('kw-ai-provider');
+  return el && AI_PROVIDERS.includes(el.value) ? el.value : _aiProvider;
+}
+
+function syncAiProviderUi() {
+  const el = $('kw-ai-provider');
+  if (el) el.value = _aiProvider;
+  const ph = $('kw-ai-key-input');
+  if (ph) ph.placeholder = `Paste your ${AI_LABEL[_aiProvider] || _aiProvider} API key…`;
+}
 
 async function runAiKeywords() {
   const btn = $('kw-ai-btn');
   const errEl = $('kw-ai-error');
   errEl.textContent = '';
+  const provider = selectedAiProvider();
+  const label = AI_LABEL[provider] || provider;
 
-  // If no key set, show the key input inline
-  if (!_hasClaudeKey) {
+  // If this provider has no key yet, show the key input inline
+  if (!_aiKeys[provider]) {
+    $('kw-ai-key-input').placeholder = `Paste your ${label} API key…`;
     $('kw-ai-key-row').style.display = 'flex';
     $('kw-ai-key-input').focus();
     return;
@@ -2284,16 +2311,16 @@ async function runAiKeywords() {
 
   const { status, body } = await api('/api/ai-keywords', {
     method: 'POST',
-    body: { projects, excluded: filters.keywords },
+    body: { projects, excluded: filters.keywords, provider },
   });
 
   btn.disabled = false;
   btn.textContent = '✨ AI suggestions';
 
   if (status === 401) {
-    _hasClaudeKey = false;
+    _aiKeys[provider] = false;
     $('kw-ai-key-row').style.display = 'flex';
-    errEl.textContent = 'Claude API key not set or invalid.';
+    errEl.textContent = `${label} API key not set or invalid.`;
     return;
   }
   if (!body?.ok) {
@@ -2333,21 +2360,37 @@ async function runAiKeywords() {
   });
 }
 
-async function saveClaudeKey() {
+async function saveAiKey() {
+  const provider = selectedAiProvider();
   const key = $('kw-ai-key-input').value.trim();
   if (!key) return;
-  const { body } = await api('/api/config/claude-key', { method: 'POST', body: { apiKey: key } });
-  if (body?.ok) {
-    _hasClaudeKey = true;
-    $('kw-ai-key-row').style.display = 'none';
-    $('kw-ai-key-input').value = '';
-    runAiKeywords();
+  const { status, body } = await api('/api/config/ai-provider', {
+    method: 'POST',
+    body: { provider, apiKey: key },
+  });
+  if (status !== 200 || !body?.ok) {
+    $('kw-ai-error').textContent = body?.error || `Error ${status}`;
+    return;
   }
+  _aiKeys[provider] = true;
+  _aiProvider = provider;
+  $('kw-ai-key-row').style.display = 'none';
+  $('kw-ai-key-input').value = '';
+  runAiKeywords();
 }
 
 $('kw-ai-btn').addEventListener('click', runAiKeywords);
-$('kw-ai-key-save').addEventListener('click', saveClaudeKey);
-$('kw-ai-key-input').addEventListener('keydown', e => { if (e.key === 'Enter') saveClaudeKey(); });
+$('kw-ai-key-save').addEventListener('click', saveAiKey);
+$('kw-ai-key-input').addEventListener('keydown', e => { if (e.key === 'Enter') saveAiKey(); });
+$('kw-ai-provider').addEventListener('change', async e => {
+  const provider = e.target.value;
+  if (!AI_PROVIDERS.includes(provider)) return;
+  _aiProvider = provider;
+  $('kw-ai-key-input').placeholder = `Paste your ${AI_LABEL[provider]} API key…`;
+  if (_aiKeys[provider]) $('kw-ai-key-row').style.display = 'none';
+  // persist the active provider so /health and default requests agree
+  await api('/api/config/ai-provider', { method: 'POST', body: { provider } });
+});
 
 $('keyword-modal-close').addEventListener('click', closeKeywordModal);
 $('keyword-modal').addEventListener('click', e => {
